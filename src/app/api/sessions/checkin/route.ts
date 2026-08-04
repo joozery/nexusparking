@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
   // ถ้ามี uid → ต้องเจอบัตรใน DB
   // ถ้าไม่มี uid แต่มี cardType → walk-in (ไม่มีบัตร)
   let resolvedUid: string
-  let resolvedType: string
+  let resolvedType: 'car' | 'motorcycle' | 'overnight'
 
   if (uid) {
     const card = await ParkingCard.findOne({ uid: uid.trim(), isActive: true })
@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
   } else {
     // walk-in — สร้าง UID ชั่วคราว
     resolvedUid  = `WALKIN-${Date.now()}`
-    resolvedType = manualType
+    resolvedType = manualType as 'car' | 'motorcycle' | 'overnight'
   }
 
   const session = await ParkingSession.create({
