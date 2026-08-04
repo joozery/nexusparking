@@ -45,9 +45,9 @@ export function CheckOutDialog({
           {step === 'scan' ? (
             <div
               onClick={onSimulateScan}
-              className="w-full cursor-pointer flex flex-col items-center gap-2 p-5 rounded-xl border-2 border-dashed border-emerald-200 bg-emerald-50 hover:bg-emerald-100 hover:border-emerald-400 transition-all active:scale-[0.98]"
+              className="w-full cursor-pointer flex flex-col items-center gap-2 p-5 rounded-lg border-2 border-dashed border-emerald-200 bg-emerald-50 hover:bg-emerald-100 hover:border-emerald-400 transition-all active:scale-[0.98]"
             >
-              <div className="flex size-12 items-center justify-center rounded-xl bg-emerald-600 shadow-md shadow-emerald-500/30 animate-pulse">
+              <div className="flex size-12 items-center justify-center rounded-lg bg-emerald-600 shadow-md shadow-emerald-500/30 animate-pulse">
                 <CreditCard className="size-6 text-white" />
               </div>
               <div className="text-center">
@@ -63,7 +63,7 @@ export function CheckOutDialog({
                 <CardBadge type={cardType} />
               </div>
 
-              <div className="rounded-xl border border-emerald-200 overflow-hidden">
+              <div className="rounded-lg border border-emerald-200 overflow-hidden">
                 <div className="bg-emerald-50 px-3 py-2 flex items-center gap-2">
                   <Clock className="size-3.5 text-emerald-600" />
                   <span className="text-xs font-semibold text-emerald-800">ระยะเวลาจอด: {hours} ชั่วโมง</span>

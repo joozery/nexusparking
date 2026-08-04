@@ -202,12 +202,12 @@ export default function HardwareMonitorPage() {
               : '#E8ECF4'
 
             return (
-              <div key={d} className="bg-white rounded-2xl p-4"
+              <div key={d} className="bg-white rounded-xl p-4"
                 style={{ border: `1px solid ${borderColor}` }}>
                 {/* Top row */}
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex items-center gap-2.5">
-                    <div className="size-8 rounded-xl flex items-center justify-center"
+                    <div className="size-8 rounded-lg flex items-center justify-center"
                       style={{
                         background: st?.success === true
                           ? 'rgba(5,150,105,0.08)'
@@ -285,7 +285,7 @@ export default function HardwareMonitorPage() {
         </div>
 
         {/* Activity Log */}
-        <div className="bg-white rounded-2xl overflow-hidden" style={{ border: '1px solid #E8ECF4' }}>
+        <div className="bg-white rounded-xl overflow-hidden" style={{ border: '1px solid #E8ECF4' }}>
           <div className="px-5 py-3 flex items-center justify-between"
             style={{ borderBottom: '1px solid #E8ECF4' }}>
             <div className="flex items-center gap-2">

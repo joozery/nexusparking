@@ -134,7 +134,7 @@ export default function AdminPage() {
         <div className="fixed inset-0 z-40 flex items-center justify-center p-4"
           style={{ background: 'rgba(0,0,0,0.4)' }}
           onClick={e => { if (e.target === e.currentTarget) setEditTarget(null) }}>
-          <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl" style={{ border: '1px solid #E8ECF4' }}>
+          <div className="bg-white rounded-xl p-6 w-full max-w-sm shadow-xl" style={{ border: '1px solid #E8ECF4' }}>
             <div className="flex items-center justify-between mb-5">
               <p className="text-sm font-black text-slate-900">แก้ไขบัญชี</p>
               <button onClick={() => setEditTarget(null)} className="text-slate-400 hover:text-slate-600">
@@ -142,7 +142,7 @@ export default function AdminPage() {
               </button>
             </div>
             <div className="space-y-4">
-              <div className="px-3 py-2.5 rounded-xl" style={{ background: '#F8FAFF', border: '1px solid #E8ECF4' }}>
+              <div className="px-3 py-2.5 rounded-lg" style={{ background: '#F8FAFF', border: '1px solid #E8ECF4' }}>
                 <p className="text-xs font-black text-slate-700">{editTarget.name}</p>
                 <p className="text-[10px] text-slate-400">@{editTarget.username}</p>
               </div>
@@ -150,7 +150,7 @@ export default function AdminPage() {
                 <label className="text-[10px] font-black text-slate-500 uppercase tracking-wide block mb-1.5">Role</label>
                 <select value={editTarget.role}
                   onChange={e => setEditTarget(t => t ? ({ ...t, role: e.target.value as AdminUser['role'] }) : t)}
-                  className="w-full h-9 px-3 rounded-xl text-sm text-slate-800 outline-none"
+                  className="w-full h-9 px-3 rounded-lg text-sm text-slate-800 outline-none"
                   style={{ border: '1.5px solid #E8ECF4', background: '#FAFBFF' }}>
                   <option value="operator">Operator</option>
                   <option value="admin">Admin</option>
@@ -164,7 +164,7 @@ export default function AdminPage() {
                   <input type={showEditPwd ? 'text' : 'password'} value={editPwd}
                     onChange={e => setEditPwd(e.target.value)}
                     placeholder="รหัสผ่านใหม่"
-                    className="w-full h-9 pl-8 pr-9 rounded-xl text-sm text-slate-800 outline-none"
+                    className="w-full h-9 pl-8 pr-9 rounded-lg text-sm text-slate-800 outline-none"
                     style={{ border: '1.5px solid #E8ECF4', background: '#FAFBFF' }} />
                   <button type="button" onClick={() => setShowEditPwd(s => !s)}
                     className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400">
@@ -175,12 +175,12 @@ export default function AdminPage() {
             </div>
             <div className="flex gap-2 mt-5">
               <button onClick={() => setEditTarget(null)}
-                className="flex-1 h-9 rounded-xl text-xs font-bold text-slate-600"
+                className="flex-1 h-9 rounded-lg text-xs font-bold text-slate-600"
                 style={{ background: '#F1F5F9' }}>
                 ยกเลิก
               </button>
               <button onClick={handleSaveEdit} disabled={saving}
-                className="flex-1 h-9 rounded-xl text-xs font-bold text-white flex items-center justify-center gap-1.5 disabled:opacity-60"
+                className="flex-1 h-9 rounded-lg text-xs font-bold text-white flex items-center justify-center gap-1.5 disabled:opacity-60"
                 style={{ background: '#1D4ED8', boxShadow: '0 1px 8px rgba(29,78,216,0.3)' }}>
                 {saving ? <RefreshCw className="size-3.5 animate-spin" /> : <CheckCircle2 className="size-3.5" />}
                 บันทึก
@@ -216,7 +216,7 @@ export default function AdminPage() {
 
         {/* Create form */}
         {showCreate && isSuperadmin && (
-          <div className="bg-white rounded-2xl p-5" style={{ border: '1px solid rgba(29,78,216,0.2)', boxShadow: '0 2px 12px rgba(29,78,216,0.06)' }}>
+          <div className="bg-white rounded-xl p-5" style={{ border: '1px solid rgba(29,78,216,0.2)', boxShadow: '0 2px 12px rgba(29,78,216,0.06)' }}>
             <p className="text-xs font-black text-slate-900 mb-4">สร้างบัญชีใหม่</p>
             <form onSubmit={handleCreate}>
               <div className="grid grid-cols-2 gap-3 mb-3">
@@ -224,13 +224,13 @@ export default function AdminPage() {
                   <label className="text-[10px] font-black text-slate-500 uppercase tracking-wide block mb-1">ชื่อ-นามสกุล</label>
                   <input value={newName} onChange={e => setNewName(e.target.value)} required
                     placeholder="ชื่อ นามสกุล"
-                    className="w-full h-9 px-3 rounded-xl text-sm text-slate-800 outline-none"
+                    className="w-full h-9 px-3 rounded-lg text-sm text-slate-800 outline-none"
                     style={{ border: '1.5px solid #E8ECF4', background: '#FAFBFF' }} />
                 </div>
                 <div>
                   <label className="text-[10px] font-black text-slate-500 uppercase tracking-wide block mb-1">Role</label>
                   <select value={newRole} onChange={e => setNewRole(e.target.value as 'admin' | 'operator')}
-                    className="w-full h-9 px-3 rounded-xl text-sm text-slate-800 outline-none"
+                    className="w-full h-9 px-3 rounded-lg text-sm text-slate-800 outline-none"
                     style={{ border: '1.5px solid #E8ECF4', background: '#FAFBFF' }}>
                     <option value="operator">Operator</option>
                     <option value="admin">Admin</option>
@@ -240,7 +240,7 @@ export default function AdminPage() {
                   <label className="text-[10px] font-black text-slate-500 uppercase tracking-wide block mb-1">Username</label>
                   <input value={newUser} onChange={e => setNewUser(e.target.value)} required
                     placeholder="username"
-                    className="w-full h-9 px-3 rounded-xl text-sm text-slate-800 outline-none font-mono"
+                    className="w-full h-9 px-3 rounded-lg text-sm text-slate-800 outline-none font-mono"
                     style={{ border: '1.5px solid #E8ECF4', background: '#FAFBFF' }} />
                 </div>
                 <div>
@@ -248,7 +248,7 @@ export default function AdminPage() {
                   <div className="relative">
                     <input type={showNewPwd ? 'text' : 'password'} value={newPwd} onChange={e => setNewPwd(e.target.value)} required
                       placeholder="รหัสผ่าน"
-                      className="w-full h-9 px-3 pr-8 rounded-xl text-sm text-slate-800 outline-none"
+                      className="w-full h-9 px-3 pr-8 rounded-lg text-sm text-slate-800 outline-none"
                       style={{ border: '1.5px solid #E8ECF4', background: '#FAFBFF' }} />
                     <button type="button" onClick={() => setShowNewPwd(s => !s)}
                       className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400">
@@ -271,7 +271,7 @@ export default function AdminPage() {
 
         {/* Current user card */}
         {me && (
-          <div className="flex items-center gap-3 px-4 py-3 rounded-2xl"
+          <div className="flex items-center gap-3 px-4 py-3 rounded-xl"
             style={{ background: 'rgba(29,78,216,0.04)', border: '1px solid rgba(29,78,216,0.12)' }}>
             <div className="size-7 flex items-center justify-center rounded-lg text-[10px] font-black text-white"
               style={{ background: 'linear-gradient(135deg, #1D4ED8, #3B82F6)' }}>
@@ -301,11 +301,11 @@ export default function AdminPage() {
               const isMe = admin._id === me?.sub
               return (
                 <div key={admin._id}
-                  className="bg-white rounded-2xl px-4 py-3.5 flex items-center gap-3"
+                  className="bg-white rounded-xl px-4 py-3.5 flex items-center gap-3"
                   style={{ border: `1px solid ${isMe ? 'rgba(29,78,216,0.15)' : '#E8ECF4'}`, opacity: admin.isActive ? 1 : 0.55 }}>
 
                   {/* Avatar */}
-                  <div className="size-9 rounded-xl flex items-center justify-center text-sm font-black text-white shrink-0"
+                  <div className="size-9 rounded-lg flex items-center justify-center text-sm font-black text-white shrink-0"
                     style={{ background: admin.isActive ? `linear-gradient(135deg, ${meta.color}, ${meta.color}99)` : '#CBD5E1' }}>
                     {admin.name.charAt(0).toUpperCase()}
                   </div>

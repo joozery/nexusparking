@@ -114,7 +114,7 @@ export function LostCardDialog({ open, onOpenChange, onConfirm }: Props) {
           </div>
 
           {/* Fee summary — คำนวณ dynamic */}
-          <div className="rounded-xl border border-amber-200 overflow-hidden">
+          <div className="rounded-lg border border-amber-200 overflow-hidden">
             <div className="grid grid-cols-2 divide-x divide-amber-200">
               <div className="py-2 px-3 bg-amber-50 text-center">
                 <p className="text-[10px] text-amber-600 font-medium">ค่าจอดรถ ({hours} ชม.)</p>

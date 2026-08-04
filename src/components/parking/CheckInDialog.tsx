@@ -51,9 +51,9 @@ export function CheckInDialog({
             <div className="flex flex-col items-center gap-3">
               <div
                 onClick={onSimulateScan}
-                className="w-full cursor-pointer flex flex-col items-center gap-2 p-5 rounded-xl border-2 border-dashed border-blue-200 bg-blue-50 hover:bg-blue-100 hover:border-blue-400 transition-all active:scale-[0.98]"
+                className="w-full cursor-pointer flex flex-col items-center gap-2 p-5 rounded-lg border-2 border-dashed border-blue-200 bg-blue-50 hover:bg-blue-100 hover:border-blue-400 transition-all active:scale-[0.98]"
               >
-                <div className="flex size-12 items-center justify-center rounded-xl bg-blue-600 shadow-md shadow-blue-500/30 animate-pulse">
+                <div className="flex size-12 items-center justify-center rounded-lg bg-blue-600 shadow-md shadow-blue-500/30 animate-pulse">
                   <CreditCard className="size-6 text-white" />
                 </div>
                 <div className="text-center">

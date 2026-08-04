@@ -13,9 +13,9 @@ export function QuickActions({ onCheckIn, onCheckOut, onLostCard }: Props) {
 
       <button
         onClick={onCheckIn}
-        className="w-full flex items-center gap-4 p-4 rounded-2xl bg-white border-2 border-slate-200 hover:border-blue-400 hover:bg-blue-50/40 transition-all group shadow-sm active:scale-[0.98]"
+        className="w-full flex items-center gap-4 p-4 rounded-xl bg-white border-2 border-slate-200 hover:border-blue-400 hover:bg-blue-50/40 transition-all group shadow-sm active:scale-[0.98]"
       >
-        <div className="flex size-14 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white shadow-lg shadow-blue-500/30 group-hover:shadow-blue-500/50 transition-shadow">
+        <div className="flex size-14 shrink-0 items-center justify-center rounded-lg bg-blue-600 text-white shadow-lg shadow-blue-500/30 group-hover:shadow-blue-500/50 transition-shadow">
           <LogIn className="size-7" />
         </div>
         <div className="text-left flex-1">
@@ -27,9 +27,9 @@ export function QuickActions({ onCheckIn, onCheckOut, onLostCard }: Props) {
 
       <button
         onClick={onCheckOut}
-        className="w-full flex items-center gap-4 p-4 rounded-2xl bg-white border-2 border-slate-200 hover:border-emerald-400 hover:bg-emerald-50/40 transition-all group shadow-sm active:scale-[0.98]"
+        className="w-full flex items-center gap-4 p-4 rounded-xl bg-white border-2 border-slate-200 hover:border-emerald-400 hover:bg-emerald-50/40 transition-all group shadow-sm active:scale-[0.98]"
       >
-        <div className="flex size-14 shrink-0 items-center justify-center rounded-xl bg-emerald-600 text-white shadow-lg shadow-emerald-500/30 group-hover:shadow-emerald-500/50 transition-shadow">
+        <div className="flex size-14 shrink-0 items-center justify-center rounded-lg bg-emerald-600 text-white shadow-lg shadow-emerald-500/30 group-hover:shadow-emerald-500/50 transition-shadow">
           <LogOut className="size-7" />
         </div>
         <div className="text-left flex-1">
@@ -41,9 +41,9 @@ export function QuickActions({ onCheckIn, onCheckOut, onLostCard }: Props) {
 
       <button
         onClick={onLostCard}
-        className="w-full flex items-center gap-4 p-4 rounded-2xl bg-white border-2 border-slate-200 hover:border-amber-400 hover:bg-amber-50/40 transition-all group shadow-sm active:scale-[0.98]"
+        className="w-full flex items-center gap-4 p-4 rounded-xl bg-white border-2 border-slate-200 hover:border-amber-400 hover:bg-amber-50/40 transition-all group shadow-sm active:scale-[0.98]"
       >
-        <div className="flex size-14 shrink-0 items-center justify-center rounded-xl bg-amber-500 text-white shadow-lg shadow-amber-500/30 group-hover:shadow-amber-500/50 transition-shadow">
+        <div className="flex size-14 shrink-0 items-center justify-center rounded-lg bg-amber-500 text-white shadow-lg shadow-amber-500/30 group-hover:shadow-amber-500/50 transition-shadow">
           <AlertTriangle className="size-7" />
         </div>
         <div className="text-left flex-1">
@@ -54,7 +54,7 @@ export function QuickActions({ onCheckIn, onCheckOut, onLostCard }: Props) {
       </button>
 
       {/* Rate reference */}
-      <div className="rounded-2xl bg-white border border-slate-200 p-4 shadow-sm">
+      <div className="rounded-xl bg-white border border-slate-200 p-4 shadow-sm">
         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-3">อัตราค่าบริการ</p>
         <div className="space-y-2.5">
           {[

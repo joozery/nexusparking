@@ -1,7 +1,12 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { LayoutDashboard, Car, CircleParking, BadgeDollarSign, TrendingUp, RefreshCw, Clock, ArrowDownLeft, ArrowUpRight, AlertTriangle } from 'lucide-react'
+import Link from 'next/link'
+import {
+  LayoutDashboard, Car, Bike, Moon, BadgeDollarSign, TrendingUp,
+  RefreshCw, Clock, ArrowDownLeft, ArrowUpRight, AlertTriangle,
+  CircleParking, CreditCard, History, BarChart2, DoorOpen, Settings,
+} from 'lucide-react'
 
 interface Stats {
   activeCars: number
@@ -20,17 +25,36 @@ interface Session {
   totalFee: number
 }
 
+const TYPE_ICON: Record<string, typeof Car> = { car: Car, motorcycle: Bike, overnight: Moon }
+const TYPE_LABEL: Record<string, string>   = { car: 'รถยนต์', motorcycle: 'มอเตอร์ไซค์', overnight: 'ค้างคืน' }
+
+const QUICK_LINKS = [
+  { href: '/gate',    icon: DoorOpen,       label: 'เกท / เช็คอิน',  sub: 'รับรถเข้า-ออก',    color: '#1D4ED8', bg: 'rgba(29,78,216,0.08)'  },
+  { href: '/cards',   icon: CreditCard,     label: 'จัดการบัตร',     sub: 'เพิ่ม / ปิดใช้งาน', color: '#0891B2', bg: 'rgba(8,145,178,0.08)'  },
+  { href: '/history', icon: History,        label: 'ประวัติ',         sub: 'ค้นหา-ลบ session',  color: '#7C3AED', bg: 'rgba(124,58,237,0.08)' },
+  { href: '/reports', icon: BarChart2,      label: 'รายงาน',          sub: 'รายได้รายวัน/เดือน', color: '#059669', bg: 'rgba(5,150,105,0.08)'  },
+  { href: '/settings',icon: Settings,       label: 'ตั้งค่า',         sub: 'ฮาร์ดแวร์ / ระบบ',  color: '#D97706', bg: 'rgba(217,119,6,0.08)'  },
+]
+
+function fmtTime(iso: string) {
+  return new Date(iso).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })
+}
+function fmtDate(iso: string) {
+  return new Date(iso).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })
+}
+
 export default function DashboardPage() {
   const [stats,   setStats]   = useState<Stats | null>(null)
   const [recent,  setRecent]  = useState<Session[]>([])
   const [loading, setLoading] = useState(true)
+  const [tick,    setTick]    = useState(new Date())
 
   async function fetchAll() {
     setLoading(true)
     try {
       const [sRes, rRes] = await Promise.all([
         fetch('/api/stats'),
-        fetch('/api/sessions?limit=8'),
+        fetch('/api/sessions?limit=10'),
       ])
       setStats(await sRes.json())
       const d = await rRes.json()
@@ -40,158 +64,290 @@ export default function DashboardPage() {
     }
   }
 
-  useEffect(() => { fetchAll() }, [])
+  useEffect(() => {
+    fetchAll()
+    // auto-refresh every 30 s
+    const id = setInterval(() => { fetchAll(); setTick(new Date()) }, 30000)
+    return () => clearInterval(id)
+  }, [])
 
-  const occupancyPct = stats ? Math.round((stats.activeCars / stats.totalCapacity) * 100) : 0
+  const occupancyPct = stats
+    ? Math.min(100, Math.round((stats.activeCars / stats.totalCapacity) * 100))
+    : 0
+
+  const occupancyColor =
+    occupancyPct >= 85 ? '#DC2626' :
+    occupancyPct >= 60 ? '#D97706' :
+    '#059669'
+
+  const occupancyGrad =
+    occupancyPct >= 85 ? 'linear-gradient(135deg,#7F1D1D,#DC2626)' :
+    occupancyPct >= 60 ? 'linear-gradient(135deg,#78350F,#D97706)' :
+    'linear-gradient(135deg,#064E3B,#059669)'
+
+  const todayDate = new Date().toLocaleDateString('th-TH', {
+    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+  })
 
   return (
     <>
-      <header className="shrink-0 h-14 bg-white flex items-center justify-between px-6"
-        style={{ borderBottom: '1px solid #E8ECF4' }}>
-        <div className="flex items-center gap-3">
-          <div className="flex size-7 items-center justify-center rounded-lg"
-            style={{ background: 'rgba(29,78,216,0.08)' }}>
-            <LayoutDashboard className="size-3.5" style={{ color: '#1D4ED8' }} />
+      {/* ── HEADER ── */}
+      <header className="shrink-0 bg-white" style={{ borderBottom: '1px solid #E8ECF4' }}>
+        <div className="flex items-center justify-between px-6 h-14">
+          <div className="flex items-center gap-3">
+            <div className="size-7 rounded-lg flex items-center justify-center"
+              style={{ background: 'rgba(29,78,216,0.08)' }}>
+              <LayoutDashboard className="size-3.5" style={{ color: '#1D4ED8' }} />
+            </div>
+            <div>
+              <h1 className="text-sm font-bold text-slate-900 leading-none">ภาพรวมระบบ</h1>
+              <p className="text-[10px] text-slate-400 mt-0.5">{todayDate}</p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-sm font-black text-slate-900 leading-none">ภาพรวมระบบ</h1>
-            <p className="text-[10px] text-slate-400 mt-0.5">
-              {new Date().toLocaleDateString('th-TH', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-            </p>
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 text-[10px] text-slate-400">
+              <span className="size-1.5 rounded-full bg-green-400 animate-pulse" />
+              {tick.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+            </div>
+            <button onClick={fetchAll}
+              className="size-8 rounded-lg flex items-center justify-center hover:bg-slate-100 transition-colors">
+              <RefreshCw className={`size-3.5 text-slate-400 ${loading ? 'animate-spin' : ''}`} />
+            </button>
           </div>
         </div>
-        <button onClick={fetchAll}
-          className="size-8 rounded-lg flex items-center justify-center transition-colors"
-          style={{ background: '#F1F5F9' }}
-          onMouseEnter={e => { e.currentTarget.style.background = '#E2E8F0' }}
-          onMouseLeave={e => { e.currentTarget.style.background = '#F1F5F9' }}>
-          <RefreshCw className={`size-3.5 text-slate-500 ${loading ? 'animate-spin' : ''}`} />
-        </button>
       </header>
 
-      <div className="flex-1 flex flex-col gap-4 p-5 overflow-auto">
+      <div className="flex-1 overflow-auto bg-slate-50/60">
+        <div className="p-5 space-y-4">
 
-        {/* KPI */}
-        <div className="shrink-0 grid grid-cols-4 gap-3">
-          {[
-            { label: 'รถในลานตอนนี้', value: stats?.activeCars,       sub: `จาก ${stats?.totalCapacity ?? 200} คัน`, icon: Car,            iconBg: 'rgba(29,78,216,0.1)',  iconColor: '#1D4ED8', bar: true  },
-            { label: 'ที่จอดว่าง',    value: stats?.availableSlots,   sub: `${100 - occupancyPct}% ว่าง`,          icon: CircleParking,   iconBg: 'rgba(16,185,129,0.1)', iconColor: '#10B981', bar: false },
-            { label: 'รายได้วันนี้',  value: stats ? `฿${stats.todayRevenue.toLocaleString()}` : undefined, sub: 'ยอดสะสม', icon: BadgeDollarSign, iconBg: 'rgba(16,185,129,0.1)', iconColor: '#10B981', bar: false },
-            { label: 'รถเข้าวันนี้',  value: stats?.todayEntries,     sub: 'รายการทั้งหมด',                        icon: TrendingUp,      iconBg: 'rgba(245,158,11,0.1)', iconColor: '#F59E0B', bar: false },
-          ].map(({ label, value, sub, icon: Icon, iconBg, iconColor, bar }) => (
-            <div key={label} className="bg-white rounded-2xl px-4 py-4 flex items-center gap-3.5"
-              style={{ border: '1px solid #E8ECF4' }}>
-              <div className="size-10 rounded-xl flex items-center justify-center shrink-0"
-                style={{ background: iconBg }}>
-                <Icon className="size-5" style={{ color: iconColor }} strokeWidth={1.75} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-semibold text-slate-400 truncate">{label}</p>
-                <p className="text-2xl font-black text-slate-900 leading-tight">{value ?? '—'}</p>
-                {bar ? (
-                  <div className="mt-1.5 h-1.5 rounded-full bg-slate-100 overflow-hidden">
-                    <div className="h-full rounded-full" style={{ width: `${occupancyPct}%`, background: iconColor }} />
-                  </div>
-                ) : (
-                  <p className="text-[10px] text-slate-400">{sub}</p>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
+          {/* ── OCCUPANCY HERO ── */}
+          <div className="rounded-xl p-5 text-white relative overflow-hidden"
+            style={{ backgroundImage: 'url(/coverbgda.png)', backgroundSize: 'cover', backgroundPosition: 'center', boxShadow: '0 4px 24px rgba(0,0,0,0.15)' }}>
+            {/* overlay gradient for readability */}
+            <div className="absolute inset-0 pointer-events-none rounded-xl"
+              style={{ background: `${occupancyGrad.replace('linear-gradient', 'linear-gradient').replace(')', ', rgba(0,0,0,0.35))')}`, opacity: 0.75 }} />
+            {/* bg blobs */}
+            <div className="absolute -top-8 -right-8 size-40 rounded-full pointer-events-none"
+              style={{ background: 'rgba(255,255,255,0.06)' }} />
+            <div className="absolute -bottom-6 right-24 size-24 rounded-full pointer-events-none"
+              style={{ background: 'rgba(255,255,255,0.04)' }} />
 
-        {/* Lower row */}
-        <div className="flex gap-4 flex-1 min-h-0">
-
-          {/* Capacity gauge */}
-          <div className="w-64 shrink-0 bg-white rounded-2xl p-5 flex flex-col"
-            style={{ border: '1px solid #E8ECF4' }}>
-            <p className="text-xs font-black text-slate-700 mb-4">ความจุลานจอด</p>
-            <div className="flex-1 flex flex-col items-center justify-center gap-4">
-              <div className="relative size-36">
-                <svg className="size-36 -rotate-90" viewBox="0 0 120 120">
-                  <circle cx="60" cy="60" r="50" fill="none" strokeWidth="10" stroke="#F1F5F9" />
-                  <circle cx="60" cy="60" r="50" fill="none" strokeWidth="10"
-                    stroke="#1D4ED8" strokeLinecap="round"
-                    strokeDasharray={`${2 * Math.PI * 50}`}
-                    strokeDashoffset={`${2 * Math.PI * 50 * (1 - occupancyPct / 100)}`}
+            <div className="relative z-10 flex items-center gap-8">
+              {/* ring gauge */}
+              <div className="relative size-28 shrink-0">
+                <svg className="size-28 -rotate-90" viewBox="0 0 100 100">
+                  <circle cx="50" cy="50" r="40" fill="none" strokeWidth="8"
+                    stroke="rgba(255,255,255,0.15)" />
+                  <circle cx="50" cy="50" r="40" fill="none" strokeWidth="8"
+                    stroke="white" strokeLinecap="round"
+                    strokeDasharray={`${2 * Math.PI * 40}`}
+                    strokeDashoffset={`${2 * Math.PI * 40 * (1 - occupancyPct / 100)}`}
+                    style={{ transition: 'stroke-dashoffset 0.6s ease' }}
                   />
                 </svg>
                 <div className="absolute inset-0 flex flex-col items-center justify-center">
-                  <span className="text-3xl font-black text-slate-900">{occupancyPct}%</span>
-                  <span className="text-[10px] text-slate-400 font-semibold">ใช้งาน</span>
+                  <span className="text-3xl font-bold leading-none">{occupancyPct}%</span>
+                  <span className="text-[10px] opacity-70 mt-0.5">ใช้งาน</span>
                 </div>
               </div>
-              <div className="w-full grid grid-cols-2 gap-2">
-                <div className="text-center py-2.5 rounded-xl" style={{ background: 'rgba(29,78,216,0.06)' }}>
-                  <p className="text-xl font-black" style={{ color: '#1D4ED8' }}>{stats?.activeCars ?? '—'}</p>
-                  <p className="text-[9px] text-slate-400 font-semibold uppercase tracking-wide">ใช้งาน</p>
+
+              {/* text info */}
+              <div className="flex-1">
+                <p className="text-xs font-semibold opacity-60 uppercase tracking-widest mb-1">สถานะลานจอด</p>
+                <p className="text-4xl font-bold leading-none">
+                  {stats?.activeCars ?? '—'}
+                  <span className="text-xl opacity-50 font-normal ml-2">/ {stats?.totalCapacity ?? '—'} คัน</span>
+                </p>
+                <p className="text-sm opacity-70 mt-2">
+                  ที่จอดว่างเหลือ <strong className="text-white font-bold">{stats?.availableSlots ?? '—'} ช่อง</strong>
+                </p>
+
+                {/* progress bar */}
+                <div className="mt-3 h-2 rounded-full overflow-hidden"
+                  style={{ background: 'rgba(255,255,255,0.2)' }}>
+                  <div className="h-full rounded-full"
+                    style={{
+                      width: `${occupancyPct}%`,
+                      background: 'rgba(255,255,255,0.8)',
+                      transition: 'width 0.6s ease',
+                    }} />
                 </div>
-                <div className="text-center py-2.5 rounded-xl" style={{ background: 'rgba(16,185,129,0.06)' }}>
-                  <p className="text-xl font-black" style={{ color: '#10B981' }}>{stats?.availableSlots ?? '—'}</p>
-                  <p className="text-[9px] text-slate-400 font-semibold uppercase tracking-wide">ว่าง</p>
+
+                <div className="flex items-center gap-4 mt-2 text-[10px] opacity-60">
+                  <span>0%</span>
+                  <span className="flex-1 text-center">ความจุ {occupancyPct}%</span>
+                  <span>100%</span>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Recent activity */}
-          <div className="flex-1 bg-white rounded-2xl overflow-hidden flex flex-col"
-            style={{ border: '1px solid #E8ECF4' }}>
-            <div className="shrink-0 px-5 py-3.5 flex items-center justify-between"
-              style={{ borderBottom: '1px solid #E8ECF4' }}>
-              <p className="text-xs font-black text-slate-700">กิจกรรมล่าสุด</p>
-              <a href="/history" className="text-[10px] font-bold hover:underline" style={{ color: '#1D4ED8' }}>
-                ดูทั้งหมด →
-              </a>
-            </div>
-            {loading ? (
-              <div className="flex-1 flex items-center justify-center">
-                <RefreshCw className="size-4 text-slate-300 animate-spin" />
+          {/* ── KPI STRIP ── */}
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              {
+                label: 'รายได้วันนี้',
+                value: stats ? `฿${stats.todayRevenue.toLocaleString('th-TH')}` : '—',
+                sub:   'บาท ยอดสะสม',
+                icon:  BadgeDollarSign,
+                grad:  'linear-gradient(135deg,#1E3A8A,#1D4ED8)',
+                glow:  'rgba(29,78,216,0.2)',
+              },
+              {
+                label: 'รถเข้าวันนี้',
+                value: stats?.todayEntries ?? '—',
+                sub:   'คัน รวมทุกประเภท',
+                icon:  TrendingUp,
+                grad:  'linear-gradient(135deg,#164E63,#0891B2)',
+                glow:  'rgba(8,145,178,0.2)',
+              },
+              {
+                label: 'ที่จอดว่าง',
+                value: stats?.availableSlots ?? '—',
+                sub:   `จาก ${stats?.totalCapacity ?? '—'} ช่อง`,
+                icon:  CircleParking,
+                grad:  occupancyPct >= 85
+                  ? 'linear-gradient(135deg,#7F1D1D,#DC2626)'
+                  : occupancyPct >= 60
+                  ? 'linear-gradient(135deg,#78350F,#D97706)'
+                  : 'linear-gradient(135deg,#064E3B,#059669)',
+                glow: occupancyPct >= 85
+                  ? 'rgba(220,38,38,0.2)'
+                  : occupancyPct >= 60
+                  ? 'rgba(217,119,6,0.2)'
+                  : 'rgba(5,150,105,0.2)',
+              },
+            ].map(k => {
+              const Icon = k.icon
+              return (
+                <div key={k.label} className="rounded-xl p-4 text-white relative overflow-hidden"
+                  style={{ background: k.grad, boxShadow: `0 4px 16px ${k.glow}` }}>
+                  <div className="absolute -top-2 -right-2 size-14 rounded-full pointer-events-none"
+                    style={{ background: 'rgba(255,255,255,0.07)' }} />
+                  <Icon className="size-4 opacity-75 mb-3" strokeWidth={1.75} />
+                  <p className="text-3xl font-bold leading-none">{k.value}</p>
+                  <p className="text-[10px] font-semibold opacity-60 mt-1">{k.label}</p>
+                  <p className="text-[9px] opacity-40 mt-0.5">{k.sub}</p>
+                </div>
+              )
+            })}
+          </div>
+
+          {/* ── LOWER ROW ── */}
+          <div className="grid grid-cols-5 gap-4">
+
+            {/* Quick links */}
+            <div className="col-span-2 bg-white rounded-xl overflow-hidden"
+              style={{ border: '1px solid #E8ECF4' }}>
+              <div className="px-4 py-3" style={{ borderBottom: '1px solid #E8ECF4', background: '#FAFBFF' }}>
+                <p className="text-xs font-bold text-slate-700">เมนูด่วน</p>
               </div>
-            ) : recent.length === 0 ? (
-              <div className="flex-1 flex items-center justify-center">
-                <p className="text-sm text-slate-300">ยังไม่มีข้อมูล</p>
-              </div>
-            ) : (
-              <div className="flex-1 overflow-y-auto scrollbar-hide">
-                {recent.map((s, i) => {
-                  const isActive = s.status === 'active'
-                  const isLost   = s.status === 'lost'
+              <div className="p-3 grid grid-cols-1 gap-2">
+                {QUICK_LINKS.map(l => {
+                  const Icon = l.icon
                   return (
-                    <div key={s._id} className="flex items-center gap-3.5 px-5 py-3"
-                      style={i < recent.length - 1 ? { borderBottom: '1px solid #F8FAFF' } : {}}>
-                      <div className="size-7 rounded-lg flex items-center justify-center shrink-0"
-                        style={isLost ? { background: 'rgba(245,158,11,0.08)' } : isActive ? { background: 'rgba(16,185,129,0.08)' } : { background: 'rgba(29,78,216,0.07)' }}>
-                        {isLost
-                          ? <AlertTriangle className="size-3.5" style={{ color: '#F59E0B' }} />
-                          : isActive
-                          ? <ArrowDownLeft className="size-3.5" style={{ color: '#10B981' }} />
-                          : <ArrowUpRight className="size-3.5" style={{ color: '#1D4ED8' }} />
-                        }
+                    <Link key={l.href} href={l.href}
+                      className="flex items-center gap-3 px-3 py-2.5 rounded-lg group transition-all hover:shadow-sm"
+                      style={{ border: '1px solid #F1F5F9' }}
+                      onMouseEnter={e => { e.currentTarget.style.borderColor = l.color; e.currentTarget.style.background = l.bg }}
+                      onMouseLeave={e => { e.currentTarget.style.borderColor = '#F1F5F9'; e.currentTarget.style.background = 'transparent' }}>
+                      <div className="size-8 rounded-lg flex items-center justify-center shrink-0 transition-all"
+                        style={{ background: l.bg }}>
+                        <Icon className="size-4" style={{ color: l.color }} strokeWidth={1.75} />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-black text-slate-800">{s.plate}</p>
-                        <p className="text-[10px] text-slate-400 flex items-center gap-1">
-                          <Clock className="size-2.5" />
-                          {new Date(s.entryTime).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}
-                          {' · '}
-                          {s.cardType === 'car' ? 'รถยนต์' : s.cardType === 'motorcycle' ? 'มอเตอร์ไซค์' : 'ค้างคืน'}
-                        </p>
+                        <p className="text-xs font-bold text-slate-800">{l.label}</p>
+                        <p className="text-[10px] text-slate-400">{l.sub}</p>
                       </div>
-                      <div className="text-right shrink-0">
-                        <p className="text-sm font-black text-slate-800">฿{s.totalFee}</p>
-                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full"
-                          style={isLost ? { background: 'rgba(245,158,11,0.1)', color: '#D97706' } : isActive ? { background: 'rgba(16,185,129,0.08)', color: '#059669' } : { background: 'rgba(29,78,216,0.07)', color: '#1D4ED8' }}>
-                          {isLost ? 'บัตรหาย' : isActive ? 'จอดอยู่' : 'เสร็จสิ้น'}
-                        </span>
-                      </div>
-                    </div>
+                      <ArrowUpRight className="size-3.5 text-slate-300 shrink-0 group-hover:text-slate-500 transition-colors" />
+                    </Link>
                   )
                 })}
               </div>
-            )}
+            </div>
+
+            {/* Recent activity */}
+            <div className="col-span-3 bg-white rounded-xl overflow-hidden flex flex-col"
+              style={{ border: '1px solid #E8ECF4' }}>
+              <div className="shrink-0 flex items-center justify-between px-5 py-3"
+                style={{ borderBottom: '1px solid #E8ECF4', background: '#FAFBFF' }}>
+                <p className="text-xs font-bold text-slate-700">กิจกรรมล่าสุด</p>
+                <Link href="/history" className="text-[10px] font-bold flex items-center gap-1 hover:underline"
+                  style={{ color: '#1D4ED8' }}>
+                  ดูทั้งหมด <ArrowUpRight className="size-3" />
+                </Link>
+              </div>
+
+              {loading ? (
+                <div className="flex-1 flex items-center justify-center py-12">
+                  <RefreshCw className="size-4 text-slate-200 animate-spin" />
+                </div>
+              ) : recent.length === 0 ? (
+                <div className="flex-1 flex items-center justify-center py-12">
+                  <p className="text-sm text-slate-300">ยังไม่มีข้อมูล</p>
+                </div>
+              ) : (
+                <div className="flex-1 overflow-y-auto scrollbar-hide">
+                  {recent.map((s, i) => {
+                    const isActive    = s.status === 'active'
+                    const isLost      = s.status === 'lost'
+                    const TypeIcon    = TYPE_ICON[s.cardType] ?? Car
+                    const statusColor = isLost ? '#D97706' : isActive ? '#059669' : '#1D4ED8'
+                    const statusBg    = isLost ? 'rgba(217,119,6,0.08)' : isActive ? 'rgba(5,150,105,0.08)' : 'rgba(29,78,216,0.07)'
+                    const statusLabel = isLost ? 'บัตรหาย' : isActive ? 'จอดอยู่' : 'เสร็จสิ้น'
+                    return (
+                      <div key={s._id}
+                        className="flex items-center gap-3.5 px-5 py-3 hover:bg-slate-50 transition-colors"
+                        style={i < recent.length - 1 ? { borderBottom: '1px solid #F8FAFF' } : {}}>
+
+                        {/* status dot */}
+                        <div className="relative shrink-0">
+                          <div className="size-8 rounded-lg flex items-center justify-center"
+                            style={{ background: statusBg }}>
+                            {isLost
+                              ? <AlertTriangle className="size-3.5" style={{ color: statusColor }} />
+                              : isActive
+                              ? <ArrowDownLeft  className="size-3.5" style={{ color: statusColor }} />
+                              : <ArrowUpRight   className="size-3.5" style={{ color: statusColor }} />}
+                          </div>
+                          {isActive && (
+                            <span className="absolute -top-0.5 -right-0.5 size-2 rounded-full bg-green-400"
+                              style={{ boxShadow: '0 0 0 2px white' }} />
+                          )}
+                        </div>
+
+                        {/* info */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <p className="text-sm font-bold text-slate-800">{s.plate || '—'}</p>
+                            <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full"
+                              style={{ background: statusBg, color: statusColor }}>
+                              {statusLabel}
+                            </span>
+                          </div>
+                          <p className="text-[10px] text-slate-400 flex items-center gap-1 mt-0.5">
+                            <TypeIcon className="size-2.5" strokeWidth={1.75} />
+                            {TYPE_LABEL[s.cardType]}
+                            <span className="text-slate-300">·</span>
+                            <Clock className="size-2.5" />
+                            {fmtDate(s.entryTime)} {fmtTime(s.entryTime)}
+                          </p>
+                        </div>
+
+                        {/* fee */}
+                        <div className="text-right shrink-0">
+                          <p className="text-sm font-bold text-slate-800">
+                            {s.totalFee > 0 ? `฿${s.totalFee.toLocaleString('th-TH')}` : <span className="text-slate-300">—</span>}
+                          </p>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
           </div>
+
         </div>
       </div>
     </>

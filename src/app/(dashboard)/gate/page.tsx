@@ -27,6 +27,7 @@ interface Session {
   cardType: CardType
   plate: string
   entryTime: string
+  exitTime?: string
   durationMin: number
   fee: number
   totalFee: number
@@ -47,8 +48,9 @@ const TYPE_META: Record<CardType, { label: string; icon: typeof Car; color: stri
   overnight:  { label: 'ค้างคืน',     icon: Moon, color: '#F59E0B', bg: 'rgba(245,158,11,0.08)' },
 }
 
-function fmtDur(entryTime: string) {
-  const diff = Date.now() - new Date(entryTime).getTime()
+function fmtDur(entryTime: string, exitTime?: string) {
+  const end  = exitTime ? new Date(exitTime).getTime() : Date.now()
+  const diff = end - new Date(entryTime).getTime()
   const h = Math.floor(diff / 3600000)
   const m = Math.floor((diff % 3600000) / 60000)
   return h > 0 ? `${h} ชม. ${m} น.` : `${m} น.`
@@ -63,6 +65,7 @@ export default function GatePage() {
   const [bizClose,     setBizClose]     = useState('22:00')
   const [activeId,     setActiveId]     = useState<string | null>(null)
   const [activeTab,    setActiveTab]    = useState<'all' | 'active' | 'completed'>('all')
+  const [search,       setSearch]       = useState('')
 
   const [checkInOpen,  setCheckInOpen]  = useState(false)
   const [checkOutOpen, setCheckOutOpen] = useState(false)
@@ -128,10 +131,14 @@ export default function GatePage() {
 
   async function handleCheckin() {
     if (!ciPlate || ciPlate.length !== 4) return
+    // ciUid มีค่า = สแกนบัตรจริง, ไม่มี = เลือกประเภทด้วยมือ (walk-in)
+    const body = ciUid
+      ? { uid: ciUid, plate: ciPlate }
+      : { cardType: ciType, plate: ciPlate }
     const res = await fetch('/api/sessions/checkin', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ uid: ciUid, plate: ciPlate }),
+      body: JSON.stringify(body),
     })
     if (res.ok) {
       const data = await res.json()
@@ -292,19 +299,29 @@ ${lostFine > 0 ? `<div class="row lost-row"><span>ค่าปรับบัต
     setCoSessionId(s._id); setCoStep('payment'); setCheckOutOpen(true)
   }
 
-  const filtered = sessions.filter(s =>
-    activeTab === 'all' ? true : activeTab === 'active' ? s.status === 'active' : s.status === 'completed'
-  )
+  const filtered = sessions.filter(s => {
+    const matchTab = activeTab === 'all' ? true : activeTab === 'active' ? s.status === 'active' : s.status === 'completed'
+    const matchSearch = search === '' || s.plate.toLowerCase().includes(search.toLowerCase()) || s.cardUid.toLowerCase().includes(search.toLowerCase())
+    return matchTab && matchSearch
+  })
 
   const active = sessions.find(s => s._id === activeId) ?? sessions[0] ?? null
   const tm     = active ? TYPE_META[active.cardType] : null
   const TypeIcon = tm?.icon ?? Car
   const baseRate  = active?.cardType === 'car' ? 30 : active?.cardType === 'motorcycle' ? 20 : 100
   const extraRate = active?.cardType === 'car' ? 20 : active?.cardType === 'motorcycle' ? 10 : 0
-  const durationMin = active ? Math.max(1, Math.floor((Date.now() - new Date(active.entryTime).getTime()) / 60000)) : 0
+  // active session → คำนวณ live, completed/lost → ใช้ค่าที่บันทึกไว้
+  const isActiveSession = active?.status === 'active'
+  const durationMin = active
+    ? isActiveSession
+      ? Math.max(1, Math.floor((Date.now() - new Date(active.entryTime).getTime()) / 60000))
+      : active.durationMin
+    : 0
   const hours    = Math.ceil(durationMin / 60)
   const extraHrs = hours > 1 ? hours - 1 : 0
-  const liveFee  = active ? calcFee(active.cardType, hours) : 0
+  const liveFee  = active
+    ? isActiveSession ? calcFee(active.cardType, hours) : active.totalFee
+    : 0
 
   return (
     <>
@@ -363,9 +380,9 @@ ${lostFine > 0 ? `<div class="row lost-row"><span>ค่าปรับบัต
             { label: 'รายได้วันนี้', value: stats ? `฿${stats.todayRevenue.toLocaleString()}` : undefined, sub: 'วันนี้', icon: BadgeDollarSign, iconBg: 'rgba(16,185,129,0.1)', iconColor: '#10B981', bar: false },
             { label: 'แจ้งเตือน',   value: sessions.filter(s => s.status === 'lost' || !s.status).length || undefined, sub: 'รายการผิดปกติ', icon: ShieldAlert, iconBg: 'rgba(245,158,11,0.1)', iconColor: '#F59E0B', bar: false },
           ].map(({ label, value, sub, icon: Icon, iconBg, iconColor, bar }) => (
-            <div key={label} className="bg-white rounded-2xl px-4 py-3.5 flex items-center gap-3.5"
+            <div key={label} className="bg-white rounded-xl px-4 py-3.5 flex items-center gap-3.5"
               style={{ border: '1px solid #E8ECF4' }}>
-              <div className="size-9 rounded-xl flex items-center justify-center shrink-0"
+              <div className="size-9 rounded-lg flex items-center justify-center shrink-0"
                 style={{ background: iconBg }}>
                 <Icon className="size-4" style={{ color: iconColor }} />
               </div>
@@ -387,7 +404,7 @@ ${lostFine > 0 ? `<div class="row lost-row"><span>ค่าปรับบัต
         <div className="flex gap-4 flex-1 min-h-0">
 
           {/* Vehicle list */}
-          <div className="w-[280px] shrink-0 flex flex-col bg-white rounded-2xl overflow-hidden"
+          <div className="w-[280px] shrink-0 flex flex-col bg-white rounded-xl overflow-hidden"
             style={{ border: '1px solid #E8ECF4' }}>
             <div className="shrink-0 px-4 pt-3.5 pb-3">
               <div className="flex items-center justify-between mb-3">
@@ -399,7 +416,10 @@ ${lostFine > 0 ? `<div class="row lost-row"><span>ค่าปรับบัต
               </div>
               <div className="relative">
                 <Search className="size-3 text-slate-400 absolute left-2.5 top-2.5" />
-                <input placeholder="ค้นหาทะเบียน..."
+                <input
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  placeholder="ค้นหาทะเบียน / UID..."
                   className="w-full h-8 pl-7 pr-3 rounded-lg text-xs text-slate-700 outline-none"
                   style={{ background: '#F8FAFF', border: '1px solid #E8ECF4' }} />
               </div>
@@ -444,7 +464,7 @@ ${lostFine > 0 ? `<div class="row lost-row"><span>ค่าปรับบัต
                     onMouseEnter={e => { if (!on) e.currentTarget.style.background = '#F8FAFF' }}
                     onMouseLeave={e => { if (!on) e.currentTarget.style.background = 'transparent' }}>
                     {on && <span className="absolute left-0 top-3 bottom-3 w-[3px] rounded-full" style={{ background: '#1D4ED8' }} />}
-                    <div className="size-8 rounded-xl flex items-center justify-center shrink-0"
+                    <div className="size-8 rounded-lg flex items-center justify-center shrink-0"
                       style={on ? { background: '#1D4ED8' } : { background: m.bg }}>
                       <VIcon className="size-3.5" style={{ color: on ? 'white' : m.color }} strokeWidth={1.75} />
                     </div>
@@ -463,7 +483,7 @@ ${lostFine > 0 ? `<div class="row lost-row"><span>ค่าปรับบัต
                       </div>
                       <div className="flex items-center gap-2 mt-0.5">
                         <span className="text-[10px] text-slate-400 flex items-center gap-1">
-                          <Clock className="size-2.5" /> {fmtDur(s.entryTime)}
+                          <Clock className="size-2.5" /> {fmtDur(s.entryTime, s.exitTime)}
                         </span>
                         <span className="text-[10px] font-medium" style={{ color: m.color }}>{m.label}</span>
                       </div>
@@ -482,7 +502,7 @@ ${lostFine > 0 ? `<div class="row lost-row"><span>ค่าปรับบัต
 
           {/* Detail panel */}
           {!active ? (
-            <div className="flex-1 bg-white rounded-2xl flex items-center justify-center"
+            <div className="flex-1 bg-white rounded-xl flex items-center justify-center"
               style={{ border: '1px solid #E8ECF4' }}>
               <div className="text-center">
                 <CircleParking className="size-12 text-slate-200 mx-auto mb-3" />
@@ -490,7 +510,7 @@ ${lostFine > 0 ? `<div class="row lost-row"><span>ค่าปรับบัต
               </div>
             </div>
           ) : (
-            <div className="flex-1 flex flex-col bg-white rounded-2xl overflow-hidden"
+            <div className="flex-1 flex flex-col bg-white rounded-xl overflow-hidden"
               style={{ border: '1px solid #E8ECF4' }}>
 
               {/* Blue header */}
@@ -500,7 +520,7 @@ ${lostFine > 0 ? `<div class="row lost-row"><span>ค่าปรับบัต
                   style={{ background: 'rgba(255,255,255,0.06)' }} />
                 <div className="relative z-10 flex items-center justify-between">
                   <div className="flex items-center gap-4">
-                    <div className="size-12 rounded-2xl flex items-center justify-center shrink-0"
+                    <div className="size-12 rounded-xl flex items-center justify-center shrink-0"
                       style={{ background: 'rgba(255,255,255,0.18)' }}>
                       <TypeIcon className="size-6 text-white" strokeWidth={1.75} />
                     </div>
@@ -516,13 +536,13 @@ ${lostFine > 0 ? `<div class="row lost-row"><span>ค่าปรับบัต
                         </span>
                       </div>
                       <p className="text-white/60 text-xs mt-1">
-                        {tm?.label} · จอดมาแล้ว {fmtDur(active.entryTime)}
+                        {tm?.label} · {active.status === 'active' ? 'จอดมาแล้ว' : 'จอดไป'} {fmtDur(active.entryTime, active.exitTime)}
                       </p>
                     </div>
                   </div>
                   <button
                     onClick={() => printReceipt(active, liveFee)}
-                    className="size-8 rounded-xl flex items-center justify-center hover:bg-white/10 transition-colors"
+                    className="size-8 rounded-lg flex items-center justify-center hover:bg-white/10 transition-colors"
                     style={{ border: '1px solid rgba(255,255,255,0.2)' }}>
                     <Printer className="size-3.5 text-white/60" />
                   </button>
@@ -534,7 +554,7 @@ ${lostFine > 0 ? `<div class="row lost-row"><span>ค่าปรับบัต
                 style={{ borderBottom: '1px solid #E8ECF4' }}>
                 {[
                   { icon: ArrowDownLeft, label: 'เวลาเข้า',    value: new Date(active.entryTime).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }), iconColor: '#1D4ED8', iconBg: 'rgba(29,78,216,0.08)' },
-                  { icon: Clock,         label: 'ระยะเวลา',    value: fmtDur(active.entryTime), iconColor: '#3B82F6', iconBg: 'rgba(59,130,246,0.08)' },
+                  { icon: Clock,         label: 'ระยะเวลา',    value: fmtDur(active.entryTime, active.exitTime), iconColor: '#3B82F6', iconBg: 'rgba(59,130,246,0.08)' },
                   { icon: Hash,          label: 'ประเภทอัตรา', value: active.cardType === 'overnight' ? 'Overnight' : 'Daytime', iconColor: '#F59E0B', iconBg: 'rgba(245,158,11,0.08)' },
                 ].map(({ icon: Icon, label, value, iconColor, iconBg }, i) => (
                   <div key={label} className="flex items-center gap-3 px-5 py-3"
@@ -556,7 +576,7 @@ ${lostFine > 0 ? `<div class="row lost-row"><span>ค่าปรับบัต
                 <div className="space-y-2.5">
                   {active.cardType !== 'overnight' ? (
                     <>
-                      <div className="flex items-center justify-between py-2.5 px-4 rounded-xl"
+                      <div className="flex items-center justify-between py-2.5 px-4 rounded-lg"
                         style={{ background: '#F8FAFF', border: '1px solid #E8ECF4' }}>
                         <div className="flex items-center gap-3">
                           <div className="size-6 rounded-lg flex items-center justify-center"
@@ -571,7 +591,7 @@ ${lostFine > 0 ? `<div class="row lost-row"><span>ค่าปรับบัต
                         <span className="text-sm font-black text-slate-800">฿{baseRate}</span>
                       </div>
                       {extraHrs > 0 && (
-                        <div className="flex items-center justify-between py-2.5 px-4 rounded-xl"
+                        <div className="flex items-center justify-between py-2.5 px-4 rounded-lg"
                           style={{ background: '#F8FAFF', border: '1px solid #E8ECF4' }}>
                           <div className="flex items-center gap-3">
                             <div className="size-6 rounded-lg flex items-center justify-center"
@@ -588,7 +608,7 @@ ${lostFine > 0 ? `<div class="row lost-row"><span>ค่าปรับบัต
                       )}
                     </>
                   ) : (
-                    <div className="flex items-center justify-between py-2.5 px-4 rounded-xl"
+                    <div className="flex items-center justify-between py-2.5 px-4 rounded-lg"
                       style={{ background: '#F8FAFF', border: '1px solid #E8ECF4' }}>
                       <div className="flex items-center gap-3">
                         <div className="size-6 rounded-lg flex items-center justify-center"
@@ -605,11 +625,13 @@ ${lostFine > 0 ? `<div class="row lost-row"><span>ค่าปรับบัต
                   )}
                 </div>
 
-                <div className="mt-4 flex items-center justify-between px-4 py-3.5 rounded-xl"
+                <div className="mt-4 flex items-center justify-between px-4 py-3.5 rounded-lg"
                   style={{ background: 'rgba(29,78,216,0.05)', border: '1.5px solid rgba(29,78,216,0.15)' }}>
                   <div>
                     <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">ยอดชำระทั้งสิ้น</p>
-                    <p className="text-[10px] text-slate-400 mt-0.5">ณ เวลาปัจจุบัน</p>
+                    <p className="text-[10px] text-slate-400 mt-0.5">
+                      {isActiveSession ? 'ณ เวลาปัจจุบัน' : 'ยอดที่ชำระแล้ว'}
+                    </p>
                   </div>
                   <span className="text-2xl font-black" style={{ color: '#1D4ED8' }}>฿{liveFee}</span>
                 </div>
@@ -619,7 +641,7 @@ ${lostFine > 0 ? `<div class="row lost-row"><span>ค่าปรับบัต
               <div className="shrink-0 px-6 pb-5 flex items-center gap-3"
                 style={{ borderTop: '1px solid #E8ECF4', paddingTop: '16px' }}>
                 <button onClick={() => setLostOpen(true)}
-                  className="h-10 px-4 rounded-xl text-xs font-bold flex items-center gap-2 transition-colors"
+                  className="h-10 px-4 rounded-lg text-xs font-bold flex items-center gap-2 transition-colors"
                   style={{ background: 'rgba(245,158,11,0.08)', color: '#B45309', border: '1px solid rgba(245,158,11,0.2)' }}
                   onMouseEnter={e => { e.currentTarget.style.background = 'rgba(245,158,11,0.14)' }}
                   onMouseLeave={e => { e.currentTarget.style.background = 'rgba(245,158,11,0.08)' }}>
@@ -627,7 +649,7 @@ ${lostFine > 0 ? `<div class="row lost-row"><span>ค่าปรับบัต
                 </button>
                 <button
                   onClick={() => printReceipt(active, liveFee)}
-                  className="h-10 px-4 rounded-xl text-xs font-bold flex items-center gap-2 transition-colors"
+                  className="h-10 px-4 rounded-lg text-xs font-bold flex items-center gap-2 transition-colors"
                   style={{ background: '#F8FAFF', color: '#64748B', border: '1px solid #E8ECF4' }}
                   onMouseEnter={e => { e.currentTarget.style.background = '#F1F5F9' }}
                   onMouseLeave={e => { e.currentTarget.style.background = '#F8FAFF' }}>
@@ -636,7 +658,7 @@ ${lostFine > 0 ? `<div class="row lost-row"><span>ค่าปรับบัต
                 <button
                   onClick={() => active.status === 'active' ? openCheckoutFromList(active) : null}
                   disabled={active.status !== 'active'}
-                  className="flex-1 h-10 rounded-xl text-sm font-black text-white flex items-center justify-center gap-2 transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-40"
+                  className="flex-1 h-10 rounded-lg text-sm font-black text-white flex items-center justify-center gap-2 transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-40"
                   style={{ background: '#1D4ED8', boxShadow: '0 2px 12px rgba(29,78,216,0.35)' }}>
                   <ArrowUpRight className="size-4" />
                   Process Payment — ฿{liveFee}

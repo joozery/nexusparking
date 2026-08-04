@@ -91,7 +91,7 @@ function ToastCard({ item, onClose }: { item: ToastItem; onClose: (id: string) =
 
   return (
     <div
-      className="relative overflow-hidden rounded-2xl pointer-events-auto transition-all duration-300 ease-out"
+      className="relative overflow-hidden rounded-xl pointer-events-auto transition-all duration-300 ease-out"
       style={{
         background: 'white',
         boxShadow: '0 8px 32px rgba(0,0,0,0.12), 0 0 0 1px rgba(0,0,0,0.05)',
@@ -113,7 +113,7 @@ function ToastCard({ item, onClose }: { item: ToastItem; onClose: (id: string) =
         }} />
 
       <div className="flex items-start gap-3 px-4 py-3.5 pl-5">
-        <div className="size-8 rounded-xl flex items-center justify-center shrink-0 mt-0.5"
+        <div className="size-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5"
           style={{ background: m.bg }}>
           <Icon className="size-4" style={{ color: m.iconColor }} />
         </div>

@@ -52,37 +52,38 @@ const TH_DAYS   = ['อาทิตย์','จันทร์','อังคา
 const TH_MONTHS = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.']
 
 function WeatherClock() {
-  const [now, setNow] = useState(new Date())
+  const [now, setNow] = useState<Date | null>(null)
   useEffect(() => {
+    setNow(new Date())
     const id = setInterval(() => setNow(new Date()), 1000)
     return () => clearInterval(id)
   }, [])
 
-  const hh  = String(now.getHours()).padStart(2, '0')
-  const mm  = String(now.getMinutes()).padStart(2, '0')
-  const ss  = String(now.getSeconds()).padStart(2, '0')
-  const day = TH_DAYS[now.getDay()]
-  const date = `${day} ${now.getDate()} ${TH_MONTHS[now.getMonth()]} ${now.getFullYear() + 543}`
+  const hh  = now ? String(now.getHours()).padStart(2, '0')   : '--'
+  const mm  = now ? String(now.getMinutes()).padStart(2, '0') : '--'
+  const ss  = now ? String(now.getSeconds()).padStart(2, '0') : '--'
+  const day  = now ? TH_DAYS[now.getDay()] : ''
+  const date = now ? `${day} ${now.getDate()} ${TH_MONTHS[now.getMonth()]} ${now.getFullYear() + 543}` : ''
 
   const w = WEATHER_ICON[WEATHER.condition]
   const WeatherIcon = w.icon
 
   return (
-    <div className="mx-3 mb-3 shrink-0 rounded-2xl overflow-hidden"
+    <div className="mx-3 mb-3 shrink-0 rounded-xl overflow-hidden"
       style={{ border: '1px solid #E8ECF4', background: '#FAFBFF' }}>
 
       {/* Time row */}
       <div className="px-4 pt-3 pb-2 flex items-end justify-between">
         <div>
           <div className="flex items-end gap-1 leading-none">
-            <span className="text-2xl font-black text-slate-800 tabular-nums tracking-tight">{hh}:{mm}</span>
-            <span className="text-xs font-bold text-slate-400 mb-0.5 tabular-nums">{ss}</span>
+            <span className="text-2xl font-bold text-slate-800 tabular-nums tracking-tight">{hh}:{mm}</span>
+            <span className="text-xs font-medium text-slate-400 mb-0.5 tabular-nums">{ss}</span>
           </div>
           <p className="text-[10px] text-slate-400 mt-0.5">{date}</p>
         </div>
 
         {/* Weather icon */}
-        <div className="flex size-10 items-center justify-center rounded-xl shrink-0"
+        <div className="flex size-10 items-center justify-center rounded-lg shrink-0"
           style={{ background: w.bg }}>
           <WeatherIcon className="size-5" style={{ color: w.color }} strokeWidth={1.75} />
         </div>
@@ -94,7 +95,7 @@ function WeatherClock() {
       {/* Weather stats */}
       <div className="px-4 py-2 flex items-center justify-between">
         <div className="flex items-baseline gap-1">
-          <span className="text-xl font-black text-slate-800">{WEATHER.temp}°</span>
+          <span className="text-xl font-bold text-slate-800">{WEATHER.temp}°</span>
           <span className="text-[10px] text-slate-400">รู้สึก {WEATHER.feels}°C</span>
         </div>
         <div className="flex items-center gap-3">
@@ -162,7 +163,7 @@ export function ParkingSidebar({ isOpen, activeNav }: Props) {
             className="h-8 w-auto object-contain brightness-0 invert"
             priority
           />
-          <span className="text-[9px] font-black px-1.5 py-0.5 rounded-md"
+          <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-md"
             style={{ background: 'rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.9)', border: '1px solid rgba(255,255,255,0.2)' }}>
             v2.4
           </span>
@@ -195,8 +196,8 @@ export function ParkingSidebar({ isOpen, activeNav }: Props) {
         ].map(({ label, value }, i) => (
           <div key={label} className="flex flex-col items-center py-2.5 gap-0.5"
             style={i < 2 ? { borderRight: '1px solid #E8ECF4' } : {}}>
-            <span className="text-sm font-black text-slate-800">{value}</span>
-            <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-wide">{label}</span>
+            <span className="text-sm font-bold text-slate-800">{value}</span>
+            <span className="text-[9px] font-medium text-slate-400 uppercase tracking-wide">{label}</span>
           </div>
         ))}
       </div>
@@ -205,7 +206,7 @@ export function ParkingSidebar({ isOpen, activeNav }: Props) {
       <nav className="flex-1 overflow-y-auto scrollbar-hide px-3 py-4 space-y-5">
         <div>
           <div className="flex items-center gap-2 px-2 mb-2">
-            <span className="text-[9px] font-black uppercase tracking-[0.18em] text-slate-400">เมนูหลัก</span>
+            <span className="text-[9px] font-semibold uppercase tracking-[0.18em] text-slate-400">เมนูหลัก</span>
             <div className="flex-1 h-px" style={{ background: '#E8ECF4' }} />
           </div>
           <div className="space-y-0.5">
@@ -213,7 +214,7 @@ export function ParkingSidebar({ isOpen, activeNav }: Props) {
               const active = key === currentNav
               return (
                 <Link key={key} href={href}
-                  className="relative flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-150 group"
+                  className="relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold transition-all duration-150 group"
                   style={{ background: active ? 'rgba(29,78,216,0.07)' : 'transparent', color: active ? '#1D4ED8' : '#64748B' }}
                   onMouseEnter={e => { if (!active) { e.currentTarget.style.background = '#F8FAFF'; e.currentTarget.style.color = '#334155' } }}
                   onMouseLeave={e => { if (!active) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#64748B' } }}
@@ -225,7 +226,7 @@ export function ParkingSidebar({ isOpen, activeNav }: Props) {
                   </div>
                   <span className="flex-1 truncate">{label}</span>
                   {badge && (
-                    <span className="text-[10px] font-black px-1.5 py-0.5 rounded-full"
+                    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
                       style={active ? { background: '#1D4ED8', color: 'white' } : { background: '#F1F5F9', color: '#94A3B8' }}>
                       {badge}
                     </span>
@@ -242,7 +243,7 @@ export function ParkingSidebar({ isOpen, activeNav }: Props) {
 
         <div>
           <div className="flex items-center gap-2 px-2 mb-2">
-            <span className="text-[9px] font-black uppercase tracking-[0.18em] text-slate-400">ระบบ</span>
+            <span className="text-[9px] font-semibold uppercase tracking-[0.18em] text-slate-400">ระบบ</span>
             <div className="flex-1 h-px" style={{ background: '#E8ECF4' }} />
           </div>
           <div className="space-y-0.5">
@@ -250,7 +251,7 @@ export function ParkingSidebar({ isOpen, activeNav }: Props) {
               const active = key === currentNav
               return (
                 <Link key={key} href={href}
-                  className="relative flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-150"
+                  className="relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold transition-all duration-150"
                   style={{ background: active ? 'rgba(29,78,216,0.07)' : 'transparent', color: active ? '#1D4ED8' : '#64748B' }}
                   onMouseEnter={e => { if (!active) { e.currentTarget.style.background = '#F8FAFF'; e.currentTarget.style.color = '#334155' } }}
                   onMouseLeave={e => { if (!active) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#64748B' } }}
@@ -274,9 +275,9 @@ export function ParkingSidebar({ isOpen, activeNav }: Props) {
       {/* ══ USER PROFILE ══ */}
       <div className="px-3 pb-4 shrink-0" style={{ borderTop: '1px solid #E8ECF4', paddingTop: '12px' }}>
         <button onClick={handleLogout}
-          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer group transition-colors hover:bg-red-50 text-left">
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer group transition-colors hover:bg-red-50 text-left">
           <div className="relative shrink-0">
-            <div className="flex size-8 items-center justify-center rounded-xl text-[10px] font-black text-white"
+            <div className="flex size-8 items-center justify-center rounded-lg text-[10px] font-bold text-white"
               style={{ background: 'linear-gradient(135deg, #1D4ED8, #3B82F6)', boxShadow: '0 2px 6px rgba(29,78,216,0.35)' }}>
               {me ? me.name.charAt(0).toUpperCase() : 'OP'}
             </div>
@@ -284,7 +285,7 @@ export function ParkingSidebar({ isOpen, activeNav }: Props) {
               style={{ background: '#22C55E' }} />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-bold text-slate-800 truncate">{me?.name ?? 'Loading...'}</p>
+            <p className="text-xs font-semibold text-slate-800 truncate">{me?.name ?? 'Loading...'}</p>
             <p className="text-[10px] text-slate-400 truncate mt-0.5 capitalize">{me?.role ?? '—'}</p>
           </div>
           <LogOut className="size-3.5 text-slate-300 shrink-0 opacity-0 group-hover:opacity-100 group-hover:text-red-400 transition-all" />

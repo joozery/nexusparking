@@ -6,7 +6,7 @@ import { MOCK_LOGS } from './types'
 
 export function ActivityLog() {
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden h-full flex flex-col">
+    <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden h-full flex flex-col">
       <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
         <div>
           <h2 className="text-sm font-bold text-slate-800">ประวัติล่าสุด</h2>
