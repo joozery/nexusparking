@@ -4,6 +4,8 @@ import { verifyToken, COOKIE_NAME } from '@/lib/auth'
 import { connectDB } from '@/lib/mongodb'
 import { ParkingQueue } from '@/models/ParkingQueue'
 import { Shift } from '@/models/Shift'
+import { getSettings } from '@/models/SystemSettings'
+import { runCheckinSequence } from '@/lib/hardware'
 
 // GET — รายการคิวที่รอ (status=waiting)
 export async function GET() {
@@ -33,15 +35,21 @@ export async function POST(req: NextRequest) {
     if (shift) shiftId = String(shift._id)
   }
 
+  const resolvedUid = cardUid ?? `WALKIN-Q-${Date.now()}`
+
   const q = await ParkingQueue.create({
     plate:      plate.trim().toUpperCase(),
     cardType,
-    cardUid:    cardUid ?? undefined,
+    cardUid:    resolvedUid,
     joinedAt:   new Date(),
     status:     'waiting',
     operatorId: payload?.sub,
     shiftId,
   })
+
+  // เปิดกล้อง + ไม้กั้นให้รถเข้าพื้นที่รอคิว
+  const settings = await getSettings()
+  void runCheckinSequence(settings.hardware, { cardUid: resolvedUid, plate: plate.trim().toUpperCase() })
 
   return NextResponse.json(q, { status: 201 })
 }

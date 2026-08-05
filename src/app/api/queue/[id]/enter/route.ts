@@ -8,10 +8,11 @@ import { Shift } from '@/models/Shift'
 
 // POST /api/queue/[id]/enter — รถออกจากคิวเข้าลานจอด
 export async function POST(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
+  const body = await req.json().catch(() => ({}))
   const jar     = await cookies()
   const token   = jar.get(COOKIE_NAME)?.value
   const payload = token ? verifyToken(token) : null
@@ -21,7 +22,7 @@ export async function POST(
   const q = await ParkingQueue.findOne({ _id: id, status: 'waiting' })
   if (!q) return NextResponse.json({ error: 'ไม่พบคิว' }, { status: 404 })
 
-  const now = new Date()
+  const now = body.entryTime ? new Date(body.entryTime) : new Date()
 
   // สร้าง session ใหม่
   let shiftId: string | undefined

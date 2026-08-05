@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import {
   LogIn, LogOut, AlertTriangle,
   Car, Bike, Moon, RefreshCw, Clock, Search,
-  Play, Square, Banknote, Smartphone, X,
+  Play, Square, Banknote, Smartphone, X, CreditCard,
   ListOrdered, Plus, CheckCheck, XCircle,
 } from 'lucide-react'
 import { CheckInDialog } from '@/components/parking/CheckInDialog'
@@ -94,11 +94,17 @@ export default function OperatorPage() {
   const [closingFloat, setClosingFloat] = useState('')
 
   // Queue
-  const [queues, setQueues] = useState<QueueEntry[]>([])
-  const [queueOpen, setQueueOpen] = useState(false)  // add-to-queue dialog
-  const [qPlate, setQPlate] = useState('')
-  const [qType, setQType] = useState<'car' | 'motorcycle'>('car')
-  const [qLoading, setQLoading] = useState<string | null>(null) // id of row being actioned
+  const [queues,      setQueues]      = useState<QueueEntry[]>([])
+  const [queueOpen,   setQueueOpen]   = useState(false)
+  const [qStep,       setQStep]       = useState<'scan' | 'confirm'>('scan')
+  const [qPlate,      setQPlate]      = useState('')
+  const [qType,       setQType]       = useState<'car' | 'motorcycle'>('car')
+  const [qUid,        setQUid]        = useState('')
+  const [qLoading,    setQLoading]    = useState<string | null>(null)
+  // queue enter dialog (custom time)
+  const [qEnterOpen,   setQEnterOpen]   = useState(false)
+  const [qEnterTarget, setQEnterTarget] = useState<{ id: string; plate: string } | null>(null)
+  const [qEnterTime,   setQEnterTime]   = useState('')
 
   // Check In
   const [checkInOpen,   setCheckInOpen]   = useState(false)
@@ -121,6 +127,7 @@ export default function OperatorPage() {
 
   function resetCI() { setCiStep('scan'); setCiPlate(''); setCiType('car'); setCiUid(''); setCiCustomTime('') }
   function resetCO() { setCoStep('scan'); setCoSessionId('') }
+  function resetQ()  { setQStep('scan'); setQPlate(''); setQType('car'); setQUid('') }
 
   const fetchShift = useCallback(async () => {
     const res = await fetch('/api/shifts/current')
@@ -156,26 +163,59 @@ export default function OperatorPage() {
   }, [fetchData])
 
   // Queue actions
+  async function simulateQScan() {
+    const res = await fetch('/api/cards')
+    const cards = await res.json()
+    const eligible = cards.filter((c: { type: string }) => c.type === 'car' || c.type === 'motorcycle')
+    if (eligible.length > 0) {
+      const card = eligible[Math.floor(Math.random() * eligible.length)]
+      setQUid(card.uid); setQType(card.type)
+    } else {
+      const types = ['car', 'motorcycle'] as const
+      setQType(types[Math.floor(Math.random() * types.length)])
+      setQUid('DEMO-Q-' + Math.random().toString(36).slice(2, 8).toUpperCase())
+    }
+    setQStep('confirm')
+  }
+
   async function addToQueue() {
     if (!qPlate || qPlate.length < 2) return
     const res = await fetch('/api/queue', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ plate: qPlate, cardType: qType }),
+      body: JSON.stringify({ plate: qPlate, cardType: qType, cardUid: qUid || undefined }),
     })
     if (res.ok) {
-      setQueueOpen(false); setQPlate(''); setQType('car')
+      setQueueOpen(false); resetQ()
       await fetchData()
-      success('เพิ่มคิวแล้ว', `ทะเบียน ${qPlate} อยู่ในคิวลำดับที่ ${queues.length + 1}`)
+      success('เพิ่มคิวแล้ว', `ทะเบียน ${qPlate} อยู่ในคิว — กล้อง + ไม้กั้นเปิดแล้ว`)
     } else {
       const err = await res.json()
       toastError('เพิ่มคิวไม่สำเร็จ', err.error)
     }
   }
 
-  async function enterFromQueue(id: string, plate: string) {
+  function openQEnterDialog(id: string, plate: string) {
+    const now = new Date()
+    now.setSeconds(0, 0)
+    setQEnterTarget({ id, plate })
+    setQEnterTime(now.toISOString().slice(0, 19))
+    setQEnterOpen(true)
+  }
+
+  async function confirmQEnter() {
+    if (!qEnterTarget) return
+    const { id, plate } = qEnterTarget
     setQLoading(id)
-    const res = await fetch(`/api/queue/${id}/enter`, { method: 'POST' })
+    setQEnterOpen(false)
+    const body: Record<string, string> = {}
+    const chosen = new Date(qEnterTime)
+    if (!isNaN(chosen.getTime())) body.entryTime = chosen.toISOString()
+    const res = await fetch(`/api/queue/${id}/enter`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
     setQLoading(null)
     if (res.ok) {
       await Promise.all([fetchData(), fetchShift()])
@@ -184,6 +224,7 @@ export default function OperatorPage() {
       const err = await res.json()
       toastError('ไม่สำเร็จ', err.error)
     }
+    setQEnterTarget(null)
   }
 
   async function cancelQueue(id: string, plate: string) {
@@ -418,7 +459,7 @@ export default function OperatorPage() {
           <button
             onClick={() => {
               if (stats && stats.availableSlots === 0) {
-                setQPlate(''); setQType('car'); setQueueOpen(true)
+                resetQ(); setQueueOpen(true)
               } else {
                 resetCI(); setCheckInOpen(true)
               }
@@ -578,43 +619,42 @@ export default function OperatorPage() {
           </div>
         </div>
 
-        {/* ── Queue section (appears when lot full or has queue) ── */}
-        {(queues.length > 0 || (stats && stats.availableSlots === 0)) && (
-          <div className="shrink-0 rounded-2xl overflow-hidden"
-            style={{ background: 'white', border: '1px solid rgba(124,58,237,0.22)', boxShadow: '0 2px 16px rgba(124,58,237,0.1)' }}>
+        {/* ── Queue section (always visible) ── */}
+        <div className="shrink-0 rounded-2xl overflow-hidden"
+          style={{ background: 'white', border: '1px solid rgba(124,58,237,0.22)', boxShadow: '0 2px 16px rgba(124,58,237,0.1)' }}>
 
-            {/* Queue header */}
-            <div className="flex items-center gap-2.5 px-4 py-2.5"
-              style={{ background: 'linear-gradient(90deg,rgba(91,33,182,0.06),rgba(124,58,237,0.02))', borderBottom: '1px solid rgba(124,58,237,0.12)' }}>
-              <ListOrdered className="size-4 shrink-0" style={{ color: '#7C3AED' }} />
-              <span className="text-sm font-black text-slate-700">คิวรอ</span>
-              {queues.length > 0 && (
-                <span className="text-[10px] font-black px-2 py-0.5 rounded-full text-white"
-                  style={{ background: '#DC2626' }}>{queues.length} คัน</span>
-              )}
-              {stats && stats.availableSlots === 0 && (
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full"
-                  style={{ background: 'rgba(220,38,38,0.08)', color: '#991B1B', border: '1px solid rgba(220,38,38,0.2)' }}>
-                  ลานเต็ม {stats.totalCapacity}/{stats.totalCapacity}
-                </span>
-              )}
-              <div className="flex-1" />
-              <button
-                onClick={() => { setQPlate(''); setQType('car'); setQueueOpen(true) }}
-                className="h-7 px-3 rounded-lg flex items-center gap-1.5 text-xs font-black text-white transition-all hover:brightness-110 active:scale-[0.97]"
-                style={{ background: 'linear-gradient(135deg,#5B21B6,#7C3AED)', boxShadow: '0 2px 8px rgba(124,58,237,0.3)' }}
-              >
-                <Plus className="size-3" /> เพิ่มคิว
-              </button>
+          {/* Queue header */}
+          <div className="flex items-center gap-2.5 px-4 py-2.5"
+            style={{ background: 'linear-gradient(90deg,rgba(91,33,182,0.06),rgba(124,58,237,0.02))', borderBottom: '1px solid rgba(124,58,237,0.12)' }}>
+            <ListOrdered className="size-4 shrink-0" style={{ color: '#7C3AED' }} />
+            <span className="text-sm font-black text-slate-700">คิวรอ</span>
+            {queues.length > 0 && (
+              <span className="text-[10px] font-black px-2 py-0.5 rounded-full text-white"
+                style={{ background: '#DC2626' }}>{queues.length} คัน</span>
+            )}
+            {stats && stats.availableSlots === 0 && (
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full"
+                style={{ background: 'rgba(220,38,38,0.08)', color: '#991B1B', border: '1px solid rgba(220,38,38,0.2)' }}>
+                ลานเต็ม {stats.totalCapacity}/{stats.totalCapacity}
+              </span>
+            )}
+            <div className="flex-1" />
+            <button
+              onClick={() => { resetQ(); setQueueOpen(true) }}
+              className="h-7 px-3 rounded-lg flex items-center gap-1.5 text-xs font-black text-white transition-all hover:brightness-110 active:scale-[0.97]"
+              style={{ background: 'linear-gradient(135deg,#5B21B6,#7C3AED)', boxShadow: '0 2px 8px rgba(124,58,237,0.3)' }}
+            >
+              <Plus className="size-3" /> เพิ่มคิว
+            </button>
+          </div>
+
+          {/* Queue cards — horizontal scroll */}
+          {queues.length === 0 ? (
+            <div className="flex items-center justify-center py-5 gap-2">
+              <ListOrdered className="size-4" style={{ color: 'rgba(124,58,237,0.25)' }} />
+              <p className="text-xs text-slate-400">ยังไม่มีรถในคิว — กด "เพิ่มคิว" เพื่อเพิ่มรถ</p>
             </div>
-
-            {/* Queue cards — horizontal scroll */}
-            {queues.length === 0 ? (
-              <div className="flex items-center justify-center py-5 gap-2">
-                <ListOrdered className="size-4" style={{ color: 'rgba(124,58,237,0.25)' }} />
-                <p className="text-xs text-slate-400">ลานเต็ม — ยังไม่มีรถรอคิว กด "เพิ่มคิว" เพื่อจองคิว</p>
-              </div>
-            ) : (
+          ) : (
               <div className="flex gap-2.5 overflow-x-auto p-3" style={{ scrollbarWidth: 'none' }}>
                 {queues.map((q, idx) => (
                   <div key={q._id}
@@ -644,7 +684,7 @@ export default function OperatorPage() {
                     {/* Action buttons */}
                     <div className="flex flex-col shrink-0">
                       <button
-                        onClick={() => enterFromQueue(q._id, q.plate)}
+                        onClick={() => openQEnterDialog(q._id, q.plate)}
                         disabled={!!qLoading}
                         className="flex-1 flex items-center justify-center px-3 transition-all hover:brightness-110 disabled:opacity-40"
                         style={{ background: 'rgba(5,150,105,0.08)', borderBottom: '1px solid #E8ECF4' }}
@@ -669,22 +709,21 @@ export default function OperatorPage() {
               </div>
             )}
           </div>
-        )}
 
       </div> {/* end body */}
 
-      {/* ─── Add Queue Dialog ─── */}
-      {queueOpen && (
+      {/* ─── Queue Enter Dialog (custom time) ─── */}
+      {qEnterOpen && qEnterTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center"
           style={{ background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)' }}>
           <div className="bg-white rounded-3xl w-full max-w-xs mx-4 overflow-hidden shadow-2xl">
             <div className="px-6 py-5 flex items-center justify-between"
-              style={{ background: 'linear-gradient(135deg,#5B21B6,#7C3AED)' }}>
+              style={{ background: 'linear-gradient(135deg, #065F46 0%, #059669 100%)' }}>
               <div>
-                <p className="text-white font-black">เพิ่มรถเข้าคิว</p>
-                <p className="text-violet-200 text-xs mt-0.5">คิวที่ {queues.length + 1}</p>
+                <p className="text-white font-black">เข้าลานจอด</p>
+                <p className="text-emerald-200 text-xs mt-0.5">ทะเบียน {qEnterTarget.plate}</p>
               </div>
-              <button onClick={() => setQueueOpen(false)}
+              <button onClick={() => setQEnterOpen(false)}
                 className="size-8 rounded-lg flex items-center justify-center"
                 style={{ background: 'rgba(255,255,255,0.15)' }}>
                 <X className="size-4 text-white" />
@@ -692,49 +731,162 @@ export default function OperatorPage() {
             </div>
 
             <div className="p-5 space-y-4">
-              {/* ประเภท */}
-              <div className="grid grid-cols-2 gap-2">
-                {(['car', 'motorcycle'] as const).map(t => (
-                  <button key={t} onClick={() => setQType(t)}
-                    className="flex items-center justify-center gap-2 h-11 rounded-xl font-bold text-sm transition-all"
-                    style={qType === t
-                      ? { background: 'rgba(124,58,237,0.1)', border: '2px solid #7C3AED', color: '#7C3AED' }
-                      : { background: '#F8FAFF', border: '2px solid #E2E8F0', color: '#64748B' }}>
-                    {t === 'car' ? <Car className="size-4" /> : <Bike className="size-4" />}
-                    {t === 'car' ? 'รถยนต์' : 'มอเตอร์ไซค์'}
-                  </button>
-                ))}
-              </div>
-
-              {/* เลขทะเบียน */}
               <div>
-                <label className="block text-xs font-black text-slate-700 mb-1.5">เลขทะเบียน</label>
+                <label className="block text-xs font-black text-slate-700 mb-1.5">
+                  เวลาเข้าลาน
+                  <span className="text-slate-400 font-normal ml-1">— ปรับได้ถึงวินาที</span>
+                </label>
                 <input
-                  autoFocus
-                  value={qPlate}
-                  onChange={e => setQPlate(e.target.value.toUpperCase())}
-                  onKeyDown={e => e.key === 'Enter' && addToQueue()}
-                  placeholder="กก 1234"
-                  className="w-full h-12 rounded-xl px-4 text-xl font-black text-slate-800 text-center outline-none tracking-widest"
-                  style={{ border: '2px solid #E2E8F0', background: '#FAFBFF', letterSpacing: '0.15em' }}
-                  onFocus={e => { e.currentTarget.style.borderColor = '#7C3AED' }}
+                  type="datetime-local" step="1"
+                  value={qEnterTime}
+                  onChange={e => setQEnterTime(e.target.value)}
+                  className="w-full h-11 rounded-xl px-4 text-sm text-slate-800 outline-none"
+                  style={{ border: '2px solid #E2E8F0', background: '#FAFBFF' }}
+                  onFocus={e => { e.currentTarget.style.borderColor = '#059669' }}
                   onBlur={e => { e.currentTarget.style.borderColor = '#E2E8F0' }}
                 />
               </div>
 
               <div className="flex gap-2">
-                <button onClick={() => setQueueOpen(false)}
+                <button onClick={() => setQEnterOpen(false)}
                   className="flex-1 h-11 rounded-xl text-sm font-bold text-slate-600"
                   style={{ background: '#F1F5F9', border: '1px solid #E2E8F0' }}>
                   ยกเลิก
                 </button>
-                <button onClick={addToQueue}
-                  disabled={qPlate.length < 2}
-                  className="flex-1 h-11 rounded-xl text-sm font-black text-white disabled:opacity-40 transition-all hover:opacity-90"
-                  style={{ background: 'linear-gradient(135deg,#5B21B6,#7C3AED)' }}>
-                  เพิ่มคิว
+                <button onClick={confirmQEnter}
+                  className="flex-1 h-11 rounded-xl text-sm font-black text-white transition-all hover:opacity-90"
+                  style={{ background: 'linear-gradient(135deg, #065F46 0%, #059669 100%)' }}>
+                  ยืนยันเข้าลาน
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Add Queue Dialog (scan → confirm, like checkin) ─── */}
+      {queueOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center"
+          style={{ background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)' }}>
+          <div className="bg-white rounded-3xl w-full max-w-xs mx-4 overflow-hidden shadow-2xl">
+
+            {/* Header */}
+            <div className="px-5 py-4 flex items-center gap-3"
+              style={{ background: 'linear-gradient(135deg,#5B21B6,#7C3AED)' }}>
+              <div className="flex size-8 items-center justify-center rounded-lg shrink-0"
+                style={{ background: 'rgba(255,255,255,0.2)' }}>
+                <ListOrdered className="size-4 text-white" />
+              </div>
+              <div className="flex-1">
+                <p className="text-white font-black text-sm">เพิ่มรถเข้าคิว</p>
+                <p className="text-violet-200 text-xs">แตะบัตร → เปิดไม้กั้น → รอในพื้นที่คิว</p>
+              </div>
+              <button onClick={() => { setQueueOpen(false); resetQ() }}
+                className="size-8 rounded-lg flex items-center justify-center"
+                style={{ background: 'rgba(255,255,255,0.15)' }}>
+                <X className="size-4 text-white" />
+              </button>
+            </div>
+
+            <div className="p-5">
+              {qStep === 'scan' ? (
+                <div className="flex flex-col items-center gap-3">
+                  {/* Scan zone */}
+                  <div
+                    onClick={simulateQScan}
+                    className="w-full cursor-pointer flex flex-col items-center gap-2 p-5 rounded-xl transition-all active:scale-[0.98]"
+                    style={{ border: '2px dashed rgba(124,58,237,0.35)', background: 'rgba(124,58,237,0.04)' }}
+                    onMouseEnter={e => { e.currentTarget.style.background = 'rgba(124,58,237,0.08)'; e.currentTarget.style.borderColor = 'rgba(124,58,237,0.6)' }}
+                    onMouseLeave={e => { e.currentTarget.style.background = 'rgba(124,58,237,0.04)'; e.currentTarget.style.borderColor = 'rgba(124,58,237,0.35)' }}
+                  >
+                    <div className="flex size-12 items-center justify-center rounded-xl animate-pulse"
+                      style={{ background: 'linear-gradient(135deg,#5B21B6,#7C3AED)', boxShadow: '0 4px 16px rgba(124,58,237,0.4)' }}>
+                      <CreditCard className="size-6 text-white" />
+                    </div>
+                    <div className="text-center">
+                      <p className="text-sm font-black" style={{ color: '#5B21B6' }}>รอการสแกนบัตร...</p>
+                      <p className="text-xs mt-0.5" style={{ color: 'rgba(91,33,182,0.6)' }}>แตะบัตรที่เครื่องอ่านบัตร</p>
+                      <p className="text-[10px] mt-1.5 px-2 py-0.5 rounded-full inline-block"
+                        style={{ border: '1px solid rgba(124,58,237,0.25)', color: 'rgba(124,58,237,0.6)', background: 'white' }}>
+                        คลิกจำลองการสแกน
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Manual type select */}
+                  <div className="w-full grid grid-cols-2 gap-2">
+                    {(['car', 'motorcycle'] as const).map(t => {
+                      const Icon = t === 'car' ? Car : Bike
+                      const label = t === 'car' ? 'รถยนต์' : 'มอเตอร์ไซค์'
+                      return (
+                        <button key={t}
+                          onClick={() => { setQType(t); setQUid(''); setQStep('confirm') }}
+                          className="flex items-center justify-center gap-1.5 h-10 rounded-xl font-bold text-xs transition-all"
+                          style={{ background: 'rgba(124,58,237,0.06)', border: '1.5px solid rgba(124,58,237,0.2)', color: '#5B21B6' }}
+                          onMouseEnter={e => { e.currentTarget.style.background = 'rgba(124,58,237,0.12)' }}
+                          onMouseLeave={e => { e.currentTarget.style.background = 'rgba(124,58,237,0.06)' }}
+                        >
+                          <Icon className="size-3.5" /> {label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                  <p className="text-[10px] text-slate-400">หรือเลือกประเภทบัตรด้านบน</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {/* Card type badge */}
+                  <div className="flex items-center justify-between px-3 py-2.5 rounded-xl"
+                    style={{ background: 'rgba(124,58,237,0.06)', border: '1px solid rgba(124,58,237,0.2)' }}>
+                    <span className="text-xs text-slate-600 font-medium">ประเภทบัตร</span>
+                    <span className="flex items-center gap-1.5 text-xs font-black" style={{ color: '#5B21B6' }}>
+                      {qType === 'car' ? <Car className="size-3.5" /> : <Bike className="size-3.5" />}
+                      {qType === 'car' ? 'รถยนต์' : 'มอเตอร์ไซค์'}
+                    </span>
+                  </div>
+
+                  {/* Plate input */}
+                  <div className="space-y-1">
+                    <label className="text-xs font-black text-slate-700">เลขทะเบียน 4 ตัวท้าย</label>
+                    <input
+                      autoFocus
+                      value={qPlate}
+                      onChange={e => setQPlate(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                      onKeyDown={e => e.key === 'Enter' && addToQueue()}
+                      placeholder="1234"
+                      maxLength={4}
+                      className="w-full h-12 rounded-xl px-4 text-2xl font-black text-slate-800 text-center outline-none tracking-[0.4em]"
+                      style={{ border: '2px solid #E2E8F0', background: '#FAFBFF' }}
+                      onFocus={e => { e.currentTarget.style.borderColor = '#7C3AED' }}
+                      onBlur={e => { e.currentTarget.style.borderColor = '#E2E8F0' }}
+                    />
+                    <p className="text-[10px] text-slate-400">กรอกเฉพาะตัวเลข 4 หลักท้าย</p>
+                  </div>
+
+                  {/* Hardware note */}
+                  <div className="flex items-center gap-2 px-3 py-2 rounded-xl"
+                    style={{ background: 'rgba(124,58,237,0.05)', border: '1px solid rgba(124,58,237,0.15)' }}>
+                    <CheckCheck className="size-3.5 shrink-0" style={{ color: '#7C3AED' }} />
+                    <p className="text-[10px] font-medium" style={{ color: '#5B21B6' }}>
+                      เมื่อยืนยัน: กล้องถ่ายภาพ + ไม้กั้นเปิด (รถเข้าพื้นที่รอคิว)
+                    </p>
+                  </div>
+
+                  <div className="flex gap-2 pt-1">
+                    <button onClick={() => setQStep('scan')}
+                      className="flex-1 h-11 rounded-xl text-sm font-bold text-slate-600"
+                      style={{ background: '#F1F5F9', border: '1px solid #E2E8F0' }}>
+                      ← ย้อนกลับ
+                    </button>
+                    <button onClick={addToQueue}
+                      disabled={qPlate.length !== 4}
+                      className="flex-1 h-11 rounded-xl text-sm font-black text-white disabled:opacity-40 transition-all hover:opacity-90 flex items-center justify-center gap-1.5"
+                      style={{ background: 'linear-gradient(135deg,#5B21B6,#7C3AED)' }}>
+                      <ListOrdered className="size-3.5" /> ยืนยัน — เพิ่มคิว
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
