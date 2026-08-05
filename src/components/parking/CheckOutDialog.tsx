@@ -1,6 +1,7 @@
 'use client'
 
-import { CreditCard, LogOut, Clock, ReceiptText, Banknote } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { CreditCard, LogOut, Clock, Banknote, Smartphone, Tag, ChevronDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
@@ -8,6 +9,17 @@ import {
 } from '@/components/ui/dialog'
 import { CardBadge } from './CardBadge'
 import { type CardType } from './types'
+
+export type PaymentMethod = 'cash' | 'qr'
+
+interface DiscountOption {
+  _id: string
+  name: string
+  discountType: 'fixed' | 'percent'
+  discountValue: number
+  maxDiscount?: number
+  description?: string
+}
 
 interface Props {
   open: boolean
@@ -18,15 +30,44 @@ interface Props {
   fee: number
   onSimulateScan: () => void
   onBack: () => void
-  onConfirm: () => void
+  onConfirm: (paymentMethod: PaymentMethod, discountId?: string) => void
+}
+
+function calcDiscountAmount(discount: DiscountOption | null, fee: number): number {
+  if (!discount) return 0
+  if (discount.discountType === 'fixed') return Math.min(discount.discountValue, fee)
+  const pct = Math.floor(fee * discount.discountValue / 100)
+  return discount.maxDiscount ? Math.min(pct, discount.maxDiscount) : pct
 }
 
 export function CheckOutDialog({
   open, onOpenChange, step, cardType, hours, fee,
   onSimulateScan, onBack, onConfirm,
 }: Props) {
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash')
+  const [discounts, setDiscounts] = useState<DiscountOption[]>([])
+  const [selectedId, setSelectedId] = useState<string>('')
+
+  const selectedDiscount = discounts.find(d => d._id === selectedId) ?? null
+  const discountAmount = calcDiscountAmount(selectedDiscount, fee)
+  const finalFee = Math.max(0, fee - discountAmount)
+
+  useEffect(() => {
+    if (open) {
+      fetch('/api/discounts?active=1')
+        .then(r => r.json())
+        .then(d => setDiscounts(Array.isArray(d) ? d : []))
+        .catch(() => {})
+    }
+  }, [open])
+
+  function handleClose(o: boolean) {
+    if (!o) { setPaymentMethod('cash'); setSelectedId('') }
+    onOpenChange(o)
+  }
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-sm" showCloseButton>
 
         <DialogHeader className="bg-gradient-to-r from-emerald-600 to-emerald-500">
@@ -63,6 +104,7 @@ export function CheckOutDialog({
                 <CardBadge type={cardType} />
               </div>
 
+              {/* Fee breakdown */}
               <div className="rounded-lg border border-emerald-200 overflow-hidden">
                 <div className="bg-emerald-50 px-3 py-2 flex items-center gap-2">
                   <Clock className="size-3.5 text-emerald-600" />
@@ -78,18 +120,74 @@ export function CheckOutDialog({
                     {hours > 1 && <div className="flex justify-between text-xs text-slate-600"><span>{hours - 1} ชม.ถัดไป × ฿10</span><span>฿{(hours - 1) * 10}</span></div>}
                   </>}
                   {cardType === 'overnight' && (
-                    <div className="flex justify-between text-xs text-slate-600"><span>ค้างคืนเหมาจ่าย (18:00–07:00)</span><span>฿100</span></div>
+                    <div className="flex justify-between text-xs text-slate-600"><span>ค้างคืน (22:00–07:00)</span><span>฿100</span></div>
+                  )}
+                  {discountAmount > 0 && (
+                    <div className="flex justify-between text-xs font-semibold" style={{ color: '#EA580C' }}>
+                      <span className="flex items-center gap-1"><Tag className="size-3" />{selectedDiscount?.name}</span>
+                      <span>-฿{discountAmount}</span>
+                    </div>
                   )}
                 </div>
-                <div className="bg-emerald-600 px-3 py-2.5 flex items-center justify-between">
-                  <span className="text-emerald-100 text-xs font-semibold">ยอดชำระทั้งสิ้น</span>
-                  <span className="text-xl font-black text-white tabular-nums">฿{fee}</span>
+                <div className="px-3 py-2.5 flex items-center justify-between"
+                  style={{ background: finalFee < fee ? 'linear-gradient(135deg,#059669,#10B981)' : '#059669' }}>
+                  <div>
+                    <span className="text-emerald-100 text-xs font-semibold">ยอดชำระทั้งสิ้น</span>
+                    {discountAmount > 0 && (
+                      <p className="text-emerald-200 text-[10px] line-through">฿{fee}</p>
+                    )}
+                  </div>
+                  <span className="text-xl font-black text-white tabular-nums">฿{finalFee}</span>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-50 border border-blue-200">
-                <ReceiptText className="size-3.5 text-blue-600 shrink-0" />
-                <p className="text-[10px] text-blue-700 font-medium">ลิ้นชักเงินเปิด + ไม้กั้นเปิด + กล้องถ่ายภาพอัตโนมัติ</p>
+              {/* Discount dropdown */}
+              {discounts.length > 0 && (
+                <div>
+                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 flex items-center gap-1">
+                    <Tag className="size-3" /> ส่วนลดร้านค้า
+                  </p>
+                  <div className="relative">
+                    <select
+                      value={selectedId}
+                      onChange={e => setSelectedId(e.target.value)}
+                      className="w-full h-10 rounded-xl pl-3 pr-8 text-sm font-semibold text-slate-700 outline-none appearance-none cursor-pointer"
+                      style={{ border: selectedId ? '2px solid #EA580C' : '1.5px solid #E2E8F0', background: selectedId ? 'rgba(234,88,12,0.04)' : '#F8FAFF' }}
+                    >
+                      <option value="">— ไม่มีส่วนลด —</option>
+                      {discounts.map(d => (
+                        <option key={d._id} value={d._id}>
+                          {d.name} ({d.discountType === 'fixed' ? `ลด ฿${d.discountValue}` : `ลด ${d.discountValue}%`})
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown className="size-4 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  </div>
+                  {selectedDiscount?.description && (
+                    <p className="text-[10px] text-slate-400 mt-1 px-1">{selectedDiscount.description}</p>
+                  )}
+                </div>
+              )}
+
+              {/* Payment method */}
+              <div className="space-y-1.5">
+                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">วิธีชำระเงิน</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <button type="button" onClick={() => setPaymentMethod('cash')}
+                    className="flex items-center justify-center gap-2 h-11 rounded-xl text-sm font-bold transition-all"
+                    style={paymentMethod === 'cash'
+                      ? { background: '#059669', color: 'white', boxShadow: '0 2px 8px rgba(5,150,105,0.35)' }
+                      : { background: '#F1F5F9', color: '#64748B', border: '1.5px solid #E2E8F0' }}>
+                    <Banknote className="size-4" /> เงินสด
+                  </button>
+                  <button type="button" onClick={() => setPaymentMethod('qr')}
+                    className="flex items-center justify-center gap-2 h-11 rounded-xl text-sm font-bold transition-all"
+                    style={paymentMethod === 'qr'
+                      ? { background: '#7C3AED', color: 'white', boxShadow: '0 2px 8px rgba(124,58,237,0.35)' }
+                      : { background: '#F1F5F9', color: '#64748B', border: '1.5px solid #E2E8F0' }}>
+                    <Smartphone className="size-4" /> โอนเงิน
+                  </button>
+                </div>
               </div>
             </div>
           )}
@@ -101,9 +199,15 @@ export function CheckOutDialog({
           ) : (
             <>
               <Button variant="outline" size="sm" onClick={onBack}>← สแกนใหม่</Button>
-              <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white flex-1" onClick={onConfirm}>
-                <Banknote className="size-3.5" />
-                รับเงิน ฿{fee} — เปิดลิ้นชัก
+              <Button
+                size="sm"
+                className="flex-1 text-white"
+                style={paymentMethod === 'qr' ? { background: '#7C3AED' } : { background: '#059669' }}
+                onClick={() => onConfirm(paymentMethod, selectedId || undefined)}
+              >
+                {paymentMethod === 'cash'
+                  ? <><Banknote className="size-3.5" /> รับเงินสด ฿{finalFee}</>
+                  : <><Smartphone className="size-3.5" /> ยืนยันรับโอน ฿{finalFee}</>}
               </Button>
             </>
           )}

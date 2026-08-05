@@ -3,7 +3,7 @@
 import {
   LayoutDashboard, DoorOpen, History, CreditCard,
   BarChart2, Settings, ChevronRight, LogOut,
-  Clock, CloudSun, Droplets, Wind, Sun, Cloud, CloudRain, Activity, Users,
+  Clock, CloudSun, Droplets, Wind, Sun, Cloud, CloudRain, Activity, Users, ClipboardList, Tag,
 } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
@@ -24,15 +24,18 @@ const NAV_MAIN = [
   { key: 'cards',     href: '/cards',     icon: CreditCard,      label: 'จัดการบัตร',    badge: '2'  },
 ]
 const NAV_SYSTEM = [
-  { key: 'reports',  href: '/reports',  icon: BarChart2, label: 'รายงานรายได้' },
-  { key: 'hardware', href: '/hardware', icon: Activity,  label: 'มอนิเตอร์ฮาร์ดแวร์' },
-  { key: 'settings', href: '/settings', icon: Settings,  label: 'ตั้งค่าระบบ'  },
-  { key: 'admin',    href: '/admin',    icon: Users,     label: 'จัดการแอดมิน'  },
+  { key: 'shifts',    href: '/shifts',    icon: ClipboardList, label: 'รายงานกะ'          },
+  { key: 'discounts', href: '/discounts', icon: Tag,           label: 'ส่วนลดร้านค้า'    },
+  { key: 'reports',   href: '/reports',   icon: BarChart2,     label: 'รายงานรายได้'      },
+  { key: 'hardware', href: '/hardware', icon: Activity,      label: 'มอนิเตอร์ฮาร์ดแวร์' },
+  { key: 'settings', href: '/settings', icon: Settings,      label: 'ตั้งค่าระบบ'       },
+  { key: 'admin',    href: '/admin',    icon: Users,         label: 'จัดการแอดมิน'      },
 ]
 
 const PATH_MAP: Record<string, string> = {
   '/': 'gate', '/gate': 'gate', '/dashboard': 'dashboard',
   '/history': 'history', '/cards': 'cards',
+  '/shifts': 'shifts', '/discounts': 'discounts',
   '/reports': 'reports', '/hardware': 'hardware', '/settings': 'settings', '/admin': 'admin',
 }
 
@@ -155,13 +158,10 @@ export function ParkingSidebar({ isOpen, activeNav }: Props) {
           style={{ background: 'rgba(255,255,255,0.05)' }} />
 
         <div className="relative z-10 flex items-center justify-between mb-4">
-          <Image
+          <img
             src="/logo/logonext.svg"
             alt="Logo"
-            width={110}
-            height={36}
             className="h-8 w-auto object-contain brightness-0 invert"
-            priority
           />
           <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-md"
             style={{ background: 'rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.9)', border: '1px solid rgba(255,255,255,0.2)' }}>

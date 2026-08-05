@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { cookies } from 'next/headers'
+import { verifyToken, COOKIE_NAME } from '@/lib/auth'
 import { connectDB } from '@/lib/mongodb'
 import { ParkingCard } from '@/models/ParkingCard'
 import { ParkingSession } from '@/models/ParkingSession'
+import { Shift } from '@/models/Shift'
 import { getSettings } from '@/models/SystemSettings'
 import { runCheckinSequence } from '@/lib/hardware'
 
@@ -15,6 +18,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'uid or cardType is required' }, { status: 400 })
   }
 
+  const jar     = await cookies()
+  const token   = jar.get(COOKIE_NAME)?.value
+  const payload = token ? verifyToken(token) : null
+
   await connectDB()
 
   const settings = await getSettings()
@@ -25,9 +32,7 @@ export async function POST(req: NextRequest) {
   const curMin       = now.getHours() * 60 + now.getMinutes()
   const outsideHours = curMin < openH * 60 + openM || curMin >= closeH * 60 + closeM
 
-  // ถ้ามี uid → ต้องเจอบัตรใน DB
-  // ถ้าไม่มี uid แต่มี cardType → walk-in (ไม่มีบัตร)
-  let resolvedUid: string
+  let resolvedUid:  string
   let resolvedType: 'car' | 'motorcycle' | 'overnight'
 
   if (uid) {
@@ -42,17 +47,29 @@ export async function POST(req: NextRequest) {
     resolvedUid  = card.uid
     resolvedType = card.type
   } else {
-    // walk-in — สร้าง UID ชั่วคราว
     resolvedUid  = `WALKIN-${Date.now()}`
     resolvedType = manualType as 'car' | 'motorcycle' | 'overnight'
   }
 
+  // Find active shift and increment checkin count
+  let shiftId: string | undefined
+  if (payload) {
+    const shift = await Shift.findOne({ operatorId: payload.sub, status: 'active' })
+    if (shift) {
+      shiftId = String(shift._id)
+      shift.checkinsCount += 1
+      await shift.save()
+    }
+  }
+
   const session = await ParkingSession.create({
-    cardUid:   resolvedUid,
-    cardType:  resolvedType,
-    plate:     plate.trim(),
-    entryTime: now,
-    status:    'active',
+    cardUid:    resolvedUid,
+    cardType:   resolvedType,
+    plate:      plate.trim(),
+    entryTime:  now,
+    status:     'active',
+    operatorId: payload?.sub,
+    shiftId,
   })
 
   void runCheckinSequence(settings.hardware, { cardUid: resolvedUid, plate: plate.trim() })

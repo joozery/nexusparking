@@ -32,7 +32,10 @@ export default function LoginPage() {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password }),
       })
-      if (res.ok) router.push('/gate')
+      if (res.ok) {
+        const data = await res.json()
+        router.push(data.role === 'operator' ? '/operator' : '/gate')
+      }
       else setError((await res.json()).error ?? 'เข้าสู่ระบบไม่สำเร็จ')
     } finally { setLoading(false) }
   }
@@ -122,15 +125,11 @@ export default function LoginPage() {
 
             {/* ── Logo ── */}
             <div className="flex justify-center mb-6 fade-up">
-              <div className="relative w-[200px] h-[50px]">
-                <Image
-                  src="/logo/logonext.svg"
-                  alt="NexusParking Logo"
-                  fill
-                  style={{ objectFit: 'contain', objectPosition: 'center' }}
-                  priority
-                />
-              </div>
+              <img
+                src="/logo/logonext.svg"
+                alt="NexusParking Logo"
+                className="h-12 w-auto object-contain"
+              />
             </div>
 
             {/* ── Divider ── */}

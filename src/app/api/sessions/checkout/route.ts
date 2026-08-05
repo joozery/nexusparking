@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { cookies } from 'next/headers'
+import { verifyToken, COOKIE_NAME } from '@/lib/auth'
 import { connectDB } from '@/lib/mongodb'
 import { ParkingSession } from '@/models/ParkingSession'
+import { Shift } from '@/models/Shift'
+import { Discount } from '@/models/Discount'
 import { getSettings } from '@/models/SystemSettings'
 import { calcFeeFromMinutes, calcDurationMinutes } from '@/lib/calcFee'
 import { runCheckoutSequence } from '@/lib/hardware'
@@ -21,7 +25,11 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const { uid, sessionId } = await req.json()
+  const { uid, sessionId, paymentMethod = 'cash', discountId } = await req.json()
+
+  const jar     = await cookies()
+  const token   = jar.get(COOKIE_NAME)?.value
+  const payload = token ? verifyToken(token) : null
 
   await connectDB()
 
@@ -36,15 +44,56 @@ export async function POST(req: NextRequest) {
   const durationMin = calcDurationMinutes(session.entryTime, now)
   const fee = calcFeeFromMinutes(session.cardType, durationMin, session.entryTime, now)
 
-  session.exitTime    = now
-  session.durationMin = durationMin
-  session.fee         = fee
-  session.lostFine    = 0
-  session.totalFee    = fee
-  session.status      = 'completed'
+  // คำนวณส่วนลด
+  let discountAmount = 0
+  let discountName: string | undefined
+  if (discountId) {
+    const discount = await Discount.findById(discountId).lean() as {
+      name: string; discountType: string; discountValue: number; maxDiscount?: number
+    } | null
+    if (discount) {
+      discountName = discount.name
+      if (discount.discountType === 'fixed') {
+        discountAmount = Math.min(discount.discountValue, fee)
+      } else {
+        const pct = Math.floor(fee * discount.discountValue / 100)
+        discountAmount = discount.maxDiscount ? Math.min(pct, discount.maxDiscount) : pct
+      }
+    }
+  }
+
+  const totalFee = Math.max(0, fee - discountAmount)
+
+  session.exitTime       = now
+  session.durationMin    = durationMin
+  session.fee            = fee
+  session.lostFine       = 0
+  session.totalFee       = totalFee
+  session.discountId     = discountId ?? undefined
+  session.discountName   = discountName
+  session.discountAmount = discountAmount
+  session.status         = 'completed'
+  session.paymentMethod  = paymentMethod as 'cash' | 'qr'
+  if (payload) session.operatorId = payload.sub
+
+  // Link to active shift
+  if (payload) {
+    const shift = await Shift.findOne({ operatorId: payload.sub, status: 'active' })
+    if (shift) {
+      session.shiftId = String(shift._id)
+      shift.checkoutsCount += 1
+      if (paymentMethod === 'qr') {
+        shift.qrAmount += totalFee
+      } else {
+        shift.cashAmount += totalFee
+      }
+      shift.totalAmount += totalFee
+      await shift.save()
+    }
+  }
+
   await session.save()
 
-  // trigger hardware (fire-and-forget)
   void runCheckoutSequence(settings.hardware, {
     cardUid: session.cardUid,
     plate:   session.plate,

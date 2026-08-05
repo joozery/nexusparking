@@ -12,13 +12,23 @@ export async function GET(req: NextRequest) {
   const dateFrom = searchParams.get('dateFrom')
   const dateTo   = searchParams.get('dateTo')
 
+  const shiftId = searchParams.get('shiftId')
+
   const filter: Record<string, unknown> = {}
-  if (status) filter.status = status
-  if (plate)  filter.plate  = { $regex: plate, $options: 'i' }
+  if (status)  filter.status  = status
+  if (plate)   filter.plate   = { $regex: plate, $options: 'i' }
+  if (shiftId) filter.shiftId = shiftId
   if (dateFrom || dateTo) {
     filter.entryTime = {}
-    if (dateFrom) (filter.entryTime as Record<string, unknown>).$gte = new Date(dateFrom)
-    if (dateTo)   (filter.entryTime as Record<string, unknown>).$lte = new Date(dateTo + 'T23:59:59')
+    if (dateFrom) {
+      const from = dateFrom.includes('T') ? new Date(dateFrom) : new Date(dateFrom + 'T00:00:00')
+      ;(filter.entryTime as Record<string, unknown>).$gte = from
+    }
+    if (dateTo) {
+      // ถ้าเป็น full ISO timestamp ใช้ตรงๆ ถ้าเป็น date-only (YYYY-MM-DD) เติม end-of-day
+      const dateToVal = dateTo.includes('T') ? new Date(dateTo) : new Date(dateTo + 'T23:59:59')
+      ;(filter.entryTime as Record<string, unknown>).$lte = dateToVal
+    }
   }
 
   const [sessions, total] = await Promise.all([

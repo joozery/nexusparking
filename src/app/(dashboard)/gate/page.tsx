@@ -175,11 +175,11 @@ export default function GatePage() {
     }
   }
 
-  async function handleCheckout() {
+  async function handleCheckout(paymentMethod: 'cash' | 'qr' = 'cash', discountId?: string) {
     const res = await fetch('/api/sessions/checkout', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sessionId: coSessionId || undefined }),
+      body: JSON.stringify({ sessionId: coSessionId || undefined, paymentMethod, discountId }),
     })
     if (res.ok) {
       setCheckOutOpen(false); resetCO(); fetchData()
