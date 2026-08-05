@@ -14,12 +14,15 @@ export async function GET(req: NextRequest) {
   if (!uid) return NextResponse.json({ error: 'uid required' }, { status: 400 })
 
   await connectDB()
-  const session = await ParkingSession.findOne({ cardUid: uid.trim(), status: 'active' }).lean()
+  const [session, settings] = await Promise.all([
+    ParkingSession.findOne({ cardUid: uid.trim(), status: 'active' }).lean(),
+    getSettings(),
+  ])
   if (!session) return NextResponse.json({ error: 'ไม่พบยานพาหนะในลาน' }, { status: 404 })
 
   const now = new Date()
   const durationMin = calcDurationMinutes(session.entryTime, now)
-  const fee = calcFeeFromMinutes(session.cardType, durationMin, session.entryTime, now)
+  const fee = calcFeeFromMinutes(session.cardType, durationMin, session.entryTime, now, settings.rates.overnight)
 
   return NextResponse.json({ ...session, durationMin, fee, totalFee: fee })
 }
@@ -42,7 +45,7 @@ export async function POST(req: NextRequest) {
   const settings = await getSettings()
   const now = new Date()
   const durationMin = calcDurationMinutes(session.entryTime, now)
-  const fee = calcFeeFromMinutes(session.cardType, durationMin, session.entryTime, now)
+  const fee = calcFeeFromMinutes(session.cardType, durationMin, session.entryTime, now, settings.rates.overnight)
 
   // คำนวณส่วนลด
   let discountAmount = 0

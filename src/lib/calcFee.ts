@@ -1,85 +1,163 @@
 export type CardType = 'car' | 'motorcycle' | 'overnight'
 
+export interface OvernightConfig {
+  windowStart: string  // 'HH:MM'
+  windowEnd:   string  // 'HH:MM'
+  flatRate:    number
+  extraHour:   number
+}
+
+export interface FeeSegment {
+  kind:      'normal' | 'overnight' | 'outside'
+  from:      Date
+  to:        Date
+  minutes:   number
+  hours:     number   // ceiled hours (0 for overnight flat)
+  fee:       number
+  rateLabel: string
+}
+
+const DEFAULT_OVERNIGHT: OvernightConfig = {
+  windowStart: '18:00',
+  windowEnd:   '07:00',
+  flatRate:    100,
+  extraHour:   20,
+}
+
 function ceilHours(minutes: number) {
   return Math.max(1, Math.ceil(minutes / 60))
 }
 
-// นาทีที่อยู่ใน daytime (07:00-22:00) — ใช้คำนวณค่าจอดปกติสำหรับ overnight
-function daytimeMinutes(entryTime: Date, exitTime: Date): number {
-  const MS = 60000
-  const dayStart = 7 * 60   // 07:00
-  const dayEnd   = 22 * 60  // 22:00
-
-  let total = 0
-  let cur = new Date(entryTime)
-  const end = new Date(exitTime)
-
-  while (cur < end) {
-    const next = new Date(cur)
-    next.setDate(next.getDate() + 1)
-    next.setHours(0, 0, 0, 0)
-    const segEnd = next < end ? next : end
-
-    // ช่วงกลางคืนของวัน cur
-    const curMin = cur.getHours() * 60 + cur.getMinutes()
-    const segEndMin = (segEnd.getDate() === cur.getDate())
-      ? segEnd.getHours() * 60 + segEnd.getMinutes()
-      : 24 * 60
-
-    const overlapStart = Math.max(curMin, dayStart)
-    const overlapEnd   = Math.min(segEndMin, dayEnd)
-    if (overlapEnd > overlapStart) total += (overlapEnd - overlapStart)
-
-    cur = next
-  }
-
-  return total
-}
-
-// ตรวจสอบว่าการจอดข้ามช่วง 22:00-07:00 หรือเปล่า
-function spansNightWindow(entryTime: Date, exitTime: Date): boolean {
-  const nightStart = 22 * 60  // 22:00
-  const nightEnd   = 7  * 60  // 07:00
-
-  let cur = new Date(entryTime)
-  const end = new Date(exitTime)
-
-  while (cur < end) {
-    const h = cur.getHours() * 60 + cur.getMinutes()
-    if (h >= nightStart || h < nightEnd) return true
-    // ก้าวไป 30 นาที
+function spansOvernightWindow(entry: Date, exit: Date, cfg: OvernightConfig): boolean {
+  const wsMin = toMin(cfg.windowStart)
+  const weMin = toMin(cfg.windowEnd)
+  let cur = new Date(entry)
+  while (cur < exit) {
+    const m = cur.getHours() * 60 + cur.getMinutes()
+    if (m >= wsMin || m < weMin) return true
     cur = new Date(cur.getTime() + 30 * 60000)
   }
   return false
 }
 
+function toMin(hhmm: string) {
+  const [h, m] = hhmm.split(':').map(Number)
+  return h * 60 + m
+}
+
+// คืน overnight window segments ที่ทับกับ [entry, exit] เรียงตามเวลา
+function overnightWindowsIn(entry: Date, exit: Date, cfg: OvernightConfig) {
+  const [wsH, wsM] = cfg.windowStart.split(':').map(Number)
+  const [weH, weM] = cfg.windowEnd.split(':').map(Number)
+
+  const windows: { start: Date; end: Date }[] = []
+  const checkFrom = new Date(entry)
+  checkFrom.setDate(checkFrom.getDate() - 1)
+  checkFrom.setHours(0, 0, 0, 0)
+  const checkTo = new Date(exit)
+  checkTo.setHours(0, 0, 0, 0)
+
+  for (let d = new Date(checkFrom); d <= checkTo; d.setDate(d.getDate() + 1)) {
+    const wStart = new Date(d); wStart.setHours(wsH, wsM, 0, 0)
+    const wEnd   = new Date(d); wEnd.setDate(wEnd.getDate() + 1); wEnd.setHours(weH, weM, 0, 0)
+    const oStart = entry > wStart ? new Date(entry) : new Date(wStart)
+    const oEnd   = exit  < wEnd   ? new Date(exit)  : new Date(wEnd)
+    if (oEnd > oStart) windows.push({ start: oStart, end: oEnd })
+  }
+  return windows
+}
+
+// คำนวณ breakdown แยกแต่ละช่วง — ใช้แสดงผลใน simulator และ checkout
+export function calcFeeBreakdown(
+  cardType:  CardType,
+  entryTime: Date,
+  exitTime:  Date,
+  overnight?: OvernightConfig,
+): { segments: FeeSegment[]; total: number } {
+  const cfg = overnight ?? DEFAULT_OVERNIGHT
+  const isOvernight = cardType === 'overnight' || spansOvernightWindow(entryTime, exitTime, cfg)
+
+  if (!isOvernight) {
+    const minutes = (exitTime.getTime() - entryTime.getTime()) / 60000
+    const h = ceilHours(minutes)
+    let fee: number
+    let rateLabel: string
+    if (cardType === 'car') {
+      fee = h <= 1 ? 30 : 30 + (h - 1) * 20
+      rateLabel = h <= 1 ? '฿30 (ชม.แรก)' : `฿30 + ${h - 1}×฿20`
+    } else {
+      fee = h <= 1 ? 20 : 20 + (h - 1) * 10
+      rateLabel = h <= 1 ? '฿20 (ชม.แรก)' : `฿20 + ${h - 1}×฿10`
+    }
+    return {
+      segments: [{ kind: 'normal', from: entryTime, to: exitTime, minutes, hours: h, fee, rateLabel }],
+      total: fee,
+    }
+  }
+
+  const windows = overnightWindowsIn(entryTime, exitTime, cfg)
+  const segments: FeeSegment[] = []
+  let cursor = entryTime
+
+  for (const w of windows) {
+    // ช่วงนอก window ก่อน
+    if (cursor < w.start) {
+      const min = (w.start.getTime() - cursor.getTime()) / 60000
+      const h   = Math.ceil(min / 60)
+      segments.push({
+        kind: 'outside', from: new Date(cursor), to: new Date(w.start),
+        minutes: min, hours: h,
+        fee: h * cfg.extraHour,
+        rateLabel: `${h} ชม. × ฿${cfg.extraHour}/ชม.`,
+      })
+    }
+    // overnight window — flat rate
+    const min = (w.end.getTime() - w.start.getTime()) / 60000
+    segments.push({
+      kind: 'overnight', from: new Date(w.start), to: new Date(w.end),
+      minutes: min, hours: 0,
+      fee: cfg.flatRate,
+      rateLabel: `เหมาจ่าย ฿${cfg.flatRate}`,
+    })
+    cursor = w.end
+  }
+
+  // ช่วงนอก window หลัง
+  if (cursor < exitTime) {
+    const min = (exitTime.getTime() - cursor.getTime()) / 60000
+    const h   = Math.ceil(min / 60)
+    segments.push({
+      kind: 'outside', from: new Date(cursor), to: new Date(exitTime),
+      minutes: min, hours: h,
+      fee: h * cfg.extraHour,
+      rateLabel: `${h} ชม. × ฿${cfg.extraHour}/ชม.`,
+    })
+  }
+
+  const total = segments.reduce((s, seg) => s + seg.fee, 0)
+  return { segments, total }
+}
+
 export function calcFeeFromMinutes(
-  type: CardType,
-  minutes: number,
+  type:       CardType,
+  minutes:    number,
   entryTime?: Date,
   exitTime?:  Date,
+  overnight?: OvernightConfig,
 ): number {
-  // ถ้าเป็น overnight type หรือจอดข้ามช่วง 22:00-07:00 → overnight rate
-  const isOvernight = type === 'overnight' ||
-    (entryTime != null && exitTime != null && spansNightWindow(entryTime, exitTime))
+  const cfg = overnight ?? DEFAULT_OVERNIGHT
+  const isOvernight =
+    type === 'overnight' ||
+    (entryTime != null && exitTime != null && spansOvernightWindow(entryTime, exitTime, cfg))
 
   if (isOvernight) {
-    // ฿100 ค่าค้างคืน + คิดชั่วโมง daytime ส่วนที่เกินตามปกติ
-    if (!entryTime || !exitTime) return 100
-    const dtMin  = daytimeMinutes(entryTime, exitTime)
-    const dtHrs  = dtMin > 0 ? ceilHours(dtMin) : 0
-    if (type === 'motorcycle') {
-      const extra = dtHrs <= 1 ? 0 : (dtHrs - 1) * 10
-      return 100 + extra
-    }
-    // car / overhead default
-    const extra = dtHrs <= 1 ? 0 : (dtHrs - 1) * 20
-    return 100 + extra
+    if (!entryTime || !exitTime) return cfg.flatRate
+    return calcFeeBreakdown(type, entryTime, exitTime, cfg).total
   }
 
   if (type === 'car')        return ceilHours(minutes) <= 1 ? 30 : 30 + (ceilHours(minutes) - 1) * 20
   if (type === 'motorcycle') return ceilHours(minutes) <= 1 ? 20 : 20 + (ceilHours(minutes) - 1) * 10
-  return 100
+  return cfg.flatRate
 }
 
 export function calcDurationMinutes(entryTime: Date, exitTime: Date): number {

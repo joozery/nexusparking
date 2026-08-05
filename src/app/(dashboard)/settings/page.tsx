@@ -5,17 +5,18 @@ import {
   Settings, Clock, BadgeDollarSign, Cpu, Save,
   RefreshCw, Wifi, WifiOff,
   Camera, Shield, CreditCard, Printer, Banknote, Play,
-  Car, Bike, Moon, AlertOctagon,
+  Car, Bike, Moon, AlertOctagon, ParkingSquare,
 } from 'lucide-react'
 import { useToast } from '@/components/ui/Toast'
 
 interface HWDevice { ip: string; port: number; endpoint: string; enabled: boolean }
 interface AppSettings {
   businessHours: { open: string; close: string }
+  capacity: { car: number; motorcycle: number }
   rates: {
     car:        { firstHour: number; extraHour: number }
     motorcycle: { firstHour: number; extraHour: number }
-    overnight:  { flatRate: number;  extraHour: number }
+    overnight:  { windowStart: string; windowEnd: string; flatRate: number; extraHour: number }
   }
   hardware: { camera: HWDevice; barrier: HWDevice; reader: HWDevice; printer: HWDevice; drawer: HWDevice }
   lostCardFine: number
@@ -158,6 +159,43 @@ export default function SettingsPage() {
               </div>
             </div>
 
+            {/* Capacity */}
+            <div className="bg-white rounded-xl overflow-hidden" style={{ border: '1px solid #E8ECF4' }}>
+              <div className="px-5 py-4 flex items-center gap-3" style={{ borderBottom: '1px solid #E8ECF4', background: '#FAFBFF' }}>
+                <div className="size-8 rounded-lg flex items-center justify-center"
+                  style={{ background: 'rgba(109,40,217,0.08)' }}>
+                  <ParkingSquare className="size-4" style={{ color: '#6D28D9' }} />
+                </div>
+                <div>
+                  <p className="text-sm font-black text-slate-900">ความจุลานจอด</p>
+                  <p className="text-[10px] text-slate-400">กำหนดจำนวนคันสูงสุดที่ลานรองรับได้แต่ละประเภท</p>
+                </div>
+              </div>
+              <div className="p-5">
+                <div className="grid grid-cols-2 gap-4 max-w-xs">
+                  {[
+                    { label: 'รถยนต์ (คัน)',      key: 'car'        as const },
+                    { label: 'มอเตอร์ไซค์ (คัน)', key: 'motorcycle' as const },
+                  ].map(({ label, key }) => (
+                    <div key={key}>
+                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-wide block mb-1.5">{label}</label>
+                      <input
+                        type="number" min={1}
+                        value={settings.capacity[key]}
+                        onChange={e => setSettings(s => s ? ({ ...s, capacity: { ...s.capacity, [key]: +e.target.value } }) : s)}
+                        className="w-full h-10 px-3 rounded-lg text-sm font-black text-slate-800 outline-none"
+                        style={{ border: '1.5px solid #E8ECF4', background: '#FAFBFF' }}
+                        onFocus={e => e.currentTarget.style.borderColor = '#6D28D9'}
+                        onBlur={e => e.currentTarget.style.borderColor = '#E8ECF4'} />
+                    </div>
+                  ))}
+                </div>
+                <p className="mt-3 text-[10px] text-slate-400">
+                  รวมทั้งหมด: <span className="font-black text-slate-600">{(settings.capacity.car + settings.capacity.motorcycle).toLocaleString()} คัน</span>
+                </p>
+              </div>
+            </div>
+
             {/* Rates */}
             <div className="bg-white rounded-xl overflow-hidden" style={{ border: '1px solid #E8ECF4' }}>
               <div className="px-5 py-4 flex items-center gap-3" style={{ borderBottom: '1px solid #E8ECF4', background: '#FAFBFF' }}>
@@ -217,8 +255,29 @@ export default function SettingsPage() {
                 <div className="rounded-lg p-4" style={{ background: '#F8FAFF', border: '1px solid rgba(124,58,237,0.1)' }}>
                   <div className="flex items-center gap-2 mb-3">
                     <Moon className="size-4" style={{ color: '#7C3AED' }} />
-                    <p className="text-xs font-black text-slate-800">ค้างคืน (Overnight) — เหมาจ่าย 18:00–07:00</p>
+                    <p className="text-xs font-black text-slate-800">
+                      ค้างคืน (Overnight) — เหมาจ่าย {settings.rates.overnight.windowStart}–{settings.rates.overnight.windowEnd}
+                    </p>
                   </div>
+                  {/* ช่วงเวลา overnight */}
+                  <div className="grid grid-cols-2 gap-3 max-w-xs mb-3">
+                    {[
+                      { label: 'เริ่มช่วงกลางคืน', key: 'windowStart' as const },
+                      { label: 'สิ้นสุดช่วงกลางคืน', key: 'windowEnd'   as const },
+                    ].map(({ label, key }) => (
+                      <div key={key}>
+                        <label className="text-[9px] font-black text-slate-500 uppercase block mb-1">{label}</label>
+                        <input type="time"
+                          value={settings.rates.overnight[key]}
+                          onChange={e => setSettings(s => s ? ({...s, rates: {...s.rates, overnight: {...s.rates.overnight, [key]: e.target.value}}}) : s)}
+                          className="w-full h-9 px-3 rounded-lg text-sm font-black text-slate-800 outline-none"
+                          style={{ border: '1.5px solid #E8ECF4', background: 'white' }}
+                          onFocus={e => e.currentTarget.style.borderColor = '#7C3AED'}
+                          onBlur={e => e.currentTarget.style.borderColor = '#E8ECF4'} />
+                      </div>
+                    ))}
+                  </div>
+                  {/* อัตรา */}
                   <div className="grid grid-cols-2 gap-3 max-w-xs">
                     {[
                       { label: 'ราคาเหมาจ่าย (฿)', val: settings.rates.overnight.flatRate,  cb: (v: number) => setSettings(s => s ? ({...s, rates: {...s.rates, overnight: {...s.rates.overnight, flatRate: v}}}) : s) },

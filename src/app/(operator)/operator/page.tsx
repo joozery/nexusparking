@@ -101,11 +101,12 @@ export default function OperatorPage() {
   const [qLoading, setQLoading] = useState<string | null>(null) // id of row being actioned
 
   // Check In
-  const [checkInOpen, setCheckInOpen] = useState(false)
-  const [ciStep, setCiStep] = useState<'scan' | 'confirm'>('scan')
-  const [ciType, setCiType] = useState<CardType>('car')
-  const [ciPlate, setCiPlate] = useState('')
-  const [ciUid, setCiUid] = useState('')
+  const [checkInOpen,   setCheckInOpen]   = useState(false)
+  const [ciStep,        setCiStep]        = useState<'scan' | 'confirm'>('scan')
+  const [ciType,        setCiType]        = useState<CardType>('car')
+  const [ciPlate,       setCiPlate]       = useState('')
+  const [ciUid,         setCiUid]         = useState('')
+  const [ciCustomTime,  setCiCustomTime]  = useState('')
 
   // Check Out
   const [checkOutOpen, setCheckOutOpen] = useState(false)
@@ -118,7 +119,7 @@ export default function OperatorPage() {
   // Lost card
   const [lostOpen, setLostOpen] = useState(false)
 
-  function resetCI() { setCiStep('scan'); setCiPlate(''); setCiType('car'); setCiUid('') }
+  function resetCI() { setCiStep('scan'); setCiPlate(''); setCiType('car'); setCiUid(''); setCiCustomTime('') }
   function resetCO() { setCoStep('scan'); setCoSessionId('') }
 
   const fetchShift = useCallback(async () => {
@@ -224,8 +225,8 @@ export default function OperatorPage() {
     if (res.ok) {
       setShiftEnding(false)
       setClosingFloat('')
-      await fetchShift()
-      success('ปิดกะแล้ว', 'บันทึกยอดเรียบร้อย')
+      success('ปิดกะแล้ว', 'บันทึกยอดเรียบร้อย — กำลังออกจากระบบ...')
+      setTimeout(handleLogout, 1500)
     } else {
       const err = await res.json()
       toastError('ไม่สามารถปิดกะได้', err.error)
@@ -249,7 +250,10 @@ export default function OperatorPage() {
 
   async function handleCheckin() {
     if (!ciPlate || ciPlate.length !== 4) return
-    const body = ciUid ? { uid: ciUid, plate: ciPlate } : { cardType: ciType, plate: ciPlate }
+    const body: Record<string, string> = ciUid
+      ? { uid: ciUid, plate: ciPlate }
+      : { cardType: ciType, plate: ciPlate }
+    if (ciCustomTime) body.entryTime = new Date(ciCustomTime).toISOString()
     const res = await fetch('/api/sessions/checkin', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -791,6 +795,13 @@ export default function OperatorPage() {
               >
                 เริ่มกะ
               </button>
+              <button
+                onClick={handleLogout}
+                className="w-full h-10 rounded-xl text-sm font-bold"
+                style={{ background: '#FEF2F2', color: '#991B1B', border: '1px solid rgba(239,68,68,0.2)' }}
+              >
+                ออกจากระบบ
+              </button>
             </div>
           </div>
         </div>
@@ -879,6 +890,8 @@ export default function OperatorPage() {
         open={checkInOpen}
         onOpenChange={o => { setCheckInOpen(o); if (!o) resetCI() }}
         step={ciStep} cardType={ciType} plate={ciPlate}
+        customEntryTime={ciCustomTime}
+        onCustomEntryTimeChange={setCiCustomTime}
         onSimulateScan={simulateCIScan}
         onSelectType={t => { setCiType(t); setCiStep('confirm') }}
         onPlateChange={setCiPlate}

@@ -9,7 +9,7 @@ import { getSettings } from '@/models/SystemSettings'
 import { runCheckinSequence } from '@/lib/hardware'
 
 export async function POST(req: NextRequest) {
-  const { uid, plate, cardType: manualType } = await req.json()
+  const { uid, plate, cardType: manualType, entryTime: customEntryTime } = await req.json()
 
   if (!plate) {
     return NextResponse.json({ error: 'plate is required' }, { status: 400 })
@@ -24,8 +24,16 @@ export async function POST(req: NextRequest) {
 
   await connectDB()
 
-  const settings = await getSettings()
-  const now = new Date()
+  const [settings, activeSessions] = await Promise.all([
+    getSettings(),
+    ParkingSession.countDocuments({ status: 'active' }),
+  ])
+  const totalCapacity = settings.capacity.car + settings.capacity.motorcycle
+  if (activeSessions >= totalCapacity) {
+    return NextResponse.json({ error: 'ลานจอดเต็มแล้ว กรุณาใช้ระบบคิวรอ' }, { status: 409 })
+  }
+
+  const now = customEntryTime ? new Date(customEntryTime) : new Date()
 
   const [openH, openM]   = settings.businessHours.open.split(':').map(Number)
   const [closeH, closeM] = settings.businessHours.close.split(':').map(Number)

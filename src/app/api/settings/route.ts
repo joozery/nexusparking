@@ -18,6 +18,10 @@ export async function PUT(req: NextRequest) {
   } else {
     // deep merge
     if (body.businessHours) Object.assign(settings.businessHours, body.businessHours)
+    if (body.capacity) {
+      Object.assign(settings.capacity, body.capacity)
+      settings.markModified('capacity')
+    }
     if (body.rates) {
       if (body.rates.car)        Object.assign(settings.rates.car,        body.rates.car)
       if (body.rates.motorcycle) Object.assign(settings.rates.motorcycle, body.rates.motorcycle)

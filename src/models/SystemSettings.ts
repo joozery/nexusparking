@@ -2,10 +2,11 @@ import mongoose, { Schema, type Document } from 'mongoose'
 
 export interface ISystemSettings extends Document {
   businessHours: { open: string; close: string }
+  capacity: { car: number; motorcycle: number }
   rates: {
     car:        { firstHour: number; extraHour: number }
     motorcycle: { firstHour: number; extraHour: number }
-    overnight:  { flatRate: number;  extraHour: number }
+    overnight:  { windowStart: string; windowEnd: string; flatRate: number; extraHour: number }
   }
   hardware: {
     camera:  { ip: string; port: number; endpoint: string; enabled: boolean }
@@ -29,10 +30,14 @@ const SystemSettingsSchema = new Schema<ISystemSettings>({
     open:  { type: String, default: '06:30' },
     close: { type: String, default: '22:00' },
   },
+  capacity: {
+    car:        { type: Number, default: 150 },
+    motorcycle: { type: Number, default: 50  },
+  },
   rates: {
     car:        { firstHour: { type: Number, default: 30  }, extraHour: { type: Number, default: 20 } },
     motorcycle: { firstHour: { type: Number, default: 20  }, extraHour: { type: Number, default: 10 } },
-    overnight:  { flatRate:  { type: Number, default: 100 }, extraHour: { type: Number, default: 20 } },
+    overnight:  { windowStart: { type: String, default: '18:00' }, windowEnd: { type: String, default: '07:00' }, flatRate: { type: Number, default: 100 }, extraHour: { type: Number, default: 20 } },
   },
   hardware: {
     camera:  hwDevice,

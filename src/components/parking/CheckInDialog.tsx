@@ -1,6 +1,6 @@
 'use client'
 
-import { CreditCard, LogIn, CheckCircle2, Car, Bike, Moon } from 'lucide-react'
+import { CreditCard, LogIn, CheckCircle2, Car, Bike, Moon, Clock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -19,15 +19,18 @@ interface Props {
   step: 'scan' | 'confirm'
   cardType: CardType
   plate: string
+  customEntryTime?: string
   onSimulateScan: () => void
   onSelectType: (type: CardType) => void
   onPlateChange: (plate: string) => void
+  onCustomEntryTimeChange?: (v: string) => void
   onBack: () => void
   onConfirm: () => void
 }
 
 export function CheckInDialog({
   open, onOpenChange, step, cardType, plate,
+  customEntryTime, onCustomEntryTimeChange,
   onSimulateScan, onSelectType, onPlateChange, onBack, onConfirm,
 }: Props) {
   return (
@@ -97,6 +100,37 @@ export function CheckInDialog({
                 />
                 <p className="text-[10px] text-slate-400">กรอกเฉพาะตัวเลข 4 หลักท้าย</p>
               </div>
+
+              {/* Custom entry time */}
+              {onCustomEntryTimeChange && (
+                <div className="rounded-lg overflow-hidden" style={{ border: '1px solid #E8ECF4' }}>
+                  <button
+                    className="w-full flex items-center gap-2 px-3 py-2 text-left"
+                    style={{ background: customEntryTime ? 'rgba(109,40,217,0.05)' : '#FAFBFF' }}
+                    onClick={() => onCustomEntryTimeChange(customEntryTime ? '' : new Date().toISOString().slice(0, 19))}
+                  >
+                    <Clock className="size-3.5 shrink-0" style={{ color: customEntryTime ? '#6D28D9' : '#94A3B8' }} />
+                    <span className="text-[10px] font-bold flex-1" style={{ color: customEntryTime ? '#6D28D9' : '#94A3B8' }}>
+                      {customEntryTime ? 'กำหนดเวลาเข้าเอง' : 'ใช้เวลาจริง (คลิกเพื่อกำหนดเอง)'}
+                    </span>
+                    {customEntryTime && (
+                      <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full"
+                        style={{ background: 'rgba(109,40,217,0.1)', color: '#6D28D9' }}>SIM</span>
+                    )}
+                  </button>
+                  {customEntryTime && (
+                    <div className="px-3 pb-2.5 pt-1" style={{ background: 'rgba(109,40,217,0.03)' }}>
+                      <label className="text-[9px] font-black text-slate-400 uppercase block mb-1">วัน-เวลาเข้า (วินาทีได้)</label>
+                      <input type="datetime-local" step="1" value={customEntryTime}
+                        onChange={e => onCustomEntryTimeChange(e.target.value)}
+                        className="w-full h-9 px-3 rounded-lg text-xs text-slate-800 outline-none"
+                        style={{ border: '1.5px solid rgba(109,40,217,0.3)', background: 'white' }}
+                        onFocus={e => e.currentTarget.style.borderColor = '#6D28D9'}
+                        onBlur={e => e.currentTarget.style.borderColor = 'rgba(109,40,217,0.3)'} />
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-50 border border-emerald-200">
                 <CheckCircle2 className="size-3.5 text-emerald-600 shrink-0" />

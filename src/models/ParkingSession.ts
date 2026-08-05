@@ -18,6 +18,7 @@ export interface IParkingSession extends Document {
   discountName?:  string
   discountAmount: number
   note?:          string
+  isSimulated?:   boolean
 }
 
 const ParkingSessionSchema = new Schema<IParkingSession>({
@@ -38,6 +39,7 @@ const ParkingSessionSchema = new Schema<IParkingSession>({
   discountName:   { type: String },
   discountAmount: { type: Number, default: 0 },
   note:           { type: String },
+  isSimulated:    { type: Boolean, default: false },
 }, { timestamps: true })
 
 ParkingSessionSchema.index({ status: 1, entryTime: -1 })
