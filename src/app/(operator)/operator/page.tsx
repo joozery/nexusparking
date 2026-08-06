@@ -10,7 +10,8 @@ import {
 import { CheckInDialog } from '@/components/parking/CheckInDialog'
 import { CheckOutDialog, type PaymentMethod } from '@/components/parking/CheckOutDialog'
 import { LostCardDialog } from '@/components/parking/LostCardDialog'
-import { type CardType, calcFee } from '@/components/parking/types'
+import { type CardType } from '@/components/parking/types'
+import { calcFeeFromMinutes, type OvernightConfig } from '@/lib/calcFee'
 import { useToast } from '@/components/ui/Toast'
 
 interface Session {
@@ -84,6 +85,7 @@ function fmtTime(iso: string) {
 export default function OperatorPage() {
   const { success, error: toastError, warning } = useToast()
 
+  const [overnightCfg, setOvernightCfg] = useState<OvernightConfig | undefined>(undefined)
   const [sessions, setSessions] = useState<Session[]>([])
   const [stats, setStats] = useState<Stats | null>(null)
   const [shift, setShift] = useState<Shift | null | undefined>(undefined) // undefined = loading
@@ -165,6 +167,10 @@ export default function OperatorPage() {
   useEffect(() => {
     fetchShift()
     fetchData()
+    fetch('/api/settings')
+      .then(r => r.json())
+      .then(s => { if (s?.rates?.overnight) setOvernightCfg(s.rates.overnight) })
+      .catch(() => {})
   }, [fetchShift, fetchData])
 
   useEffect(() => {
@@ -325,10 +331,11 @@ export default function OperatorPage() {
     if (!v || !coEntryTime) {
       setCoHours(0); setCoFee(0); return
     }
-    const durationMin = Math.max(1, Math.floor((new Date(v).getTime() - coEntryTime.getTime()) / 60000))
+    const exit = new Date(v)
+    const durationMin = Math.max(1, Math.floor((exit.getTime() - coEntryTime.getTime()) / 60000))
     const hours = Math.ceil(durationMin / 60)
     setCoHours(hours)
-    setCoFee(calcFee(coType, hours))
+    setCoFee(calcFeeFromMinutes(coType, durationMin, coEntryTime, exit, overnightCfg))
   }
 
   // Check Out (scan dialog)
@@ -350,9 +357,12 @@ export default function OperatorPage() {
 
   function openCheckoutFromCard(s: Session) {
     const entry = new Date(s.entryTime)
-    const durationMin = Math.max(1, Math.floor((Date.now() - entry.getTime()) / 60000))
+    const now = new Date()
+    const durationMin = Math.max(1, Math.floor((now.getTime() - entry.getTime()) / 60000))
     const hours = Math.ceil(durationMin / 60)
-    setCoType(s.cardType); setCoHours(hours); setCoFee(calcFee(s.cardType, hours))
+    setCoType(s.cardType)
+    setCoHours(hours)
+    setCoFee(calcFeeFromMinutes(s.cardType, durationMin, entry, now, overnightCfg))
     setCoSessionId(s._id); setCoEntryTime(entry); setCoStep('payment'); setCheckOutOpen(true)
   }
 
