@@ -141,12 +141,20 @@ export default function OperatorPage() {
         fetch('/api/stats'),
         fetch('/api/queue'),
       ])
-      const sData = await sRes.json()
-      const stData = await stRes.json()
-      const qData = await qRes.json()
-      setSessions(sData.sessions ?? [])
-      setStats(stData)
-      setQueues(Array.isArray(qData) ? qData : [])
+      const safeJson = async (r: Response, fallback: unknown) => {
+        if (!r.ok) return fallback
+        try { return await r.json() } catch { return fallback }
+      }
+      const [sData, stData, qData] = await Promise.all([
+        safeJson(sRes, {}),
+        safeJson(stRes, null),
+        safeJson(qRes, []),
+      ])
+      setSessions((sData as { sessions?: Session[] }).sessions ?? [])
+      setStats(stData as Stats | null)
+      setQueues(Array.isArray(qData) ? qData as QueueEntry[] : [])
+    } catch (e) {
+      console.error('[fetchData]', e)
     } finally {
       setLoading(false)
     }
