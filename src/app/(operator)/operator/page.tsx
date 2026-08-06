@@ -583,9 +583,6 @@ export default function OperatorPage() {
             ) : activeSessions.map(s => {
               const m = TYPE_META[s.cardType]
               const Icon = m.icon
-              const durationMin = Math.max(1, Math.floor((Date.now() - new Date(s.entryTime).getTime()) / 60000))
-              const hours = Math.ceil(durationMin / 60)
-              const liveFee = calcFee(s.cardType, hours)
               const entryTime = new Date(s.entryTime).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })
 
               return (
@@ -613,11 +610,6 @@ export default function OperatorPage() {
                   </div>
 
                   <div className="w-px my-3 shrink-0" style={{ background: '#E8ECF4' }} />
-
-                  <div className="flex flex-col items-center justify-center px-7 shrink-0 gap-0.5">
-                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest">ค่าบริการ</p>
-                    <p className="text-2xl font-black tabular-nums" style={{ color: m.color }}>฿{liveFee}</p>
-                  </div>
 
                   <div className="w-px my-3 shrink-0" style={{ background: '#E8ECF4' }} />
 
