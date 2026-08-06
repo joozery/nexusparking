@@ -18,7 +18,7 @@ export interface FeeSegment {
 }
 
 const DEFAULT_OVERNIGHT: OvernightConfig = {
-  windowStart: '22:00',
+  windowStart: '18:00',
   windowEnd:   '07:00',
   flatRate:    100,
   extraHour:   20,
@@ -31,9 +31,6 @@ function ceilHours(minutes: number) {
 function spansOvernightWindow(entry: Date, exit: Date, cfg: OvernightConfig): boolean {
   const wsMin = toMin(cfg.windowStart)
   const weMin = toMin(cfg.windowEnd)
-  // ถ้า exit อยู่ในช่วงกลางวัน (07:00–22:00) → ไม่ถือว่าค้างคืน
-  const exitMin = exit.getHours() * 60 + exit.getMinutes()
-  if (exitMin >= weMin && exitMin < wsMin) return false
   let cur = new Date(entry)
   while (cur < exit) {
     const m = cur.getHours() * 60 + cur.getMinutes()
@@ -49,11 +46,13 @@ function toMin(hhmm: string) {
 }
 
 // คืน overnight window segments ที่ทับกับ [entry, exit] เรียงตามเวลา
+// fullWindow = true หมายถึงรถอยู่ครบจนสิ้นสุด window (ครบคืน) → คิด flatRate
+// fullWindow = false หมายถึงรถออกก่อน window จบ (ค้างคืนไม่ครบ) → คิด extraHour
 function overnightWindowsIn(entry: Date, exit: Date, cfg: OvernightConfig) {
   const [wsH, wsM] = cfg.windowStart.split(':').map(Number)
   const [weH, weM] = cfg.windowEnd.split(':').map(Number)
 
-  const windows: { start: Date; end: Date }[] = []
+  const windows: { start: Date; end: Date; fullWindow: boolean }[] = []
   const checkFrom = new Date(entry)
   checkFrom.setDate(checkFrom.getDate() - 1)
   checkFrom.setHours(0, 0, 0, 0)
@@ -65,7 +64,9 @@ function overnightWindowsIn(entry: Date, exit: Date, cfg: OvernightConfig) {
     const wEnd   = new Date(d); wEnd.setDate(wEnd.getDate() + 1); wEnd.setHours(weH, weM, 0, 0)
     const oStart = entry > wStart ? new Date(entry) : new Date(wStart)
     const oEnd   = exit  < wEnd   ? new Date(exit)  : new Date(wEnd)
-    if (oEnd > oStart) windows.push({ start: oStart, end: oEnd })
+    if (oEnd > oStart) {
+      windows.push({ start: oStart, end: oEnd, fullWindow: exit.getTime() >= wEnd.getTime() })
+    }
   }
   return windows
 }
@@ -114,14 +115,24 @@ export function calcFeeBreakdown(
         rateLabel: `${h} ชม. × ฿${cfg.extraHour}/ชม.`,
       })
     }
-    // overnight window — flat rate
+    // overnight window — full = flat rate, partial (ออกก่อนสิ้นสุด window) = extraHour
     const min = (w.end.getTime() - w.start.getTime()) / 60000
-    segments.push({
-      kind: 'overnight', from: new Date(w.start), to: new Date(w.end),
-      minutes: min, hours: 0,
-      fee: cfg.flatRate,
-      rateLabel: `เหมาจ่าย ฿${cfg.flatRate}`,
-    })
+    if (w.fullWindow) {
+      segments.push({
+        kind: 'overnight', from: new Date(w.start), to: new Date(w.end),
+        minutes: min, hours: 0,
+        fee: cfg.flatRate,
+        rateLabel: `เหมาจ่าย ฿${cfg.flatRate}`,
+      })
+    } else {
+      const h = Math.ceil(min / 60)
+      segments.push({
+        kind: 'outside', from: new Date(w.start), to: new Date(w.end),
+        minutes: min, hours: h,
+        fee: h * cfg.extraHour,
+        rateLabel: `${h} ชม. × ฿${cfg.extraHour}/ชม.`,
+      })
+    }
     cursor = w.end
   }
 

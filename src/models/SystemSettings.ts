@@ -37,7 +37,7 @@ const SystemSettingsSchema = new Schema<ISystemSettings>({
   rates: {
     car:        { firstHour: { type: Number, default: 30  }, extraHour: { type: Number, default: 20 } },
     motorcycle: { firstHour: { type: Number, default: 20  }, extraHour: { type: Number, default: 10 } },
-    overnight:  { windowStart: { type: String, default: '22:00' }, windowEnd: { type: String, default: '07:00' }, flatRate: { type: Number, default: 100 }, extraHour: { type: Number, default: 20 } },
+    overnight:  { windowStart: { type: String, default: '18:00' }, windowEnd: { type: String, default: '07:00' }, flatRate: { type: Number, default: 100 }, extraHour: { type: Number, default: 20 } },
   },
   hardware: {
     camera:  hwDevice,
@@ -57,11 +57,6 @@ export async function getSettings(): Promise<ISystemSettings> {
   let settings = await SystemSettings.findOne()
   if (!settings) {
     settings = await SystemSettings.create({})
-  } else if (settings.rates?.overnight?.windowStart === '18:00') {
-    // migrate จาก default เก่า 18:00 → 22:00
-    settings.rates.overnight.windowStart = '22:00'
-    settings.markModified('rates')
-    await settings.save()
   }
   return settings
 }

@@ -88,6 +88,7 @@ function FeeCalculator({ overnightCfg }: { overnightCfg: OvernightConfig | null 
   }, [cardType, entryTime, exitTime, overnightCfg])
 
   const showDaytimeNote = exitTime && overnightCfg && exitIsDaytime(exitTime, overnightCfg) && cardType !== 'overnight'
+    && breakdown != null && !breakdown.segments.some(s => s.kind === 'overnight')
 
   return (
     <div className="bg-white rounded-xl overflow-hidden" style={{ border: '1px solid #E8ECF4' }}>
@@ -294,7 +295,8 @@ function BatchSeed({ overnightCfg }: { overnightCfg: OvernightConfig | null }) {
 
   const totalFee = rows.reduce((s, r) => s + previewFee(r), 0)
 
-  const formExitIsDaytime = exitTime && overnightCfg && exitIsDaytime(exitTime, overnightCfg) && cardType !== 'overnight'
+  const formExitIsDaytime = exitTime && entryTime && overnightCfg && exitIsDaytime(exitTime, overnightCfg) && cardType !== 'overnight'
+    && (() => { try { const { segments } = calcFeeBreakdown(cardType, new Date(entryTime), new Date(exitTime), overnightCfg); return !segments.some(s => s.kind === 'overnight') } catch { return true } })()
 
   return (
     <div className="bg-white rounded-xl overflow-hidden" style={{ border: '1px solid #E8ECF4' }}>
