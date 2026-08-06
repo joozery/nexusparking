@@ -75,9 +75,13 @@ export function CheckOutDialog({
 
   const exitTimeDate = customExitTime ? new Date(customExitTime) : null
 
-  const nights = (entryTime && exitTimeDate && overnightCfg)
-    ? calcFeeBreakdown(cardType, entryTime, exitTimeDate, overnightCfg).segments.filter(s => s.kind === 'overnight').length
-    : 0
+  const exitForCalc = exitTimeDate ?? new Date()
+  const breakdown = entryTime
+    ? calcFeeBreakdown(cardType, entryTime, exitForCalc, overnightCfg)
+    : null
+  const isOvernightSession = breakdown?.segments.some(s => s.kind === 'overnight') ?? false
+
+  const nights = breakdown?.segments.filter(s => s.kind === 'overnight').length ?? 0
 
   const selectedDailyDiscount = dailyDiscounts.find(d => d._id === dailySelectedId) ?? null
   const dailyDiscountAmount = selectedDailyDiscount ? selectedDailyDiscount.discountValue * nights : 0
@@ -168,16 +172,32 @@ export function CheckOutDialog({
                     <span className="text-xs font-semibold text-emerald-800">ระยะเวลาจอด: {durationStr}</span>
                   </div>
                   <div className="px-3 py-2 space-y-1.5 border-t border-emerald-100">
-                    {cardType === 'car' && <>
-                      <div className="flex justify-between text-xs text-slate-600"><span>ชั่วโมงแรก</span><span>฿30</span></div>
-                      {hours > 1 && <div className="flex justify-between text-xs text-slate-600"><span>{hours - 1} ชม.ถัดไป × ฿20</span><span>฿{(hours - 1) * 20}</span></div>}
-                    </>}
-                    {cardType === 'motorcycle' && <>
-                      <div className="flex justify-between text-xs text-slate-600"><span>ชั่วโมงแรก</span><span>฿20</span></div>
-                      {hours > 1 && <div className="flex justify-between text-xs text-slate-600"><span>{hours - 1} ชม.ถัดไป × ฿10</span><span>฿{(hours - 1) * 10}</span></div>}
-                    </>}
-                    {cardType === 'overnight' && (
-                      <div className="flex justify-between text-xs text-slate-600"><span>ค้างคืน (22:00–07:00)</span><span>฿100</span></div>
+                    {isOvernightSession && breakdown ? (
+                      breakdown.segments.map((seg, i) => (
+                        <div key={i} className="flex justify-between text-xs">
+                          <span style={{ color: seg.kind === 'overnight' ? '#7C3AED' : '#475569' }}>
+                            {seg.kind === 'overnight' ? '🌙 ' : ''}{seg.rateLabel}
+                          </span>
+                          <span className="font-semibold" style={{ color: seg.kind === 'overnight' ? '#7C3AED' : '#334155' }}>฿{seg.fee}</span>
+                        </div>
+                      ))
+                    ) : (
+                      <>
+                        {cardType === 'car' && <>
+                          <div className="flex justify-between text-xs text-slate-600"><span>ชั่วโมงแรก</span><span>฿30</span></div>
+                          {hours > 1 && <div className="flex justify-between text-xs text-slate-600"><span>{hours - 1} ชม.ถัดไป × ฿20</span><span>฿{(hours - 1) * 20}</span></div>}
+                        </>}
+                        {cardType === 'motorcycle' && <>
+                          <div className="flex justify-between text-xs text-slate-600"><span>ชั่วโมงแรก</span><span>฿20</span></div>
+                          {hours > 1 && <div className="flex justify-between text-xs text-slate-600"><span>{hours - 1} ชม.ถัดไป × ฿10</span><span>฿{(hours - 1) * 10}</span></div>}
+                        </>}
+                        {cardType === 'overnight' && (
+                          <div className="flex justify-between text-xs text-slate-600">
+                            <span>ค้างคืน ({overnightCfg?.windowStart ?? '18:00'}–{overnightCfg?.windowEnd ?? '07:00'})</span>
+                            <span>฿{overnightCfg?.flatRate ?? 100}</span>
+                          </div>
+                        )}
+                      </>
                     )}
                     {discountAmount > 0 && (
                       <div className="flex justify-between text-xs font-semibold" style={{ color: '#EA580C' }}>
