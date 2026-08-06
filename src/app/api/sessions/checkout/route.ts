@@ -6,7 +6,7 @@ import { ParkingSession } from '@/models/ParkingSession'
 import { Shift } from '@/models/Shift'
 import { Discount } from '@/models/Discount'
 import { getSettings } from '@/models/SystemSettings'
-import { calcFeeFromMinutes, calcDurationMinutes } from '@/lib/calcFee'
+import { calcFeeFromMinutes, calcFeeBreakdown, calcDurationMinutes } from '@/lib/calcFee'
 import { runCheckoutSequence } from '@/lib/hardware'
 
 export async function GET(req: NextRequest) {
@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const { uid, sessionId, paymentMethod = 'cash', discountId, exitTime: exitTimeRaw } = await req.json()
+  const { uid, sessionId, paymentMethod = 'cash', discountId, dailyDiscountId, exitTime: exitTimeRaw } = await req.json()
 
   const jar     = await cookies()
   const token   = jar.get(COOKIE_NAME)?.value
@@ -47,24 +47,40 @@ export async function POST(req: NextRequest) {
   const durationMin = calcDurationMinutes(session.entryTime, now)
   const fee = calcFeeFromMinutes(session.cardType, durationMin, session.entryTime, now, settings.rates.overnight)
 
-  // คำนวณส่วนลด
+  // คำนวณส่วนลดร้านค้า (fixed / percent)
   let discountAmount = 0
-  let discountName: string | undefined
+  const discountNames: string[] = []
   if (discountId) {
     const discount = await Discount.findById(discountId).lean() as {
       name: string; discountType: string; discountValue: number; maxDiscount?: number
     } | null
     if (discount) {
-      discountName = discount.name
+      discountNames.push(discount.name)
       if (discount.discountType === 'fixed') {
-        discountAmount = Math.min(discount.discountValue, fee)
+        discountAmount += Math.min(discount.discountValue, fee)
       } else {
         const pct = Math.floor(fee * discount.discountValue / 100)
-        discountAmount = discount.maxDiscount ? Math.min(pct, discount.maxDiscount) : pct
+        discountAmount += discount.maxDiscount ? Math.min(pct, discount.maxDiscount) : pct
       }
     }
   }
 
+  // คำนวณส่วนลดรายคืน (per_day)
+  if (dailyDiscountId) {
+    const dailyDiscount = await Discount.findById(dailyDiscountId).lean() as {
+      name: string; discountType: string; discountValue: number
+    } | null
+    if (dailyDiscount && dailyDiscount.discountType === 'per_day') {
+      const segments = calcFeeBreakdown(session.cardType, session.entryTime, now, settings.rates.overnight).segments
+      const nights = segments.filter(s => s.kind === 'overnight').length
+      if (nights > 0) {
+        discountNames.push(`${dailyDiscount.name} (${nights} คืน)`)
+        discountAmount += dailyDiscount.discountValue * nights
+      }
+    }
+  }
+
+  const discountName = discountNames.join(' + ') || undefined
   const totalFee = Math.max(0, fee - discountAmount)
 
   session.exitTime       = now

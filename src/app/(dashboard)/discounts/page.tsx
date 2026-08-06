@@ -6,7 +6,7 @@ import { Tag, Plus, Pencil, Trash2, ToggleLeft, ToggleRight, X, Check } from 'lu
 interface Discount {
   _id: string
   name: string
-  discountType: 'fixed' | 'percent'
+  discountType: 'fixed' | 'percent' | 'per_day'
   discountValue: number
   maxDiscount?: number
   isActive: boolean
@@ -14,7 +14,7 @@ interface Discount {
 }
 
 const emptyForm = {
-  name: '', discountType: 'fixed' as 'fixed' | 'percent',
+  name: '', discountType: 'fixed' as 'fixed' | 'percent' | 'per_day',
   discountValue: '', maxDiscount: '', description: '', isActive: true,
 }
 
@@ -96,7 +96,8 @@ export default function DiscountsPage() {
   }
 
   function fmtDiscount(d: Discount) {
-    if (d.discountType === 'fixed') return `ลด ฿${d.discountValue}`
+    if (d.discountType === 'fixed')   return `ลด ฿${d.discountValue}`
+    if (d.discountType === 'per_day') return `ลดรายคืน ฿${d.discountValue}/คืน`
     return `ลด ${d.discountValue}%${d.maxDiscount ? ` (สูงสุด ฿${d.maxDiscount})` : ''}`
   }
 
@@ -212,24 +213,31 @@ export default function DiscountsPage() {
               {/* ประเภทส่วนลด */}
               <div>
                 <label className="block text-xs font-black text-slate-700 mb-1.5">ประเภทส่วนลด</label>
-                <div className="grid grid-cols-2 gap-2">
-                  {(['fixed', 'percent'] as const).map(t => (
-                    <button key={t} onClick={() => setForm(f => ({ ...f, discountType: t }))}
-                      className="h-10 rounded-xl text-sm font-bold transition-all"
-                      style={form.discountType === t
+                <div className="grid grid-cols-3 gap-2">
+                  {([
+                    { key: 'fixed',   label: '฿ จำนวนเงิน' },
+                    { key: 'percent', label: '% เปอร์เซ็นต์' },
+                    { key: 'per_day', label: '🌙 รายคืน' },
+                  ] as const).map(t => (
+                    <button key={t.key} onClick={() => setForm(f => ({ ...f, discountType: t.key }))}
+                      className="h-10 rounded-xl text-xs font-bold transition-all"
+                      style={form.discountType === t.key
                         ? { background: 'rgba(234,88,12,0.1)', border: '2px solid #EA580C', color: '#EA580C' }
                         : { background: '#F8FAFF', border: '2px solid #E2E8F0', color: '#64748B' }}>
-                      {t === 'fixed' ? '฿ จำนวนเงิน' : '% เปอร์เซ็นต์'}
+                      {t.label}
                     </button>
                   ))}
                 </div>
+                {form.discountType === 'per_day' && (
+                  <p className="text-[10px] text-slate-400 mt-1.5">คิดตามจำนวนคืนที่จอด (overnight window ที่ผ่าน)</p>
+                )}
               </div>
 
               {/* ค่าส่วนลด */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-black text-slate-700 mb-1.5">
-                    {form.discountType === 'fixed' ? 'ลด (บาท)' : 'ลด (%)'}
+                    {form.discountType === 'fixed' ? 'ลด (บาท)' : form.discountType === 'per_day' ? 'ลดต่อคืน (บาท)' : 'ลด (%)'}
                   </label>
                   <input type="number" min="0" value={form.discountValue}
                     onChange={e => setForm(f => ({ ...f, discountValue: e.target.value }))}

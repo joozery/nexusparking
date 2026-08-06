@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { CreditCard, LogOut, Clock, Banknote, Smartphone, Tag, ChevronDown, Timer } from 'lucide-react'
+import { CreditCard, LogOut, Clock, Banknote, Smartphone, Tag, ChevronDown, Timer, Moon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
@@ -9,13 +9,14 @@ import {
 } from '@/components/ui/dialog'
 import { CardBadge } from './CardBadge'
 import { type CardType } from './types'
+import { calcFeeBreakdown, type OvernightConfig } from '@/lib/calcFee'
 
 export type PaymentMethod = 'cash' | 'qr'
 
 interface DiscountOption {
   _id: string
   name: string
-  discountType: 'fixed' | 'percent'
+  discountType: 'fixed' | 'percent' | 'per_day'
   discountValue: number
   maxDiscount?: number
   description?: string
@@ -30,10 +31,11 @@ interface Props {
   fee: number
   entryTime?: Date | null
   customExitTime?: string
+  overnightCfg?: OvernightConfig
   onCustomExitTimeChange?: (v: string) => void
   onSimulateScan: () => void
   onBack: () => void
-  onConfirm: (paymentMethod: PaymentMethod, discountId?: string) => void
+  onConfirm: (paymentMethod: PaymentMethod, discountId?: string, dailyDiscountId?: string) => void
 }
 
 function calcDiscountAmount(discount: DiscountOption | null, fee: number): number {
@@ -56,21 +58,35 @@ function fmtDuration(entryTime: Date | null | undefined, exitTime: Date | null |
 
 export function CheckOutDialog({
   open, onOpenChange, step, cardType, hours, fee,
-  entryTime, customExitTime, onCustomExitTimeChange,
+  entryTime, customExitTime, overnightCfg, onCustomExitTimeChange,
   onSimulateScan, onBack, onConfirm,
 }: Props) {
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash')
   const [discounts, setDiscounts] = useState<DiscountOption[]>([])
   const [selectedId, setSelectedId] = useState<string>('')
+  const [dailySelectedId, setDailySelectedId] = useState<string>('')
   const [cashReceived, setCashReceived] = useState('')
 
-  const selectedDiscount = discounts.find(d => d._id === selectedId) ?? null
+  const storeDiscounts = discounts.filter(d => d.discountType !== 'per_day')
+  const dailyDiscounts = discounts.filter(d => d.discountType === 'per_day')
+
+  const selectedDiscount = storeDiscounts.find(d => d._id === selectedId) ?? null
   const discountAmount = calcDiscountAmount(selectedDiscount, fee)
-  const finalFee = Math.max(0, fee - discountAmount)
+
+  const exitTimeDate = customExitTime ? new Date(customExitTime) : null
+
+  const nights = (entryTime && exitTimeDate && overnightCfg)
+    ? calcFeeBreakdown(cardType, entryTime, exitTimeDate, overnightCfg).segments.filter(s => s.kind === 'overnight').length
+    : 0
+
+  const selectedDailyDiscount = dailyDiscounts.find(d => d._id === dailySelectedId) ?? null
+  const dailyDiscountAmount = selectedDailyDiscount ? selectedDailyDiscount.discountValue * nights : 0
+
+  const totalDiscountAmount = discountAmount + dailyDiscountAmount
+  const finalFee = Math.max(0, fee - totalDiscountAmount)
   const cashNum = parseFloat(cashReceived) || 0
   const change = cashNum - finalFee
 
-  const exitTimeDate = customExitTime ? new Date(customExitTime) : null
   const durationStr = fmtDuration(entryTime, exitTimeDate, hours)
 
   useEffect(() => {
@@ -83,7 +99,7 @@ export function CheckOutDialog({
   }, [open])
 
   function handleClose(o: boolean) {
-    if (!o) { setPaymentMethod('cash'); setSelectedId(''); setCashReceived('') }
+    if (!o) { setPaymentMethod('cash'); setSelectedId(''); setDailySelectedId(''); setCashReceived('') }
     onOpenChange(o)
   }
 
@@ -169,12 +185,18 @@ export function CheckOutDialog({
                         <span>-฿{discountAmount}</span>
                       </div>
                     )}
+                    {dailyDiscountAmount > 0 && (
+                      <div className="flex justify-between text-xs font-semibold" style={{ color: '#7C3AED' }}>
+                        <span className="flex items-center gap-1"><Moon className="size-3" />{selectedDailyDiscount?.name} × {nights} คืน</span>
+                        <span>-฿{dailyDiscountAmount}</span>
+                      </div>
+                    )}
                   </div>
                   <div className="px-3 py-2.5 flex items-center justify-between"
-                    style={{ background: finalFee < fee ? 'linear-gradient(135deg,#059669,#10B981)' : '#059669' }}>
+                    style={{ background: totalDiscountAmount > 0 ? 'linear-gradient(135deg,#059669,#10B981)' : '#059669' }}>
                     <div>
                       <span className="text-emerald-100 text-xs font-semibold">ยอดชำระทั้งสิ้น</span>
-                      {discountAmount > 0 && (
+                      {totalDiscountAmount > 0 && (
                         <p className="text-emerald-200 text-[10px] line-through">฿{fee}</p>
                       )}
                     </div>
@@ -215,8 +237,8 @@ export function CheckOutDialog({
                 </div>
               )}
 
-              {/* Discount dropdown */}
-              {discounts.length > 0 && (
+              {/* Store discount dropdown (fixed / percent) */}
+              {storeDiscounts.length > 0 && (
                 <div>
                   <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 flex items-center gap-1">
                     <Tag className="size-3" /> ส่วนลดร้านค้า
@@ -229,7 +251,7 @@ export function CheckOutDialog({
                       style={{ border: selectedId ? '2px solid #EA580C' : '1.5px solid #E2E8F0', background: selectedId ? 'rgba(234,88,12,0.04)' : '#F8FAFF' }}
                     >
                       <option value="">— ไม่มีส่วนลด —</option>
-                      {discounts.map(d => (
+                      {storeDiscounts.map(d => (
                         <option key={d._id} value={d._id}>
                           {d.name} ({d.discountType === 'fixed' ? `ลด ฿${d.discountValue}` : `ลด ${d.discountValue}%`})
                         </option>
@@ -239,6 +261,34 @@ export function CheckOutDialog({
                   </div>
                   {selectedDiscount?.description && (
                     <p className="text-[10px] text-slate-400 mt-1 px-1">{selectedDiscount.description}</p>
+                  )}
+                </div>
+              )}
+
+              {/* Daily discount dropdown (per_day) */}
+              {dailyDiscounts.length > 0 && (
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-widest mb-1.5 flex items-center gap-1" style={{ color: '#6D28D9' }}>
+                    <Moon className="size-3" /> ส่วนลดรายคืน {nights > 0 && <span className="font-normal text-slate-400 normal-case">({nights} คืน)</span>}
+                  </p>
+                  <div className="relative">
+                    <select
+                      value={dailySelectedId}
+                      onChange={e => setDailySelectedId(e.target.value)}
+                      className="w-full h-10 rounded-xl pl-3 pr-8 text-sm font-semibold text-slate-700 outline-none appearance-none cursor-pointer"
+                      style={{ border: dailySelectedId ? '2px solid #7C3AED' : '1.5px solid #E2E8F0', background: dailySelectedId ? 'rgba(124,58,237,0.04)' : '#F8FAFF' }}
+                    >
+                      <option value="">— ไม่ใช้ส่วนลดรายคืน —</option>
+                      {dailyDiscounts.map(d => (
+                        <option key={d._id} value={d._id}>
+                          {d.name} (฿{d.discountValue}/คืน{nights > 0 ? ` × ${nights} = ฿${d.discountValue * nights}` : ''})
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown className="size-4 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  </div>
+                  {selectedDailyDiscount?.description && (
+                    <p className="text-[10px] text-slate-400 mt-1 px-1">{selectedDailyDiscount.description}</p>
                   )}
                 </div>
               )}
@@ -315,7 +365,7 @@ export function CheckOutDialog({
                   (paymentMethod === 'cash' && cashReceived !== '' && change < 0)
                 }
                 style={paymentMethod === 'qr' ? { background: '#7C3AED' } : { background: '#059669' }}
-                onClick={() => onConfirm(paymentMethod, selectedId || undefined)}
+                onClick={() => onConfirm(paymentMethod, selectedId || undefined, dailySelectedId || undefined)}
               >
                 {paymentMethod === 'cash'
                   ? <><Banknote className="size-3.5" /> รับเงินสด ฿{finalFee}</>

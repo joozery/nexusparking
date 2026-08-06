@@ -2,8 +2,8 @@ import mongoose, { Schema, type Document } from 'mongoose'
 
 export interface IDiscount extends Document {
   name:          string
-  discountType:  'fixed' | 'percent'
-  discountValue: number   // บาท หรือ %
+  discountType:  'fixed' | 'percent' | 'per_day'
+  discountValue: number   // บาท, % หรือ ฿/คืน
   maxDiscount?:  number   // cap สำหรับ percent (optional)
   isActive:      boolean
   description?:  string
@@ -11,7 +11,7 @@ export interface IDiscount extends Document {
 
 const DiscountSchema = new Schema<IDiscount>({
   name:          { type: String, required: true },
-  discountType:  { type: String, required: true, enum: ['fixed', 'percent'] },
+  discountType:  { type: String, required: true, enum: ['fixed', 'percent', 'per_day'] },
   discountValue: { type: Number, required: true, min: 0 },
   maxDiscount:   { type: Number },
   isActive:      { type: Boolean, default: true },

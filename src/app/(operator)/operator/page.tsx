@@ -366,8 +366,8 @@ export default function OperatorPage() {
     setCoSessionId(s._id); setCoEntryTime(entry); setCoStep('payment'); setCheckOutOpen(true)
   }
 
-  async function handleCheckout(paymentMethod: PaymentMethod, discountId?: string) {
-    const body: Record<string, unknown> = { sessionId: coSessionId || undefined, paymentMethod, discountId }
+  async function handleCheckout(paymentMethod: PaymentMethod, discountId?: string, dailyDiscountId?: string) {
+    const body: Record<string, unknown> = { sessionId: coSessionId || undefined, paymentMethod, discountId, dailyDiscountId }
     if (coCustomTime) body.exitTime = new Date(coCustomTime).toISOString()
     const res = await fetch('/api/sessions/checkout', {
       method: 'POST',
@@ -1080,6 +1080,7 @@ export default function OperatorPage() {
         step={coStep} cardType={coType} hours={coHours} fee={coFee}
         entryTime={coEntryTime}
         customExitTime={coCustomTime}
+        overnightCfg={overnightCfg}
         onCustomExitTimeChange={handleCoCustomTimeChange}
         onSimulateScan={simulateCOScan}
         onBack={() => setCoStep('scan')}
