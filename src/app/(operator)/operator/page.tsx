@@ -164,19 +164,23 @@ export default function OperatorPage() {
     }
   }, [])
 
-  useEffect(() => {
-    fetchShift()
-    fetchData()
+  const fetchSettings = useCallback(() => {
     fetch('/api/settings')
       .then(r => r.json())
       .then(s => { if (s?.rates?.overnight) setOvernightCfg(s.rates.overnight) })
       .catch(() => {})
-  }, [fetchShift, fetchData])
+  }, [])
 
   useEffect(() => {
-    const t = setInterval(fetchData, 15000)
+    fetchShift()
+    fetchData()
+    fetchSettings()
+  }, [fetchShift, fetchData, fetchSettings])
+
+  useEffect(() => {
+    const t = setInterval(() => { fetchData(); fetchSettings() }, 15000)
     return () => clearInterval(t)
-  }, [fetchData])
+  }, [fetchData, fetchSettings])
 
   // Queue actions
   async function simulateQScan() {
@@ -356,6 +360,7 @@ export default function OperatorPage() {
   }
 
   function openCheckoutFromCard(s: Session) {
+    fetchSettings()
     const entry = new Date(s.entryTime)
     const now = new Date()
     const durationMin = Math.max(1, Math.floor((now.getTime() - entry.getTime()) / 60000))

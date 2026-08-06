@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { connectDB } from '@/lib/mongodb'
 import { SystemSettings, getSettings } from '@/models/SystemSettings'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET() {
   await connectDB()
   const settings = await getSettings()
