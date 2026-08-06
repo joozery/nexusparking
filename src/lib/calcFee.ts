@@ -46,13 +46,11 @@ function toMin(hhmm: string) {
 }
 
 // คืน overnight window segments ที่ทับกับ [entry, exit] เรียงตามเวลา
-// fullWindow = true หมายถึงรถอยู่ครบจนสิ้นสุด window (ครบคืน) → คิด flatRate
-// fullWindow = false หมายถึงรถออกก่อน window จบ (ค้างคืนไม่ครบ) → คิด extraHour
 function overnightWindowsIn(entry: Date, exit: Date, cfg: OvernightConfig) {
   const [wsH, wsM] = cfg.windowStart.split(':').map(Number)
   const [weH, weM] = cfg.windowEnd.split(':').map(Number)
 
-  const windows: { start: Date; end: Date; fullWindow: boolean }[] = []
+  const windows: { start: Date; end: Date }[] = []
   const checkFrom = new Date(entry)
   checkFrom.setDate(checkFrom.getDate() - 1)
   checkFrom.setHours(0, 0, 0, 0)
@@ -64,9 +62,7 @@ function overnightWindowsIn(entry: Date, exit: Date, cfg: OvernightConfig) {
     const wEnd   = new Date(d); wEnd.setDate(wEnd.getDate() + 1); wEnd.setHours(weH, weM, 0, 0)
     const oStart = entry > wStart ? new Date(entry) : new Date(wStart)
     const oEnd   = exit  < wEnd   ? new Date(exit)  : new Date(wEnd)
-    if (oEnd > oStart) {
-      windows.push({ start: oStart, end: oEnd, fullWindow: exit.getTime() >= wEnd.getTime() })
-    }
+    if (oEnd > oStart) windows.push({ start: oStart, end: oEnd })
   }
   return windows
 }
@@ -102,7 +98,6 @@ export function calcFeeBreakdown(
   const windows = overnightWindowsIn(entryTime, exitTime, cfg)
   const segments: FeeSegment[] = []
   let cursor = entryTime
-  let firstWindowDone = false
 
   for (const w of windows) {
     // ช่วงนอก window ก่อน
@@ -116,26 +111,14 @@ export function calcFeeBreakdown(
         rateLabel: `${h} ชม. × ฿${cfg.extraHour}/ชม.`,
       })
     }
-    // window แรกที่ car เข้า → flatRate เสมอ (แม้ออกก่อนเช้า)
-    // window ถัดไป → flatRate ถ้าอยู่ครบ (fullWindow), extraHour ถ้าออกก่อน
+    // อยู่ใน overnight window → flatRate เสมอ ไม่ว่าจะอยู่ครบคืนหรือไม่
     const min = (w.end.getTime() - w.start.getTime()) / 60000
-    if (!firstWindowDone || w.fullWindow) {
-      segments.push({
-        kind: 'overnight', from: new Date(w.start), to: new Date(w.end),
-        minutes: min, hours: 0,
-        fee: cfg.flatRate,
-        rateLabel: `เหมาจ่าย ฿${cfg.flatRate}`,
-      })
-    } else {
-      const h = Math.ceil(min / 60)
-      segments.push({
-        kind: 'outside', from: new Date(w.start), to: new Date(w.end),
-        minutes: min, hours: h,
-        fee: h * cfg.extraHour,
-        rateLabel: `${h} ชม. × ฿${cfg.extraHour}/ชม.`,
-      })
-    }
-    firstWindowDone = true
+    segments.push({
+      kind: 'overnight', from: new Date(w.start), to: new Date(w.end),
+      minutes: min, hours: 0,
+      fee: cfg.flatRate,
+      rateLabel: `เหมาจ่าย ฿${cfg.flatRate}`,
+    })
     cursor = w.end
   }
 
