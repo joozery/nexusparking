@@ -5,7 +5,7 @@ import {
   Settings, Clock, BadgeDollarSign, Cpu, Save,
   RefreshCw, Wifi, WifiOff,
   Camera, Shield, CreditCard, Printer, Banknote, Play,
-  Car, Bike, Moon, AlertOctagon, ParkingSquare,
+  Car, Bike, Moon, AlertOctagon, ParkingSquare, Trash2,
 } from 'lucide-react'
 import { useToast } from '@/components/ui/Toast'
 
@@ -45,6 +45,9 @@ export default function SettingsPage() {
   const [saving,   setSaving]   = useState(false)
   const [testing,  setTesting]  = useState<string | null>(null)
   const [testResult, setTestResult] = useState<Record<string, boolean | null>>({})
+  const [showResetConfirm, setShowResetConfirm] = useState(false)
+  const [confirmText, setConfirmText]           = useState('')
+  const [resetting,  setResetting]              = useState(false)
 
   async function fetchSettings() {
     setLoading(true)
@@ -60,6 +63,20 @@ export default function SettingsPage() {
       const res = await fetch('/api/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(settings) })
       res.ok ? success('บันทึกการตั้งค่าสำเร็จ') : toastError('บันทึกไม่สำเร็จ', 'กรุณาลองใหม่อีกครั้ง')
     } finally { setSaving(false) }
+  }
+
+  async function handleReset() {
+    setResetting(true)
+    try {
+      const res = await fetch('/api/reset', { method: 'DELETE' })
+      if (res.ok) {
+        success('ลบข้อมูลทั้งหมดสำเร็จ')
+        setShowResetConfirm(false)
+        setConfirmText('')
+      } else {
+        toastError('ลบข้อมูลไม่สำเร็จ', 'กรุณาลองใหม่อีกครั้ง')
+      }
+    } finally { setResetting(false) }
   }
 
   async function testHardware(device: string) {
@@ -308,6 +325,33 @@ export default function SettingsPage() {
                 </div>
               </div>
             </div>
+            {/* Danger Zone */}
+            <div className="bg-white rounded-xl overflow-hidden" style={{ border: '1.5px solid rgba(220,38,38,0.25)' }}>
+              <div className="px-5 py-4 flex items-center gap-3" style={{ borderBottom: '1px solid rgba(220,38,38,0.12)', background: 'rgba(220,38,38,0.03)' }}>
+                <div className="size-8 rounded-lg flex items-center justify-center" style={{ background: 'rgba(220,38,38,0.08)' }}>
+                  <Trash2 className="size-4" style={{ color: '#DC2626' }} />
+                </div>
+                <div>
+                  <p className="text-sm font-black text-slate-900">โซนอันตราย</p>
+                  <p className="text-[10px] text-slate-400">การกระทำที่ไม่สามารถย้อนกลับได้</p>
+                </div>
+              </div>
+              <div className="p-5">
+                <div className="flex items-center justify-between p-4 rounded-lg" style={{ background: 'rgba(220,38,38,0.04)', border: '1px solid rgba(220,38,38,0.12)' }}>
+                  <div>
+                    <p className="text-xs font-black text-slate-800">ลบข้อมูลทั้งหมด</p>
+                    <p className="text-[10px] text-slate-400 mt-0.5">ลบ Sessions, บัตร, คิว, กะ, ส่วนลด, Logs ทั้งหมด · ข้อมูลผู้ดูแลและการตั้งค่าจะยังคงอยู่</p>
+                  </div>
+                  <button
+                    onClick={() => { setShowResetConfirm(true); setConfirmText('') }}
+                    className="h-8 px-4 rounded-lg text-white text-xs font-bold flex items-center gap-1.5 hover:opacity-90 shrink-0 ml-4"
+                    style={{ background: '#DC2626' }}>
+                    <Trash2 className="size-3.5" />
+                    ลบข้อมูลทั้งหมด
+                  </button>
+                </div>
+              </div>
+            </div>
           </>
         )}
 
@@ -398,6 +442,68 @@ export default function SettingsPage() {
         )}
 
       </div>
+
+      {/* ── RESET CONFIRM DIALOG ── */}
+      {showResetConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(15,23,42,0.55)', backdropFilter: 'blur(4px)' }}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden" style={{ border: '1px solid #E8ECF4' }}>
+            <div className="px-6 py-5 flex items-center gap-3" style={{ borderBottom: '1px solid #E8ECF4', background: 'rgba(220,38,38,0.03)' }}>
+              <div className="size-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'rgba(220,38,38,0.1)' }}>
+                <Trash2 className="size-4.5" style={{ color: '#DC2626' }} />
+              </div>
+              <div>
+                <p className="text-sm font-black text-slate-900">ยืนยันการลบข้อมูลทั้งหมด</p>
+                <p className="text-[10px] text-slate-400">การกระทำนี้ไม่สามารถย้อนกลับได้</p>
+              </div>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="rounded-lg p-3 text-[11px] text-slate-600 space-y-1" style={{ background: '#FFF7F7', border: '1px solid rgba(220,38,38,0.12)' }}>
+                <p className="font-bold text-red-700">ข้อมูลที่จะถูกลบ:</p>
+                <p>• Sessions การจอดรถทั้งหมด</p>
+                <p>• บัตรจอดรถทั้งหมด</p>
+                <p>• คิวรอทั้งหมด</p>
+                <p>• กะการทำงานทั้งหมด</p>
+                <p>• ส่วนลดทั้งหมด</p>
+                <p>• Hardware Logs ทั้งหมด</p>
+              </div>
+              <div className="rounded-lg p-3 text-[11px] text-slate-600" style={{ background: '#F0FDF4', border: '1px solid rgba(5,150,105,0.15)' }}>
+                <p className="font-bold text-green-700">ข้อมูลที่จะยังคงอยู่:</p>
+                <p>• บัญชีผู้ดูแลระบบ (Admin)</p>
+                <p>• การตั้งค่าระบบทั้งหมด</p>
+              </div>
+              <div>
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-wide block mb-1.5">
+                  พิมพ์ <span className="text-red-600 font-black">ลบข้อมูล</span> เพื่อยืนยัน
+                </label>
+                <input
+                  value={confirmText}
+                  onChange={e => setConfirmText(e.target.value)}
+                  placeholder="ลบข้อมูล"
+                  className="w-full h-10 px-3 rounded-lg text-sm text-slate-800 outline-none"
+                  style={{ border: '1.5px solid #E8ECF4', background: '#FAFBFF' }}
+                  onFocus={e => e.currentTarget.style.borderColor = '#DC2626'}
+                  onBlur={e => e.currentTarget.style.borderColor = '#E8ECF4'} />
+              </div>
+            </div>
+            <div className="px-6 pb-6 flex gap-2">
+              <button
+                onClick={() => { setShowResetConfirm(false); setConfirmText('') }}
+                className="flex-1 h-10 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-50"
+                style={{ border: '1.5px solid #E8ECF4' }}>
+                ยกเลิก
+              </button>
+              <button
+                onClick={handleReset}
+                disabled={confirmText !== 'ลบข้อมูล' || resetting}
+                className="flex-1 h-10 rounded-xl text-sm font-bold text-white flex items-center justify-center gap-1.5 disabled:opacity-40 hover:opacity-90"
+                style={{ background: '#DC2626' }}>
+                {resetting ? <RefreshCw className="size-3.5 animate-spin" /> : <Trash2 className="size-3.5" />}
+                {resetting ? 'กำลังลบ...' : 'ยืนยันลบข้อมูล'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   )
 }
