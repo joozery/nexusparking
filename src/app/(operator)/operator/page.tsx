@@ -322,9 +322,10 @@ export default function OperatorPage() {
 
   function handleCoCustomTimeChange(v: string) {
     setCoCustomTime(v)
-    if (!coEntryTime) return
-    const exit = v ? new Date(v) : new Date()
-    const durationMin = Math.max(1, Math.floor((exit.getTime() - coEntryTime.getTime()) / 60000))
+    if (!v || !coEntryTime) {
+      setCoHours(0); setCoFee(0); return
+    }
+    const durationMin = Math.max(1, Math.floor((new Date(v).getTime() - coEntryTime.getTime()) / 60000))
     const hours = Math.ceil(durationMin / 60)
     setCoHours(hours)
     setCoFee(calcFee(coType, hours))
@@ -338,15 +339,12 @@ export default function OperatorPage() {
       return
     }
     const entry = new Date(active.entryTime)
-    const nowStr = new Date().toISOString().slice(0, 19)
     setCoType(active.cardType)
     setCoSessionId(active._id)
     setCoEntryTime(entry)
-    setCoCustomTime(nowStr)
-    // คำนวณ fee จาก exit time ที่ pre-fill ไว้
-    const durationMin = Math.max(1, Math.floor((new Date(nowStr).getTime() - entry.getTime()) / 60000))
-    const hours = Math.ceil(durationMin / 60)
-    setCoHours(hours); setCoFee(calcFee(active.cardType, hours))
+    setCoCustomTime('')
+    setCoHours(0)
+    setCoFee(0)
     setCoStep('payment')
   }
 

@@ -108,41 +108,49 @@ export function CheckOutDialog({
               </div>
 
               {/* Fee breakdown */}
-              <div className="rounded-lg border border-emerald-200 overflow-hidden">
-                <div className="bg-emerald-50 px-3 py-2 flex items-center gap-2">
-                  <Clock className="size-3.5 text-emerald-600" />
-                  <span className="text-xs font-semibold text-emerald-800">ระยะเวลาจอด: {hours} ชั่วโมง</span>
+              {onCustomExitTimeChange && !customExitTime ? (
+                <div className="rounded-lg border-2 border-dashed border-slate-200 flex flex-col items-center justify-center gap-1.5 py-6">
+                  <Timer className="size-5 text-slate-300" />
+                  <p className="text-xs font-bold text-slate-400">กรุณากำหนดเวลาออกด้านล่าง</p>
+                  <p className="text-[10px] text-slate-300">ค่าบริการจะแสดงหลังกรอกเวลา</p>
                 </div>
-                <div className="px-3 py-2 space-y-1.5 border-t border-emerald-100">
-                  {cardType === 'car' && <>
-                    <div className="flex justify-between text-xs text-slate-600"><span>ชั่วโมงแรก</span><span>฿30</span></div>
-                    {hours > 1 && <div className="flex justify-between text-xs text-slate-600"><span>{hours - 1} ชม.ถัดไป × ฿20</span><span>฿{(hours - 1) * 20}</span></div>}
-                  </>}
-                  {cardType === 'motorcycle' && <>
-                    <div className="flex justify-between text-xs text-slate-600"><span>ชั่วโมงแรก</span><span>฿20</span></div>
-                    {hours > 1 && <div className="flex justify-between text-xs text-slate-600"><span>{hours - 1} ชม.ถัดไป × ฿10</span><span>฿{(hours - 1) * 10}</span></div>}
-                  </>}
-                  {cardType === 'overnight' && (
-                    <div className="flex justify-between text-xs text-slate-600"><span>ค้างคืน (22:00–07:00)</span><span>฿100</span></div>
-                  )}
-                  {discountAmount > 0 && (
-                    <div className="flex justify-between text-xs font-semibold" style={{ color: '#EA580C' }}>
-                      <span className="flex items-center gap-1"><Tag className="size-3" />{selectedDiscount?.name}</span>
-                      <span>-฿{discountAmount}</span>
-                    </div>
-                  )}
-                </div>
-                <div className="px-3 py-2.5 flex items-center justify-between"
-                  style={{ background: finalFee < fee ? 'linear-gradient(135deg,#059669,#10B981)' : '#059669' }}>
-                  <div>
-                    <span className="text-emerald-100 text-xs font-semibold">ยอดชำระทั้งสิ้น</span>
+              ) : (
+                <div className="rounded-lg border border-emerald-200 overflow-hidden">
+                  <div className="bg-emerald-50 px-3 py-2 flex items-center gap-2">
+                    <Clock className="size-3.5 text-emerald-600" />
+                    <span className="text-xs font-semibold text-emerald-800">ระยะเวลาจอด: {hours} ชั่วโมง</span>
+                  </div>
+                  <div className="px-3 py-2 space-y-1.5 border-t border-emerald-100">
+                    {cardType === 'car' && <>
+                      <div className="flex justify-between text-xs text-slate-600"><span>ชั่วโมงแรก</span><span>฿30</span></div>
+                      {hours > 1 && <div className="flex justify-between text-xs text-slate-600"><span>{hours - 1} ชม.ถัดไป × ฿20</span><span>฿{(hours - 1) * 20}</span></div>}
+                    </>}
+                    {cardType === 'motorcycle' && <>
+                      <div className="flex justify-between text-xs text-slate-600"><span>ชั่วโมงแรก</span><span>฿20</span></div>
+                      {hours > 1 && <div className="flex justify-between text-xs text-slate-600"><span>{hours - 1} ชม.ถัดไป × ฿10</span><span>฿{(hours - 1) * 10}</span></div>}
+                    </>}
+                    {cardType === 'overnight' && (
+                      <div className="flex justify-between text-xs text-slate-600"><span>ค้างคืน (22:00–07:00)</span><span>฿100</span></div>
+                    )}
                     {discountAmount > 0 && (
-                      <p className="text-emerald-200 text-[10px] line-through">฿{fee}</p>
+                      <div className="flex justify-between text-xs font-semibold" style={{ color: '#EA580C' }}>
+                        <span className="flex items-center gap-1"><Tag className="size-3" />{selectedDiscount?.name}</span>
+                        <span>-฿{discountAmount}</span>
+                      </div>
                     )}
                   </div>
-                  <span className="text-xl font-black text-white tabular-nums">฿{finalFee}</span>
+                  <div className="px-3 py-2.5 flex items-center justify-between"
+                    style={{ background: finalFee < fee ? 'linear-gradient(135deg,#059669,#10B981)' : '#059669' }}>
+                    <div>
+                      <span className="text-emerald-100 text-xs font-semibold">ยอดชำระทั้งสิ้น</span>
+                      {discountAmount > 0 && (
+                        <p className="text-emerald-200 text-[10px] line-through">฿{fee}</p>
+                      )}
+                    </div>
+                    <span className="text-xl font-black text-white tabular-nums">฿{finalFee}</span>
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Custom exit time (sim mode) */}
               {onCustomExitTimeChange && (
@@ -237,6 +245,7 @@ export function CheckOutDialog({
               <Button
                 size="sm"
                 className="flex-1 text-white"
+                disabled={!!onCustomExitTimeChange && !customExitTime}
                 style={paymentMethod === 'qr' ? { background: '#7C3AED' } : { background: '#059669' }}
                 onClick={() => onConfirm(paymentMethod, selectedId || undefined)}
               >
