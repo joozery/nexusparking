@@ -102,6 +102,7 @@ export function calcFeeBreakdown(
   const windows = overnightWindowsIn(entryTime, exitTime, cfg)
   const segments: FeeSegment[] = []
   let cursor = entryTime
+  let firstWindowDone = false
 
   for (const w of windows) {
     // ช่วงนอก window ก่อน
@@ -115,9 +116,10 @@ export function calcFeeBreakdown(
         rateLabel: `${h} ชม. × ฿${cfg.extraHour}/ชม.`,
       })
     }
-    // overnight window — full = flat rate, partial (ออกก่อนสิ้นสุด window) = extraHour
+    // window แรกที่ car เข้า → flatRate เสมอ (แม้ออกก่อนเช้า)
+    // window ถัดไป → flatRate ถ้าอยู่ครบ (fullWindow), extraHour ถ้าออกก่อน
     const min = (w.end.getTime() - w.start.getTime()) / 60000
-    if (w.fullWindow) {
+    if (!firstWindowDone || w.fullWindow) {
       segments.push({
         kind: 'overnight', from: new Date(w.start), to: new Date(w.end),
         minutes: min, hours: 0,
@@ -133,6 +135,7 @@ export function calcFeeBreakdown(
         rateLabel: `${h} ชม. × ฿${cfg.extraHour}/ชม.`,
       })
     }
+    firstWindowDone = true
     cursor = w.end
   }
 
