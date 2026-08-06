@@ -1,11 +1,11 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import {
   FlaskConical, Car, Bike, Moon, Plus, Trash2,
-  Play, RefreshCw, CheckCircle2, AlertTriangle, X,
+  Play, RefreshCw, CheckCircle2, AlertTriangle, X, Info,
 } from 'lucide-react'
-import { calcFeeBreakdown, type CardType, type FeeSegment } from '@/lib/calcFee'
+import { calcFeeBreakdown, type CardType, type FeeSegment, type OvernightConfig } from '@/lib/calcFee'
 import { useToast } from '@/components/ui/Toast'
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -35,6 +35,20 @@ function nowLocal() {
   return d.toISOString().slice(0, 19)
 }
 
+function toMin(hhmm: string) {
+  const [h, m] = hhmm.split(':').map(Number)
+  return h * 60 + m
+}
+
+function exitIsDaytime(exitIso: string, cfg: OvernightConfig): boolean {
+  if (!exitIso) return false
+  const exit = new Date(exitIso)
+  const exitMin = exit.getHours() * 60 + exit.getMinutes()
+  const weMin = toMin(cfg.windowEnd)
+  const wsMin = toMin(cfg.windowStart)
+  return exitMin >= weMin && exitMin < wsMin
+}
+
 const KIND_STYLE: Record<FeeSegment['kind'], { bg: string; border: string; label: string; color: string }> = {
   normal:    { bg: 'rgba(29,78,216,0.04)',   border: 'rgba(29,78,216,0.12)',   label: 'ปกติ',      color: '#1D4ED8' },
   outside:   { bg: 'rgba(217,119,6,0.05)',   border: 'rgba(217,119,6,0.15)',   label: 'นอกช่วง',   color: '#B45309' },
@@ -60,7 +74,7 @@ interface SeedRow {
 
 // ── Fee Calculator ────────────────────────────────────────────────────────────
 
-function FeeCalculator() {
+function FeeCalculator({ overnightCfg }: { overnightCfg: OvernightConfig | null }) {
   const [cardType,   setCardType]   = useState<CardType>('car')
   const [entryTime,  setEntryTime]  = useState(nowLocal())
   const [exitTime,   setExitTime]   = useState('')
@@ -70,8 +84,10 @@ function FeeCalculator() {
     const entry = new Date(entryTime)
     const exit  = new Date(exitTime)
     if (isNaN(entry.getTime()) || isNaN(exit.getTime()) || exit <= entry) return null
-    return calcFeeBreakdown(cardType, entry, exit)
-  }, [cardType, entryTime, exitTime])
+    return calcFeeBreakdown(cardType, entry, exit, overnightCfg ?? undefined)
+  }, [cardType, entryTime, exitTime, overnightCfg])
+
+  const showDaytimeNote = exitTime && overnightCfg && exitIsDaytime(exitTime, overnightCfg) && cardType !== 'overnight'
 
   return (
     <div className="bg-white rounded-xl overflow-hidden" style={{ border: '1px solid #E8ECF4' }}>
@@ -79,10 +95,19 @@ function FeeCalculator() {
         <div className="size-8 rounded-lg flex items-center justify-center" style={{ background: 'rgba(109,40,217,0.08)' }}>
           <FlaskConical className="size-4" style={{ color: '#6D28D9' }} />
         </div>
-        <div>
+        <div className="flex-1">
           <p className="text-sm font-black text-slate-900">คำนวณค่าจอด</p>
           <p className="text-[10px] text-slate-400">กรอกเวลาเข้า-ออก เห็นผลแยกทุกช่วงทันที</p>
         </div>
+        {overnightCfg && (
+          <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg"
+            style={{ background: 'rgba(109,40,217,0.06)', border: '1px solid rgba(109,40,217,0.15)' }}>
+            <Moon className="size-3" style={{ color: '#6D28D9' }} />
+            <span className="text-[10px] font-bold" style={{ color: '#6D28D9' }}>
+              ค้างคืน {overnightCfg.windowStart}–{overnightCfg.windowEnd} · ฿{overnightCfg.flatRate}/คืน · นอกช่วง ฿{overnightCfg.extraHour}/ชม.
+            </span>
+          </div>
+        )}
       </div>
 
       <div className="p-5 space-y-4">
@@ -120,6 +145,17 @@ function FeeCalculator() {
             </div>
           ))}
         </div>
+
+        {/* Daytime exit note */}
+        {showDaytimeNote && (
+          <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg"
+            style={{ background: 'rgba(29,78,216,0.04)', border: '1px solid rgba(29,78,216,0.15)' }}>
+            <Info className="size-3.5 shrink-0 mt-0.5" style={{ color: '#1D4ED8' }} />
+            <p className="text-[10px] font-medium" style={{ color: '#1D4ED8' }}>
+              ออกก่อน {overnightCfg?.windowStart} — คิดเรทปกติ ไม่มีค่าเหมาค้างคืน แม้รถจะค้างข้ามวัน
+            </p>
+          </div>
+        )}
 
         {/* Breakdown */}
         {breakdown && (
@@ -182,7 +218,7 @@ function FeeCalculator() {
 
 // ── Batch Seed ────────────────────────────────────────────────────────────────
 
-function BatchSeed() {
+function BatchSeed({ overnightCfg }: { overnightCfg: OvernightConfig | null }) {
   const { success, error: toastError, warning } = useToast()
   const [rows, setRows] = useState<SeedRow[]>([])
   const [seeding, setSeeding] = useState(false)
@@ -249,15 +285,16 @@ function BatchSeed() {
     } finally { setClearing(false); setConfirmClear(false) }
   }
 
-  // calc preview fee per row
   function previewFee(r: SeedRow) {
     try {
-      const { total } = calcFeeBreakdown(r.cardType, new Date(r.entryTime), new Date(r.exitTime))
+      const { total } = calcFeeBreakdown(r.cardType, new Date(r.entryTime), new Date(r.exitTime), overnightCfg ?? undefined)
       return total
     } catch { return 0 }
   }
 
   const totalFee = rows.reduce((s, r) => s + previewFee(r), 0)
+
+  const formExitIsDaytime = exitTime && overnightCfg && exitIsDaytime(exitTime, overnightCfg) && cardType !== 'overnight'
 
   return (
     <div className="bg-white rounded-xl overflow-hidden" style={{ border: '1px solid #E8ECF4' }}>
@@ -355,6 +392,16 @@ function BatchSeed() {
           </div>
         </div>
 
+        {formExitIsDaytime && (
+          <div className="flex items-center gap-2 px-3 py-2 rounded-lg"
+            style={{ background: 'rgba(29,78,216,0.04)', border: '1px solid rgba(29,78,216,0.15)' }}>
+            <Info className="size-3.5 shrink-0" style={{ color: '#1D4ED8' }} />
+            <p className="text-[10px] font-medium" style={{ color: '#1D4ED8' }}>
+              ออกก่อน {overnightCfg?.windowStart} — จะคิดเรทปกติ (ไม่มีค่าเหมาค้างคืน)
+            </p>
+          </div>
+        )}
+
         <button onClick={addRow}
           disabled={!plate || !exitTime || new Date(exitTime) <= new Date(entryTime)}
           className="flex items-center gap-2 h-9 px-4 rounded-lg text-xs font-black text-white disabled:opacity-40"
@@ -380,6 +427,7 @@ function BatchSeed() {
                   const fee = previewFee(r)
                   const m = TYPE_META[r.cardType]; const Icon = m.icon
                   const durMin = (new Date(r.exitTime).getTime() - new Date(r.entryTime).getTime()) / 60000
+                  const daytime = overnightCfg && exitIsDaytime(r.exitTime, overnightCfg) && r.cardType !== 'overnight'
                   return (
                     <tr key={r.id} style={{ borderBottom: '1px solid #F1F5F9' }}
                       onMouseEnter={e => (e.currentTarget.style.background = '#FAFBFF')}
@@ -394,7 +442,13 @@ function BatchSeed() {
                       <td className="px-3 py-2.5 text-[10px] text-slate-500 font-mono">{fmtDatetime(r.exitTime)}</td>
                       <td className="px-3 py-2.5 text-[10px] text-slate-500">{fmtDuration(durMin)}</td>
                       <td className="px-3 py-2.5 text-[10px] text-slate-500">{r.paymentMethod === 'cash' ? 'เงินสด' : 'โอน'}</td>
-                      <td className="px-3 py-2.5 font-black text-emerald-700">฿{fee}</td>
+                      <td className="px-3 py-2.5">
+                        <span className="font-black text-emerald-700">฿{fee}</span>
+                        {daytime && (
+                          <span className="ml-1.5 text-[9px] font-bold px-1 py-0.5 rounded"
+                            style={{ background: 'rgba(29,78,216,0.08)', color: '#1D4ED8' }}>ปกติ</span>
+                        )}
+                      </td>
                       <td className="px-3 py-2.5">
                         <button onClick={() => removeRow(r.id)}
                           className="size-6 rounded-lg flex items-center justify-center hover:bg-red-50 transition-colors">
@@ -439,6 +493,15 @@ function BatchSeed() {
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function SimulatorPage() {
+  const [overnightCfg, setOvernightCfg] = useState<OvernightConfig | null>(null)
+
+  useEffect(() => {
+    fetch('/api/settings')
+      .then(r => r.json())
+      .then(s => { if (s?.rates?.overnight) setOvernightCfg(s.rates.overnight) })
+      .catch(() => {})
+  }, [])
+
   return (
     <>
       <header className="shrink-0 h-14 bg-white flex items-center px-6"
@@ -460,8 +523,8 @@ export default function SimulatorPage() {
       </header>
 
       <div className="flex-1 overflow-auto p-5 space-y-5">
-        <FeeCalculator />
-        <BatchSeed />
+        <FeeCalculator overnightCfg={overnightCfg} />
+        <BatchSeed overnightCfg={overnightCfg} />
       </div>
     </>
   )
