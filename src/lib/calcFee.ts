@@ -31,6 +31,9 @@ function ceilHours(minutes: number) {
 function spansOvernightWindow(entry: Date, exit: Date, cfg: OvernightConfig): boolean {
   const wsMin = toMin(cfg.windowStart)
   const weMin = toMin(cfg.windowEnd)
+  // ถ้า exit อยู่ในช่วงกลางวัน (07:00–22:00) → ไม่ถือว่าค้างคืน
+  const exitMin = exit.getHours() * 60 + exit.getMinutes()
+  if (exitMin >= weMin && exitMin < wsMin) return false
   let cur = new Date(entry)
   while (cur < exit) {
     const m = cur.getHours() * 60 + cur.getMinutes()
