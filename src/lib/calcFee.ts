@@ -18,7 +18,7 @@ export interface FeeSegment {
 }
 
 const DEFAULT_OVERNIGHT: OvernightConfig = {
-  windowStart: '18:00',
+  windowStart: '22:00',
   windowEnd:   '07:00',
   flatRate:    100,
   extraHour:   20,
