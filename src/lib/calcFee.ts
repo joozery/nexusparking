@@ -1,10 +1,11 @@
 export type CardType = 'car' | 'motorcycle' | 'overnight'
 
 export interface OvernightConfig {
-  windowStart: string  // 'HH:MM'
-  windowEnd:   string  // 'HH:MM'
-  flatRate:    number
-  extraHour:   number
+  windowStart:    string   // 'HH:MM' - เริ่มตรวจจับ overnight
+  windowEnd:      string   // 'HH:MM' - สิ้นสุดช่วง overnight
+  flatRateStart?: string   // 'HH:MM' - เวลาที่ตัดเป็น flatRate (default '22:00')
+  flatRate:       number
+  extraHour:      number
 }
 
 export interface FeeSegment {
@@ -18,10 +19,11 @@ export interface FeeSegment {
 }
 
 const DEFAULT_OVERNIGHT: OvernightConfig = {
-  windowStart: '18:00',
-  windowEnd:   '07:00',
-  flatRate:    100,
-  extraHour:   20,
+  windowStart:    '18:00',
+  windowEnd:      '07:00',
+  flatRateStart:  '22:00',
+  flatRate:       100,
+  extraHour:      20,
 }
 
 function ceilHours(minutes: number) {
@@ -45,12 +47,14 @@ function toMin(hhmm: string) {
   return h * 60 + m
 }
 
-// คืน overnight window segments ที่ทับกับ [entry, exit] เรียงตามเวลา
+// คืน overnight window segments ที่ทับกับ [entry, exit] พร้อม flag ว่าถึง flatRate threshold หรือยัง
 function overnightWindowsIn(entry: Date, exit: Date, cfg: OvernightConfig) {
   const [wsH, wsM] = cfg.windowStart.split(':').map(Number)
   const [weH, weM] = cfg.windowEnd.split(':').map(Number)
+  // flatRateStart: เวลาที่รถต้องอยู่ถึง/เลยจึงคิด flatRate (default 22:00)
+  const [frsH, frsM] = (cfg.flatRateStart ?? '22:00').split(':').map(Number)
 
-  const windows: { start: Date; end: Date }[] = []
+  const windows: { start: Date; end: Date; isFlatRate: boolean }[] = []
   const checkFrom = new Date(entry)
   checkFrom.setDate(checkFrom.getDate() - 1)
   checkFrom.setHours(0, 0, 0, 0)
@@ -62,7 +66,14 @@ function overnightWindowsIn(entry: Date, exit: Date, cfg: OvernightConfig) {
     const wEnd   = new Date(d); wEnd.setDate(wEnd.getDate() + 1); wEnd.setHours(weH, weM, 0, 0)
     const oStart = entry > wStart ? new Date(entry) : new Date(wStart)
     const oEnd   = exit  < wEnd   ? new Date(exit)  : new Date(wEnd)
-    if (oEnd > oStart) windows.push({ start: oStart, end: oEnd })
+    if (oEnd > oStart) {
+      // billing threshold: frsH:frsM บน calendar day เดียวกับ wStart
+      const billingThreshold = new Date(d)
+      billingThreshold.setHours(frsH, frsM, 0, 0)
+      // ถ้ารถออกเลย billingThreshold → flatRate, ถ้าออกก่อน → คิดชั่วโมง
+      const isFlatRate = oEnd.getTime() > billingThreshold.getTime()
+      windows.push({ start: oStart, end: oEnd, isFlatRate })
+    }
   }
   return windows
 }
@@ -111,14 +122,28 @@ export function calcFeeBreakdown(
         rateLabel: `${h} ชม. × ฿${cfg.extraHour}/ชม.`,
       })
     }
-    // อยู่ใน overnight window → flatRate เสมอ ไม่ว่าจะอยู่ครบคืนหรือไม่
+
     const min = (w.end.getTime() - w.start.getTime()) / 60000
-    segments.push({
-      kind: 'overnight', from: new Date(w.start), to: new Date(w.end),
-      minutes: min, hours: 0,
-      fee: cfg.flatRate,
-      rateLabel: `เหมาจ่าย ฿${cfg.flatRate}`,
-    })
+
+    if (w.isFlatRate) {
+      // รถอยู่เลย flatRateStart → เหมาจ่ายค้างคืน
+      segments.push({
+        kind: 'overnight', from: new Date(w.start), to: new Date(w.end),
+        minutes: min, hours: 0,
+        fee: cfg.flatRate,
+        rateLabel: `เหมาจ่าย ฿${cfg.flatRate}`,
+      })
+    } else {
+      // รถออกก่อน flatRateStart → คิดชั่วโมง (ยังไม่เกิน ${cfg.flatRateStart ?? '22:00'})
+      const h = Math.ceil(min / 60)
+      segments.push({
+        kind: 'outside', from: new Date(w.start), to: new Date(w.end),
+        minutes: min, hours: h,
+        fee: h * cfg.extraHour,
+        rateLabel: `${h} ชม. × ฿${cfg.extraHour}/ชม.`,
+      })
+    }
+
     cursor = w.end
   }
 

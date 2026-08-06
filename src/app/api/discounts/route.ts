@@ -11,13 +11,18 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const body = await req.json()
-  const { name, discountType, discountValue, maxDiscount, description } = body
+  try {
+    const body = await req.json()
+    const { name, discountType, discountValue, maxDiscount, description } = body
 
-  if (!name || !discountType || discountValue == null)
-    return NextResponse.json({ error: 'name, discountType, discountValue จำเป็น' }, { status: 400 })
+    if (!name || !discountType || discountValue == null)
+      return NextResponse.json({ error: 'name, discountType, discountValue จำเป็น' }, { status: 400 })
 
-  await connectDB()
-  const doc = await Discount.create({ name, discountType, discountValue, maxDiscount, description })
-  return NextResponse.json(doc, { status: 201 })
+    await connectDB()
+    const doc = await Discount.create({ name, discountType, discountValue, maxDiscount, description })
+    return NextResponse.json(doc, { status: 201 })
+  } catch (err) {
+    console.error('[POST /api/discounts]', err)
+    return NextResponse.json({ error: String(err) }, { status: 500 })
+  }
 }
