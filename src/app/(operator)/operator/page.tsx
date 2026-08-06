@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import {
   LogIn, LogOut, AlertTriangle,
   Car, Bike, Moon, RefreshCw, Clock, Search,
-  Play, Square, Banknote, Smartphone, X, CreditCard,
+  Play, Square, X, CreditCard,
   ListOrdered, Plus, CheckCheck, XCircle,
 } from 'lucide-react'
 import { CheckInDialog } from '@/components/parking/CheckInDialog'
@@ -115,18 +115,20 @@ export default function OperatorPage() {
   const [ciCustomTime,  setCiCustomTime]  = useState('')
 
   // Check Out
-  const [checkOutOpen, setCheckOutOpen] = useState(false)
-  const [coStep, setCoStep] = useState<'scan' | 'payment'>('scan')
-  const [coType, setCoType] = useState<CardType>('car')
-  const [coHours, setCoHours] = useState(1)
-  const [coFee, setCoFee] = useState(0)
-  const [coSessionId, setCoSessionId] = useState('')
+  const [checkOutOpen,  setCheckOutOpen]  = useState(false)
+  const [coStep,        setCoStep]        = useState<'scan' | 'payment'>('scan')
+  const [coType,        setCoType]        = useState<CardType>('car')
+  const [coHours,       setCoHours]       = useState(1)
+  const [coFee,         setCoFee]         = useState(0)
+  const [coSessionId,   setCoSessionId]   = useState('')
+  const [coCustomTime,  setCoCustomTime]  = useState('')
+  const [coEntryTime,   setCoEntryTime]   = useState<Date | null>(null)
 
   // Lost card
   const [lostOpen, setLostOpen] = useState(false)
 
   function resetCI() { setCiStep('scan'); setCiPlate(''); setCiType('car'); setCiUid(''); setCiCustomTime('') }
-  function resetCO() { setCoStep('scan'); setCoSessionId('') }
+  function resetCO() { setCoStep('scan'); setCoSessionId(''); setCoCustomTime(''); setCoEntryTime(null) }
   function resetQ()  { setQStep('scan'); setQPlate(''); setQType('car'); setQUid('') }
 
   const fetchShift = useCallback(async () => {
@@ -227,7 +229,7 @@ export default function OperatorPage() {
     setQLoading(null)
     if (res.ok) {
       await Promise.all([fetchData(), fetchShift()])
-      success('เข้าลานแล้ว', `ทะเบียน ${plate} Check In สำเร็จ`)
+      success('เข้าลานแล้ว', `ทะเบียน ${plate} ขาเข้าสำเร็จ`)
     } else {
       const err = await res.json()
       toastError('ไม่สำเร็จ', err.error)
@@ -311,44 +313,67 @@ export default function OperatorPage() {
     if (res.ok) {
       setCheckInOpen(false); resetCI()
       await Promise.all([fetchData(), fetchShift()])
-      success('Check In สำเร็จ', `ทะเบียน ${ciPlate} เข้าลานเรียบร้อย`)
+      success('ขาเข้าสำเร็จ', `ทะเบียน ${ciPlate} เข้าลานเรียบร้อย`)
     } else {
       const err = await res.json()
-      toastError('Check In ไม่สำเร็จ', err.error ?? 'เกิดข้อผิดพลาด')
+      toastError('ขาเข้าไม่สำเร็จ', err.error ?? 'เกิดข้อผิดพลาด')
     }
+  }
+
+  function handleCoCustomTimeChange(v: string) {
+    setCoCustomTime(v)
+    if (!coEntryTime) return
+    const exit = v ? new Date(v) : new Date()
+    const durationMin = Math.max(1, Math.floor((exit.getTime() - coEntryTime.getTime()) / 60000))
+    const hours = Math.ceil(durationMin / 60)
+    setCoHours(hours)
+    setCoFee(calcFee(coType, hours))
   }
 
   // Check Out (scan dialog)
   async function simulateCOScan() {
     const active = sessions.find(s => s.status === 'active')
-    if (!active) return
-    const durationMin = Math.max(1, Math.floor((Date.now() - new Date(active.entryTime).getTime()) / 60000))
+    if (!active) {
+      toastError('ไม่มีรถในลาน', 'ยังไม่มีรถที่ Check-in เข้ามา')
+      return
+    }
+    const entry = new Date(active.entryTime)
+    const nowStr = new Date().toISOString().slice(0, 19)
+    setCoType(active.cardType)
+    setCoSessionId(active._id)
+    setCoEntryTime(entry)
+    setCoCustomTime(nowStr)
+    // คำนวณ fee จาก exit time ที่ pre-fill ไว้
+    const durationMin = Math.max(1, Math.floor((new Date(nowStr).getTime() - entry.getTime()) / 60000))
     const hours = Math.ceil(durationMin / 60)
-    setCoType(active.cardType); setCoHours(hours); setCoFee(calcFee(active.cardType, hours))
-    setCoSessionId(active._id); setCoStep('payment')
+    setCoHours(hours); setCoFee(calcFee(active.cardType, hours))
+    setCoStep('payment')
   }
 
   function openCheckoutFromCard(s: Session) {
-    const durationMin = Math.max(1, Math.floor((Date.now() - new Date(s.entryTime).getTime()) / 60000))
+    const entry = new Date(s.entryTime)
+    const durationMin = Math.max(1, Math.floor((Date.now() - entry.getTime()) / 60000))
     const hours = Math.ceil(durationMin / 60)
     setCoType(s.cardType); setCoHours(hours); setCoFee(calcFee(s.cardType, hours))
-    setCoSessionId(s._id); setCoStep('payment'); setCheckOutOpen(true)
+    setCoSessionId(s._id); setCoEntryTime(entry); setCoStep('payment'); setCheckOutOpen(true)
   }
 
   async function handleCheckout(paymentMethod: PaymentMethod, discountId?: string) {
+    const body: Record<string, unknown> = { sessionId: coSessionId || undefined, paymentMethod, discountId }
+    if (coCustomTime) body.exitTime = new Date(coCustomTime).toISOString()
     const res = await fetch('/api/sessions/checkout', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sessionId: coSessionId || undefined, paymentMethod, discountId }),
+      body: JSON.stringify(body),
     })
     if (res.ok) {
       setCheckOutOpen(false); resetCO()
       await Promise.all([fetchData(), fetchShift()])
       const label = paymentMethod === 'qr' ? 'โอนเงิน' : 'เงินสด'
-      success('Check Out สำเร็จ', `รับ${label} เรียบร้อย`)
+      success('ขาออกสำเร็จ', `รับ${label} เรียบร้อย`)
     } else {
       const err = await res.json()
-      toastError('Check Out ไม่สำเร็จ', err.error ?? 'เกิดข้อผิดพลาด')
+      toastError('ขาออกไม่สำเร็จ', err.error ?? 'เกิดข้อผิดพลาด')
     }
   }
 
@@ -430,20 +455,6 @@ export default function OperatorPage() {
           <div className="flex items-center gap-3 text-xs text-slate-600">
             <span>รถเข้า <strong className="text-slate-800">{shift.checkinsCount}</strong></span>
             <span>รถออก <strong className="text-slate-800">{shift.checkoutsCount}</strong></span>
-          </div>
-          <div className="w-px h-4 bg-emerald-200" />
-          <div className="flex items-center gap-3 text-xs text-slate-600">
-            <span className="flex items-center gap-1">
-              <Banknote className="size-3 text-slate-400" />
-              เงินสด <strong className="text-slate-800">฿{shift.cashAmount}</strong>
-            </span>
-            <span className="flex items-center gap-1">
-              <Smartphone className="size-3 text-slate-400" />
-              โอน <strong className="text-slate-800">฿{shift.qrAmount}</strong>
-            </span>
-            <span className="font-bold" style={{ color: '#059669' }}>
-              รวม ฿{shift.totalAmount}
-            </span>
           </div>
           <div className="flex-1" />
           <button
@@ -1062,6 +1073,8 @@ export default function OperatorPage() {
         open={checkOutOpen}
         onOpenChange={o => { setCheckOutOpen(o); if (!o) resetCO() }}
         step={coStep} cardType={coType} hours={coHours} fee={coFee}
+        customExitTime={coCustomTime}
+        onCustomExitTimeChange={handleCoCustomTimeChange}
         onSimulateScan={simulateCOScan}
         onBack={() => setCoStep('scan')}
         onConfirm={handleCheckout}

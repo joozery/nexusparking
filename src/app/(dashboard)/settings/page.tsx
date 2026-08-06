@@ -29,10 +29,10 @@ const TABS = [
 
 const HW_META = {
   camera:  { label: 'กล้องวงจรปิด',          icon: Camera,     desc: 'ถ่าย Snapshot อัตโนมัติ' },
-  barrier: { label: 'ไม้กั้นรถยนต์',         icon: Shield,     desc: 'เปิดหลัง Check-in/out'   },
+  barrier: { label: 'ไม้กั้นรถยนต์',         icon: Shield,     desc: 'เปิดหลังขาเข้า/ขาออก'   },
   reader:  { label: 'เครื่องอ่านบัตร',        icon: CreditCard, desc: 'Passive — อ่าน UID'      },
   printer: { label: 'เครื่องพิมพ์ใบเสร็จ',   icon: Printer,    desc: 'พิมพ์ใบเสร็จ'             },
-  drawer:  { label: 'ลิ้นชักเก็บเงิน',        icon: Banknote,   desc: 'เด้งหลัง Check-out'      },
+  drawer:  { label: 'ลิ้นชักเก็บเงิน',        icon: Banknote,   desc: 'เด้งหลังขาออก'           },
 }
 
 type TabKey = typeof TABS[number]['key']
@@ -153,7 +153,7 @@ export default function SettingsPage() {
                 </div>
                 <div>
                   <p className="text-sm font-black text-slate-900">เวลาทำการ</p>
-                  <p className="text-[10px] text-slate-400">ระบบจะบล็อก Check-in นอกช่วงเวลานี้</p>
+                  <p className="text-[10px] text-slate-400">ระบบจะบล็อกขาเข้านอกช่วงเวลานี้</p>
                 </div>
               </div>
               <div className="p-5">

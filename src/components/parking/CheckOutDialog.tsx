@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { CreditCard, LogOut, Clock, Banknote, Smartphone, Tag, ChevronDown } from 'lucide-react'
+import { CreditCard, LogOut, Clock, Banknote, Smartphone, Tag, ChevronDown, Timer } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
@@ -28,6 +28,8 @@ interface Props {
   cardType: CardType
   hours: number
   fee: number
+  customExitTime?: string
+  onCustomExitTimeChange?: (v: string) => void
   onSimulateScan: () => void
   onBack: () => void
   onConfirm: (paymentMethod: PaymentMethod, discountId?: string) => void
@@ -42,6 +44,7 @@ function calcDiscountAmount(discount: DiscountOption | null, fee: number): numbe
 
 export function CheckOutDialog({
   open, onOpenChange, step, cardType, hours, fee,
+  customExitTime, onCustomExitTimeChange,
   onSimulateScan, onBack, onConfirm,
 }: Props) {
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash')
@@ -76,7 +79,7 @@ export function CheckOutDialog({
               <LogOut className="size-4 text-white" />
             </div>
             <div>
-              <DialogTitle className="text-white text-sm">รถออก — Check Out</DialogTitle>
+              <DialogTitle className="text-white text-sm">ขาออก</DialogTitle>
               <DialogDescription className="text-emerald-100 text-xs mt-0">คำนวณค่าบริการและรับชำระเงิน</DialogDescription>
             </div>
           </div>
@@ -140,6 +143,38 @@ export function CheckOutDialog({
                   <span className="text-xl font-black text-white tabular-nums">฿{finalFee}</span>
                 </div>
               </div>
+
+              {/* Custom exit time (sim mode) */}
+              {onCustomExitTimeChange && (
+                <div className="rounded-lg overflow-hidden" style={{ border: '1px solid #E8ECF4' }}>
+                  <button
+                    type="button"
+                    className="w-full flex items-center gap-2 px-3 py-2 text-left"
+                    style={{ background: customExitTime ? 'rgba(109,40,217,0.05)' : '#FAFBFF' }}
+                    onClick={() => onCustomExitTimeChange(customExitTime ? '' : new Date().toISOString().slice(0, 19))}
+                  >
+                    <Timer className="size-3.5 shrink-0" style={{ color: customExitTime ? '#6D28D9' : '#94A3B8' }} />
+                    <span className="text-[10px] font-bold flex-1" style={{ color: customExitTime ? '#6D28D9' : '#94A3B8' }}>
+                      {customExitTime ? 'กำหนดเวลาออกเอง' : 'ใช้เวลาจริง (คลิกเพื่อกำหนดเอง)'}
+                    </span>
+                    {customExitTime && (
+                      <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full"
+                        style={{ background: 'rgba(109,40,217,0.1)', color: '#6D28D9' }}>SIM</span>
+                    )}
+                  </button>
+                  {customExitTime && (
+                    <div className="px-3 pb-2.5 pt-1" style={{ background: 'rgba(109,40,217,0.03)' }}>
+                      <label className="text-[9px] font-black text-slate-400 uppercase block mb-1">วัน-เวลาออก (วินาทีได้)</label>
+                      <input type="datetime-local" step="1" value={customExitTime}
+                        onChange={e => onCustomExitTimeChange(e.target.value)}
+                        className="w-full h-9 px-3 rounded-lg text-xs text-slate-800 outline-none"
+                        style={{ border: '1.5px solid rgba(109,40,217,0.3)', background: 'white' }}
+                        onFocus={e => e.currentTarget.style.borderColor = '#6D28D9'}
+                        onBlur={e => e.currentTarget.style.borderColor = 'rgba(109,40,217,0.3)'} />
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Discount dropdown */}
               {discounts.length > 0 && (

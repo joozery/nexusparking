@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const { uid, sessionId, paymentMethod = 'cash', discountId } = await req.json()
+  const { uid, sessionId, paymentMethod = 'cash', discountId, exitTime: exitTimeRaw } = await req.json()
 
   const jar     = await cookies()
   const token   = jar.get(COOKIE_NAME)?.value
@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
   if (!session) return NextResponse.json({ error: 'ไม่พบยานพาหนะในลาน' }, { status: 404 })
 
   const settings = await getSettings()
-  const now = new Date()
+  const now = exitTimeRaw ? new Date(exitTimeRaw) : new Date()
   const durationMin = calcDurationMinutes(session.entryTime, now)
   const fee = calcFeeFromMinutes(session.cardType, durationMin, session.entryTime, now, settings.rates.overnight)
 

@@ -35,15 +35,15 @@ const HW_META: Record<string, {
   passive?: boolean
 }> = {
   camera:  { label: 'กล้องวงจรปิด',           desc: 'ถ่าย Snapshot อัตโนมัติเมื่อรถเข้า-ออก',    icon: Camera  },
-  barrier: { label: 'ไม้กั้นรถยนต์',          desc: 'เปิดอัตโนมัติหลัง Check-in / Check-out',    icon: Shield  },
+  barrier: { label: 'ไม้กั้นรถยนต์',          desc: 'เปิดอัตโนมัติหลังขาเข้า / ขาออก',          icon: Shield  },
   reader:  { label: 'เครื่องอ่านบัตร',         desc: 'อุปกรณ์ Passive — อ่าน UID บัตรจอดรถ',      icon: CreditCard, passive: true },
   printer: { label: 'เครื่องพิมพ์ใบเสร็จ',    desc: 'พิมพ์ใบเสร็จหลังชำระเงิน',                  icon: Printer },
-  drawer:  { label: 'ลิ้นชักเก็บเงิน',         desc: 'เด้งเปิดอัตโนมัติหลัง Check-out',            icon: Banknote },
+  drawer:  { label: 'ลิ้นชักเก็บเงิน',         desc: 'เด้งเปิดอัตโนมัติหลังขาออก',                icon: Banknote },
 }
 
 const EVENT_LABEL: Record<string, string> = {
-  checkin:  'Check-in',
-  checkout: 'Check-out',
+  checkin:  'ขาเข้า',
+  checkout: 'ขาออก',
   trigger:  'Manual',
   receipt:  'ใบเสร็จ',
   ping:     'Ping',

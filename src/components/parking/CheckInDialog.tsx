@@ -43,7 +43,7 @@ export function CheckInDialog({
               <LogIn className="size-4 text-white" />
             </div>
             <div>
-              <DialogTitle className="text-white text-sm">รถเข้า — Check In</DialogTitle>
+              <DialogTitle className="text-white text-sm">ขาเข้า</DialogTitle>
               <DialogDescription className="text-blue-100 text-xs mt-0">แตะบัตรที่เครื่องอ่าน แล้วกรอกทะเบียน</DialogDescription>
             </div>
           </div>

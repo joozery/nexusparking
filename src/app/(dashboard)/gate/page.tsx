@@ -144,13 +144,13 @@ export default function GatePage() {
       const data = await res.json()
       setCheckInOpen(false); resetCI(); fetchData()
       if (data.outsideHours) {
-        warning('Check In สำเร็จ (นอกเวลาทำการ)', `ทะเบียน ${ciPlate} — เวลาทำการ ${data.businessHours}`)
+        warning('ขาเข้าสำเร็จ (นอกเวลาทำการ)', `ทะเบียน ${ciPlate} — เวลาทำการ ${data.businessHours}`)
       } else {
-        success('Check In สำเร็จ', `ทะเบียน ${ciPlate} เข้าลานเรียบร้อย`)
+        success('ขาเข้าสำเร็จ', `ทะเบียน ${ciPlate} เข้าลานเรียบร้อย`)
       }
     } else {
       const err = await res.json()
-      toastError('Check In ไม่สำเร็จ', err.error ?? 'เกิดข้อผิดพลาด')
+      toastError('ขาเข้าไม่สำเร็จ', err.error ?? 'เกิดข้อผิดพลาด')
     }
   }
 
@@ -183,10 +183,10 @@ export default function GatePage() {
     })
     if (res.ok) {
       setCheckOutOpen(false); resetCO(); fetchData()
-      success('Check Out สำเร็จ', `ชำระค่าบริการ ฿${coFee} เรียบร้อย`)
+      success('ขาออกสำเร็จ', `ชำระค่าบริการ ฿${coFee} เรียบร้อย`)
     } else {
       const err = await res.json()
-      toastError('Check Out ไม่สำเร็จ', err.error ?? 'เกิดข้อผิดพลาด')
+      toastError('ขาออกไม่สำเร็จ', err.error ?? 'เกิดข้อผิดพลาด')
     }
   }
 
@@ -364,7 +364,7 @@ ${lostFine > 0 ? `<div class="row lost-row"><span>ค่าปรับบัต
           <button onClick={() => { resetCI(); setCheckInOpen(true) }}
             className="h-8 px-4 rounded-lg text-white text-xs font-bold flex items-center gap-1.5 transition-opacity hover:opacity-90"
             style={{ background: '#1D4ED8', boxShadow: '0 1px 8px rgba(29,78,216,0.35)' }}>
-            <LogIn className="size-3.5" /> Check In
+            <LogIn className="size-3.5" /> ขาเข้า
           </button>
         </div>
       </header>
