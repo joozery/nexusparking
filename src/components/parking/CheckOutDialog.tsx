@@ -43,6 +43,17 @@ function calcDiscountAmount(discount: DiscountOption | null, fee: number): numbe
   return discount.maxDiscount ? Math.min(pct, discount.maxDiscount) : pct
 }
 
+function fmtDuration(entryTime: Date | null | undefined, exitTime: Date | null | undefined, fallbackHours: number): string {
+  if (entryTime && exitTime) {
+    const sec = Math.max(0, Math.floor((exitTime.getTime() - entryTime.getTime()) / 1000))
+    const h = Math.floor(sec / 3600)
+    const m = Math.floor((sec % 3600) / 60)
+    const s = sec % 60
+    return `${h} ชม. ${String(m).padStart(2, '0')} นาที ${String(s).padStart(2, '0')} วินาที`
+  }
+  return `${fallbackHours} ชั่วโมง`
+}
+
 export function CheckOutDialog({
   open, onOpenChange, step, cardType, hours, fee,
   entryTime, customExitTime, onCustomExitTimeChange,
@@ -51,10 +62,16 @@ export function CheckOutDialog({
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash')
   const [discounts, setDiscounts] = useState<DiscountOption[]>([])
   const [selectedId, setSelectedId] = useState<string>('')
+  const [cashReceived, setCashReceived] = useState('')
 
   const selectedDiscount = discounts.find(d => d._id === selectedId) ?? null
   const discountAmount = calcDiscountAmount(selectedDiscount, fee)
   const finalFee = Math.max(0, fee - discountAmount)
+  const cashNum = parseFloat(cashReceived) || 0
+  const change = cashNum - finalFee
+
+  const exitTimeDate = customExitTime ? new Date(customExitTime) : null
+  const durationStr = fmtDuration(entryTime, exitTimeDate, hours)
 
   useEffect(() => {
     if (open) {
@@ -66,7 +83,7 @@ export function CheckOutDialog({
   }, [open])
 
   function handleClose(o: boolean) {
-    if (!o) { setPaymentMethod('cash'); setSelectedId('') }
+    if (!o) { setPaymentMethod('cash'); setSelectedId(''); setCashReceived('') }
     onOpenChange(o)
   }
 
@@ -132,7 +149,7 @@ export function CheckOutDialog({
                 <div className="rounded-lg border border-emerald-200 overflow-hidden">
                   <div className="bg-emerald-50 px-3 py-2 flex items-center gap-2">
                     <Clock className="size-3.5 text-emerald-600" />
-                    <span className="text-xs font-semibold text-emerald-800">ระยะเวลาจอด: {hours} ชั่วโมง</span>
+                    <span className="text-xs font-semibold text-emerald-800">ระยะเวลาจอด: {durationStr}</span>
                   </div>
                   <div className="px-3 py-2 space-y-1.5 border-t border-emerald-100">
                     {cardType === 'car' && <>
@@ -230,14 +247,14 @@ export function CheckOutDialog({
               <div className="space-y-1.5">
                 <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">วิธีชำระเงิน</p>
                 <div className="grid grid-cols-2 gap-2">
-                  <button type="button" onClick={() => setPaymentMethod('cash')}
+                  <button type="button" onClick={() => { setPaymentMethod('cash'); setCashReceived('') }}
                     className="flex items-center justify-center gap-2 h-11 rounded-xl text-sm font-bold transition-all"
                     style={paymentMethod === 'cash'
                       ? { background: '#059669', color: 'white', boxShadow: '0 2px 8px rgba(5,150,105,0.35)' }
                       : { background: '#F1F5F9', color: '#64748B', border: '1.5px solid #E2E8F0' }}>
                     <Banknote className="size-4" /> เงินสด
                   </button>
-                  <button type="button" onClick={() => setPaymentMethod('qr')}
+                  <button type="button" onClick={() => { setPaymentMethod('qr'); setCashReceived('') }}
                     className="flex items-center justify-center gap-2 h-11 rounded-xl text-sm font-bold transition-all"
                     style={paymentMethod === 'qr'
                       ? { background: '#7C3AED', color: 'white', boxShadow: '0 2px 8px rgba(124,58,237,0.35)' }
@@ -245,6 +262,40 @@ export function CheckOutDialog({
                     <Smartphone className="size-4" /> โอนเงิน
                   </button>
                 </div>
+
+                {/* Cash received + change */}
+                {paymentMethod === 'cash' && (
+                  <div className="rounded-xl overflow-hidden" style={{ border: '1.5px solid #E2E8F0' }}>
+                    <div className="flex items-center gap-2 px-3 py-2" style={{ background: '#F8FAFF' }}>
+                      <Banknote className="size-3.5 text-slate-400 shrink-0" />
+                      <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex-1">รับเงิน (฿)</span>
+                    </div>
+                    <div className="px-3 pb-3 pt-2 space-y-2">
+                      <input
+                        type="number"
+                        min={0}
+                        placeholder={`อย่างน้อย ฿${finalFee}`}
+                        value={cashReceived}
+                        onChange={e => setCashReceived(e.target.value)}
+                        className="w-full h-10 px-3 rounded-lg text-lg font-black text-slate-800 outline-none tabular-nums"
+                        style={{ border: '1.5px solid #E2E8F0', background: 'white' }}
+                        onFocus={e => e.currentTarget.style.borderColor = '#059669'}
+                        onBlur={e => e.currentTarget.style.borderColor = '#E2E8F0'}
+                      />
+                      {cashReceived !== '' && (
+                        <div className="flex items-center justify-between px-3 py-2 rounded-lg"
+                          style={{ background: change >= 0 ? 'rgba(5,150,105,0.07)' : 'rgba(220,38,38,0.06)', border: `1px solid ${change >= 0 ? 'rgba(5,150,105,0.2)' : 'rgba(220,38,38,0.2)'}` }}>
+                          <span className="text-xs font-bold" style={{ color: change >= 0 ? '#059669' : '#DC2626' }}>
+                            {change >= 0 ? 'เงินทอน' : 'รับไม่พอ'}
+                          </span>
+                          <span className="text-lg font-black tabular-nums" style={{ color: change >= 0 ? '#059669' : '#DC2626' }}>
+                            ฿{Math.abs(change)}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -259,7 +310,10 @@ export function CheckOutDialog({
               <Button
                 size="sm"
                 className="flex-1 text-white"
-                disabled={!!onCustomExitTimeChange && !customExitTime}
+                disabled={
+                  (!!onCustomExitTimeChange && !customExitTime) ||
+                  (paymentMethod === 'cash' && cashReceived !== '' && change < 0)
+                }
                 style={paymentMethod === 'qr' ? { background: '#7C3AED' } : { background: '#059669' }}
                 onClick={() => onConfirm(paymentMethod, selectedId || undefined)}
               >
