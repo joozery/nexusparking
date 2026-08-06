@@ -1071,6 +1071,7 @@ export default function OperatorPage() {
         open={checkOutOpen}
         onOpenChange={o => { setCheckOutOpen(o); if (!o) resetCO() }}
         step={coStep} cardType={coType} hours={coHours} fee={coFee}
+        entryTime={coEntryTime}
         customExitTime={coCustomTime}
         onCustomExitTimeChange={handleCoCustomTimeChange}
         onSimulateScan={simulateCOScan}

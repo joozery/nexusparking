@@ -28,6 +28,7 @@ interface Props {
   cardType: CardType
   hours: number
   fee: number
+  entryTime?: Date | null
   customExitTime?: string
   onCustomExitTimeChange?: (v: string) => void
   onSimulateScan: () => void
@@ -44,7 +45,7 @@ function calcDiscountAmount(discount: DiscountOption | null, fee: number): numbe
 
 export function CheckOutDialog({
   open, onOpenChange, step, cardType, hours, fee,
-  customExitTime, onCustomExitTimeChange,
+  entryTime, customExitTime, onCustomExitTimeChange,
   onSimulateScan, onBack, onConfirm,
 }: Props) {
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash')
@@ -106,6 +107,19 @@ export function CheckOutDialog({
                 <span className="text-xs text-slate-600 font-medium">ประเภทบัตร</span>
                 <CardBadge type={cardType} />
               </div>
+
+              {entryTime && (
+                <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-blue-50 border border-blue-200">
+                  <span className="text-xs text-blue-600 font-medium flex items-center gap-1.5">
+                    <Clock className="size-3.5" /> ขาเข้า
+                  </span>
+                  <span className="text-xs font-black text-blue-800 tabular-nums">
+                    {entryTime.toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: '2-digit' })}
+                    {' '}
+                    {entryTime.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                  </span>
+                </div>
+              )}
 
               {/* Fee breakdown */}
               {onCustomExitTimeChange && !customExitTime ? (
