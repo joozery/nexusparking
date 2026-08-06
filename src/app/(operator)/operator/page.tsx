@@ -611,6 +611,11 @@ export default function OperatorPage() {
 
                   <div className="w-px my-3 shrink-0" style={{ background: '#E8ECF4' }} />
 
+                  <div className="flex flex-col items-center justify-center px-7 shrink-0 gap-0.5">
+                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest">ค่าบริการ</p>
+                    <p className="text-2xl font-black tabular-nums" style={{ color: m.color }}>฿0</p>
+                  </div>
+
                   <div className="w-px my-3 shrink-0" style={{ background: '#E8ECF4' }} />
 
                   <button
