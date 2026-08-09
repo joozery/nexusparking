@@ -21,6 +21,35 @@ MONGODB_URI=mongodb://...
 JWT_SECRET=...
 ```
 
+## Business Rules
+
+These are the canonical billing rules from the product requirements. All fee logic in `calcFee.ts` must conform to these.
+
+### Parking Rates
+
+| Card type | First hour | Additional hours | Rounding |
+|-----------|-----------|-----------------|---------|
+| Car | ฿30 | ฿20 / hr | Any partial hour → full hour (ceiling) |
+| Motorcycle | ฿20 | ฿10 / hr | Any partial hour → full hour (ceiling) |
+
+### Overnight Rate (18:00–07:00)
+- Flat rate **฿100** per overnight window (applies once per window crossed, only if stay reaches `flatRateStart` = 22:00)
+- Time **outside** the overnight window (before 18:00 or after 07:00) billed at **฿20 / hr** (ceiling per segment)
+
+### Special Cases
+- **Lost card**: regular parking fee + flat fine ฿300 (`settings.lostCardFine`)
+- **After-hours exit** (22:00–06:30): regular parking fee + surcharge ฿300 (`settings.afterHoursFine`)
+- Plate stored as **4-digit suffix** only — operators enter the last 4 characters at check-in
+
+### Hardware Triggers
+
+| Event | Camera | Barrier | Printer | Cash Drawer |
+|-------|--------|---------|---------|-------------|
+| Check-in confirmed | Snapshot ✓ | Open ✓ | — | — |
+| Check-out paid | Snapshot ✓ | Open ✓ | Receipt (on request) | Open ✓ |
+
+---
+
 ## Architecture
 
 ### Route Groups
