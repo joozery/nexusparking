@@ -1,0 +1,33 @@
+api:
+  listen: ":1984"   # web UI + API port
+
+# ── กล้อง Xiaomi ──────────────────────────────────────────────────────────────
+# แก้ IP และ password ให้ตรงกับกล้องจริง
+# วิธีหา RTSP URL ของ Xiaomi แต่ละรุ่น ดู comment ด้านล่าง
+# ─────────────────────────────────────────────────────────────────────────────
+
+streams:
+  # กล้องป้ายทะเบียน (CAM-01)
+  cam_plate: rtsp://192.168.1.108/stream1
+
+  # กล้องหน้าคนขับ (CAM-02)  — ถ้ามีแค่ 1 กล้อง ให้ comment บรรทัดนี้ออก
+  # cam_face: rtsp://192.168.1.109/stream1
+
+  # กล้อง Rear (CAM-03)
+  # cam_rear: rtsp://192.168.1.110/stream1
+
+# ── RTSP URL format ของ Xiaomi แต่ละรุ่น ─────────────────────────────────────
+#
+# รุ่นใหม่ (Xiaomi Camera 2, C300, C400, AX1, etc.) — ไม่ต้องใส่ password:
+#   rtsp://192.168.x.x/stream1   (main stream 1080p)
+#   rtsp://192.168.x.x/stream2   (sub stream 360p ใช้น้อยกว่า)
+#
+# รุ่นเก่า (Mi Home Security Camera) — ต้องใส่ password จาก Mi Home app:
+#   rtsp://admin:PASSWORD@192.168.x.x:554/stream1
+#   rtsp://admin:PASSWORD@192.168.x.x/ch0_0.264
+#
+# ไม่แน่ใจให้ลองตามลำดับ:
+#   1. rtsp://192.168.x.x/stream1
+#   2. rtsp://192.168.x.x/stream2
+#   3. rtsp://admin:admin@192.168.x.x:554/stream1
+# ─────────────────────────────────────────────────────────────────────────────
