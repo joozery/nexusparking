@@ -8,12 +8,18 @@ export interface OvernightConfig {
   extraHour:      number
 }
 
+export interface AfterHoursConfig {
+  start: string  // 'HH:MM' - เวลาปิดทำการ (เช่น '22:00')
+  end:   string  // 'HH:MM' - เวลาเปิดทำการ (เช่น '06:30')
+  fine:  number  // ค่าบริการนอกเวลา (เช่น 300)
+}
+
 export interface FeeSegment {
-  kind:      'normal' | 'overnight' | 'outside'
+  kind:      'normal' | 'overnight' | 'outside' | 'after-hours'
   from:      Date
   to:        Date
   minutes:   number
-  hours:     number   // ceiled hours (0 for overnight flat)
+  hours:     number   // ceiled hours (0 for overnight flat / after-hours)
   fee:       number
   rateLabel: string
 }
@@ -78,12 +84,20 @@ function overnightWindowsIn(entry: Date, exit: Date, cfg: OvernightConfig) {
   return windows
 }
 
+function isInAfterHours(exitTime: Date, cfg: AfterHoursConfig): boolean {
+  const exitMin  = exitTime.getHours() * 60 + exitTime.getMinutes()
+  const startMin = toMin(cfg.start)
+  const endMin   = toMin(cfg.end)
+  return exitMin >= startMin || exitMin < endMin
+}
+
 // คำนวณ breakdown แยกแต่ละช่วง — ใช้แสดงผลใน simulator และ checkout
 export function calcFeeBreakdown(
-  cardType:  CardType,
-  entryTime: Date,
-  exitTime:  Date,
-  overnight?: OvernightConfig,
+  cardType:    CardType,
+  entryTime:   Date,
+  exitTime:    Date,
+  overnight?:  OvernightConfig,
+  afterHours?: AfterHoursConfig,
 ): { segments: FeeSegment[]; total: number } {
   const cfg = overnight ?? DEFAULT_OVERNIGHT
   const isOvernight = cardType === 'overnight' || spansOvernightWindow(entryTime, exitTime, cfg)
@@ -100,10 +114,17 @@ export function calcFeeBreakdown(
       fee = h <= 1 ? 20 : 20 + (h - 1) * 10
       rateLabel = h <= 1 ? '฿20 (ชม.แรก)' : `฿20 + ${h - 1}×฿10`
     }
-    return {
-      segments: [{ kind: 'normal', from: entryTime, to: exitTime, minutes, hours: h, fee, rateLabel }],
-      total: fee,
+    const segs: FeeSegment[] = [{ kind: 'normal', from: entryTime, to: exitTime, minutes, hours: h, fee, rateLabel }]
+    if (afterHours && isInAfterHours(exitTime, afterHours)) {
+      segs.push({
+        kind: 'after-hours',
+        from: exitTime, to: exitTime,
+        minutes: 0, hours: 0,
+        fee: afterHours.fine,
+        rateLabel: `ค่าบริการนอกเวลา (${afterHours.start}–${afterHours.end})`,
+      })
     }
+    return { segments: segs, total: segs.reduce((s, seg) => s + seg.fee, 0) }
   }
 
   const windows = overnightWindowsIn(entryTime, exitTime, cfg)
@@ -159,16 +180,28 @@ export function calcFeeBreakdown(
     })
   }
 
+  // ค่าบริการนอกเวลาทำการ — ถ้าเวลาออกตกในช่วง after-hours
+  if (afterHours && isInAfterHours(exitTime, afterHours)) {
+    segments.push({
+      kind: 'after-hours',
+      from: exitTime, to: exitTime,
+      minutes: 0, hours: 0,
+      fee: afterHours.fine,
+      rateLabel: `ค่าบริการนอกเวลา (${afterHours.start}–${afterHours.end})`,
+    })
+  }
+
   const total = segments.reduce((s, seg) => s + seg.fee, 0)
   return { segments, total }
 }
 
 export function calcFeeFromMinutes(
-  type:       CardType,
-  minutes:    number,
-  entryTime?: Date,
-  exitTime?:  Date,
-  overnight?: OvernightConfig,
+  type:        CardType,
+  minutes:     number,
+  entryTime?:  Date,
+  exitTime?:   Date,
+  overnight?:  OvernightConfig,
+  afterHours?: AfterHoursConfig,
 ): number {
   const cfg = overnight ?? DEFAULT_OVERNIGHT
   const isOvernight =
@@ -177,7 +210,12 @@ export function calcFeeFromMinutes(
 
   if (isOvernight) {
     if (!entryTime || !exitTime) return cfg.flatRate
-    return calcFeeBreakdown(type, entryTime, exitTime, cfg).total
+    return calcFeeBreakdown(type, entryTime, exitTime, cfg, afterHours).total
+  }
+
+  // เมื่อมีเวลาออกจริง ให้ใช้ breakdown เพื่อรวม after-hours ได้ถูกต้อง
+  if (entryTime && exitTime) {
+    return calcFeeBreakdown(type, entryTime, exitTime, cfg, afterHours).total
   }
 
   if (type === 'car')        return ceilHours(minutes) <= 1 ? 30 : 30 + (ceilHours(minutes) - 1) * 20

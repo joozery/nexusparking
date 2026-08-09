@@ -22,7 +22,12 @@ export async function GET(req: NextRequest) {
 
   const now = new Date()
   const durationMin = calcDurationMinutes(session.entryTime, now)
-  const fee = calcFeeFromMinutes(session.cardType, durationMin, session.entryTime, now, settings.rates.overnight)
+  const afterHoursCfg = {
+    start: settings.businessHours.close,
+    end:   settings.businessHours.open,
+    fine:  settings.afterHoursFine,
+  }
+  const fee = calcFeeFromMinutes(session.cardType, durationMin, session.entryTime, now, settings.rates.overnight, afterHoursCfg)
 
   return NextResponse.json({ ...session, durationMin, fee, totalFee: fee })
 }
@@ -45,7 +50,12 @@ export async function POST(req: NextRequest) {
   const settings = await getSettings()
   const now = exitTimeRaw ? new Date(exitTimeRaw) : new Date()
   const durationMin = calcDurationMinutes(session.entryTime, now)
-  const fee = calcFeeFromMinutes(session.cardType, durationMin, session.entryTime, now, settings.rates.overnight)
+  const afterHoursCfg = {
+    start: settings.businessHours.close,
+    end:   settings.businessHours.open,
+    fine:  settings.afterHoursFine,
+  }
+  const fee = calcFeeFromMinutes(session.cardType, durationMin, session.entryTime, now, settings.rates.overnight, afterHoursCfg)
 
   // คำนวณส่วนลดร้านค้า (fixed / percent)
   let discountAmount = 0
@@ -71,7 +81,7 @@ export async function POST(req: NextRequest) {
       name: string; discountType: string; discountValue: number
     } | null
     if (dailyDiscount && dailyDiscount.discountType === 'per_day') {
-      const segments = calcFeeBreakdown(session.cardType, session.entryTime, now, settings.rates.overnight).segments
+      const segments = calcFeeBreakdown(session.cardType, session.entryTime, now, settings.rates.overnight, afterHoursCfg).segments
       const nights = segments.filter(s => s.kind === 'overnight').length
       if (nights > 0) {
         discountNames.push(`${dailyDiscount.name} (${nights} คืน)`)

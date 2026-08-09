@@ -11,7 +11,7 @@ import { CheckInDialog } from '@/components/parking/CheckInDialog'
 import { CheckOutDialog, type PaymentMethod } from '@/components/parking/CheckOutDialog'
 import { LostCardDialog } from '@/components/parking/LostCardDialog'
 import { type CardType } from '@/components/parking/types'
-import { calcFeeFromMinutes, type OvernightConfig } from '@/lib/calcFee'
+import { calcFeeFromMinutes, type OvernightConfig, type AfterHoursConfig } from '@/lib/calcFee'
 import { useToast } from '@/components/ui/Toast'
 
 interface Session {
@@ -85,7 +85,8 @@ function fmtTime(iso: string) {
 export default function OperatorPage() {
   const { success, error: toastError, warning } = useToast()
 
-  const [overnightCfg, setOvernightCfg] = useState<OvernightConfig | undefined>(undefined)
+  const [overnightCfg,   setOvernightCfg]   = useState<OvernightConfig | undefined>(undefined)
+  const [afterHoursCfg,  setAfterHoursCfg]  = useState<AfterHoursConfig | undefined>(undefined)
   const [sessions, setSessions] = useState<Session[]>([])
   const [stats, setStats] = useState<Stats | null>(null)
   const [shift, setShift] = useState<Shift | null | undefined>(undefined) // undefined = loading
@@ -167,7 +168,16 @@ export default function OperatorPage() {
   const fetchSettings = useCallback(() => {
     fetch('/api/settings')
       .then(r => r.json())
-      .then(s => { if (s?.rates?.overnight) setOvernightCfg(s.rates.overnight) })
+      .then(s => {
+        if (s?.rates?.overnight) setOvernightCfg(s.rates.overnight)
+        if (s?.businessHours) {
+          setAfterHoursCfg({
+            start: s.businessHours.close ?? '22:00',
+            end:   s.businessHours.open  ?? '06:30',
+            fine:  s.afterHoursFine      ?? 300,
+          })
+        }
+      })
       .catch(() => {})
   }, [])
 
@@ -339,7 +349,7 @@ export default function OperatorPage() {
     const durationMin = Math.max(1, Math.floor((exit.getTime() - coEntryTime.getTime()) / 60000))
     const hours = Math.ceil(durationMin / 60)
     setCoHours(hours)
-    setCoFee(calcFeeFromMinutes(coType, durationMin, coEntryTime, exit, overnightCfg))
+    setCoFee(calcFeeFromMinutes(coType, durationMin, coEntryTime, exit, overnightCfg, afterHoursCfg))
   }
 
   // Check Out (scan dialog)
@@ -367,7 +377,7 @@ export default function OperatorPage() {
     const hours = Math.ceil(durationMin / 60)
     setCoType(s.cardType)
     setCoHours(hours)
-    setCoFee(calcFeeFromMinutes(s.cardType, durationMin, entry, now, overnightCfg))
+    setCoFee(calcFeeFromMinutes(s.cardType, durationMin, entry, now, overnightCfg, afterHoursCfg))
     setCoSessionId(s._id); setCoEntryTime(entry); setCoStep('payment'); setCheckOutOpen(true)
   }
 
@@ -1086,6 +1096,7 @@ export default function OperatorPage() {
         entryTime={coEntryTime}
         customExitTime={coCustomTime}
         overnightCfg={overnightCfg}
+        afterHoursCfg={afterHoursCfg}
         onCustomExitTimeChange={handleCoCustomTimeChange}
         onSimulateScan={simulateCOScan}
         onBack={() => setCoStep('scan')}

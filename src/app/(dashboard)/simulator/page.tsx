@@ -50,9 +50,10 @@ function exitIsDaytime(exitIso: string, cfg: OvernightConfig): boolean {
 }
 
 const KIND_STYLE: Record<FeeSegment['kind'], { bg: string; border: string; label: string; color: string }> = {
-  normal:    { bg: 'rgba(29,78,216,0.04)',   border: 'rgba(29,78,216,0.12)',   label: 'ปกติ',      color: '#1D4ED8' },
-  outside:   { bg: 'rgba(217,119,6,0.05)',   border: 'rgba(217,119,6,0.15)',   label: 'นอกช่วง',   color: '#B45309' },
-  overnight: { bg: 'rgba(109,40,217,0.05)',  border: 'rgba(109,40,217,0.15)', label: 'ค้างคืน',   color: '#6D28D9' },
+  normal:       { bg: 'rgba(29,78,216,0.04)',  border: 'rgba(29,78,216,0.12)',  label: 'ปกติ',         color: '#1D4ED8' },
+  outside:      { bg: 'rgba(217,119,6,0.05)',  border: 'rgba(217,119,6,0.15)',  label: 'นอกช่วง',      color: '#B45309' },
+  overnight:    { bg: 'rgba(109,40,217,0.05)', border: 'rgba(109,40,217,0.15)', label: 'ค้างคืน',      color: '#6D28D9' },
+  'after-hours':{ bg: 'rgba(220,38,38,0.05)',  border: 'rgba(220,38,38,0.15)',  label: 'นอกเวลาทำการ', color: '#DC2626' },
 }
 
 const TYPE_META: Record<CardType, { label: string; icon: typeof Car; color: string }> = {

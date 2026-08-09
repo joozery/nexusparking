@@ -15,7 +15,8 @@ export interface ISystemSettings extends Document {
     printer: { ip: string; port: number; endpoint: string; enabled: boolean }
     drawer:  { ip: string; port: number; endpoint: string; enabled: boolean }
   }
-  lostCardFine: number
+  lostCardFine:   number
+  afterHoursFine: number
 }
 
 const hwDevice = {
@@ -46,7 +47,8 @@ const SystemSettingsSchema = new Schema<ISystemSettings>({
     printer: hwDevice,
     drawer:  hwDevice,
   },
-  lostCardFine: { type: Number, default: 300 },
+  lostCardFine:   { type: Number, default: 300 },
+  afterHoursFine: { type: Number, default: 300 },
 }, { timestamps: true })
 
 export const SystemSettings = mongoose.models.SystemSettings as mongoose.Model<ISystemSettings>

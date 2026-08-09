@@ -9,7 +9,7 @@ import {
 } from '@/components/ui/dialog'
 import { CardBadge } from './CardBadge'
 import { type CardType } from './types'
-import { calcFeeBreakdown, type OvernightConfig } from '@/lib/calcFee'
+import { calcFeeBreakdown, type OvernightConfig, type AfterHoursConfig } from '@/lib/calcFee'
 
 export type PaymentMethod = 'cash' | 'qr'
 
@@ -32,6 +32,7 @@ interface Props {
   entryTime?: Date | null
   customExitTime?: string
   overnightCfg?: OvernightConfig
+  afterHoursCfg?: AfterHoursConfig
   onCustomExitTimeChange?: (v: string) => void
   onSimulateScan: () => void
   onBack: () => void
@@ -58,7 +59,7 @@ function fmtDuration(entryTime: Date | null | undefined, exitTime: Date | null |
 
 export function CheckOutDialog({
   open, onOpenChange, step, cardType, hours, fee,
-  entryTime, customExitTime, overnightCfg, onCustomExitTimeChange,
+  entryTime, customExitTime, overnightCfg, afterHoursCfg, onCustomExitTimeChange,
   onSimulateScan, onBack, onConfirm,
 }: Props) {
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash')
@@ -76,9 +77,10 @@ export function CheckOutDialog({
   const exitTimeDate = customExitTime ? new Date(customExitTime) : null
   const exitForCalc = exitTimeDate ?? new Date()
   const breakdown = entryTime
-    ? calcFeeBreakdown(cardType, entryTime, exitForCalc, overnightCfg)
+    ? calcFeeBreakdown(cardType, entryTime, exitForCalc, overnightCfg, afterHoursCfg)
     : null
   const isOvernightSession = breakdown?.segments.some(s => s.kind === 'overnight') ?? false
+  const hasAfterHours = breakdown?.segments.some(s => s.kind === 'after-hours') ?? false
   const nights = breakdown?.segments.filter(s => s.kind === 'overnight').length ?? 0
 
   const selectedDailyDiscount = dailyDiscounts.find(d => d._id === dailySelectedId) ?? null
@@ -175,13 +177,21 @@ export function CheckOutDialog({
                       <span className="text-[11px] font-semibold text-emerald-700">{durationStr}</span>
                     </div>
                     <div className="px-2.5 py-2 space-y-1 border-t border-emerald-100">
-                      {isOvernightSession && breakdown ? (
+                      {(isOvernightSession || hasAfterHours) && breakdown ? (
                         breakdown.segments.map((seg, i) => (
                           <div key={i} className="flex justify-between text-xs">
-                            <span style={{ color: seg.kind === 'overnight' ? '#7C3AED' : '#64748B' }}>
-                              {seg.kind === 'overnight' ? '🌙 ' : ''}{seg.rateLabel}
+                            <span style={{
+                              color: seg.kind === 'overnight' ? '#7C3AED'
+                                   : seg.kind === 'after-hours' ? '#DC2626'
+                                   : '#64748B',
+                            }}>
+                              {seg.kind === 'overnight' ? '🌙 ' : seg.kind === 'after-hours' ? '⚠️ ' : ''}{seg.rateLabel}
                             </span>
-                            <span className="font-bold tabular-nums" style={{ color: seg.kind === 'overnight' ? '#7C3AED' : '#334155' }}>
+                            <span className="font-bold tabular-nums" style={{
+                              color: seg.kind === 'overnight' ? '#7C3AED'
+                                   : seg.kind === 'after-hours' ? '#DC2626'
+                                   : '#334155',
+                            }}>
                               ฿{seg.fee}
                             </span>
                           </div>
