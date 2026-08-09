@@ -3,7 +3,7 @@
 import {
   LayoutDashboard, DoorOpen, History, CreditCard,
   BarChart2, Settings, ChevronRight, LogOut,
-  Clock, CloudSun, Droplets, Wind, Sun, Cloud, CloudRain, Activity, Users, ClipboardList, Tag, FlaskConical,
+  Clock, CloudSun, Droplets, Wind, Sun, Cloud, CloudRain, Activity, Users, ClipboardList, Tag, FlaskConical, Cctv,
 } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
@@ -27,7 +27,8 @@ const NAV_SYSTEM = [
   { key: 'shifts',    href: '/shifts',    icon: ClipboardList, label: 'รายงานกะ'          },
   { key: 'discounts', href: '/discounts', icon: Tag,           label: 'ส่วนลดร้านค้า'    },
   { key: 'reports',   href: '/reports',   icon: BarChart2,     label: 'รายงานรายได้'      },
-  { key: 'hardware', href: '/hardware', icon: Activity,      label: 'มอนิเตอร์ฮาร์ดแวร์' },
+  { key: 'monitor',   href: '/monitor',   icon: Cctv,          label: 'กล้องวงจรปิด'      },
+  { key: 'hardware',  href: '/hardware',  icon: Activity,      label: 'มอนิเตอร์ฮาร์ดแวร์' },
   { key: 'settings',  href: '/settings',  icon: Settings,      label: 'ตั้งค่าระบบ'       },
   { key: 'admin',     href: '/admin',     icon: Users,         label: 'จัดการแอดมิน'      },
   { key: 'simulator', href: '/simulator', icon: FlaskConical,  label: 'จำลองข้อมูล'       },
@@ -37,7 +38,7 @@ const PATH_MAP: Record<string, string> = {
   '/': 'gate', '/gate': 'gate', '/dashboard': 'dashboard',
   '/history': 'history', '/cards': 'cards',
   '/shifts': 'shifts', '/discounts': 'discounts',
-  '/reports': 'reports', '/hardware': 'hardware', '/settings': 'settings', '/admin': 'admin',
+  '/reports': 'reports', '/monitor': 'monitor', '/hardware': 'hardware', '/settings': 'settings', '/admin': 'admin',
   '/simulator': 'simulator',
 }
 
