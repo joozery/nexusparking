@@ -100,7 +100,11 @@ export function calcFeeBreakdown(
   afterHours?: AfterHoursConfig,
 ): { segments: FeeSegment[]; total: number } {
   const cfg = overnight ?? DEFAULT_OVERNIGHT
-  const isOvernight = cardType === 'overnight' || spansOvernightWindow(entryTime, exitTime, cfg)
+
+  // คำนวณ windows ก่อน — overnight mode จะ active ก็ต่อเมื่อมี window ที่ถึง flatRateStart จริง
+  const spansWindow = cardType === 'overnight' || spansOvernightWindow(entryTime, exitTime, cfg)
+  const windows = spansWindow ? overnightWindowsIn(entryTime, exitTime, cfg) : []
+  const isOvernight = cardType === 'overnight' || windows.some(w => w.isFlatRate)
 
   if (!isOvernight) {
     const minutes = (exitTime.getTime() - entryTime.getTime()) / 60000
@@ -127,7 +131,7 @@ export function calcFeeBreakdown(
     return { segments: segs, total: segs.reduce((s, seg) => s + seg.fee, 0) }
   }
 
-  const windows = overnightWindowsIn(entryTime, exitTime, cfg)
+  // overnight mode — ใช้ windows ที่คำนวณไว้แล้ว
   const segments: FeeSegment[] = []
   let cursor = entryTime
 
