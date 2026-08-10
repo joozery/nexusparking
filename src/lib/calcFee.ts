@@ -136,11 +136,22 @@ export function calcFeeBreakdown(
     if (cursor < w.start) {
       const min = (w.start.getTime() - cursor.getTime()) / 60000
       const h   = Math.ceil(min / 60)
+      const isFirst = segments.length === 0
+      let fee: number
+      let rateLabel: string
+      if (isFirst && cardType === 'car') {
+        fee = h <= 1 ? 30 : 30 + (h - 1) * 20
+        rateLabel = h <= 1 ? '฿30 (ชม.แรก)' : `฿30 + ${h - 1}×฿20`
+      } else if (isFirst && cardType === 'motorcycle') {
+        fee = h <= 1 ? 20 : 20 + (h - 1) * 10
+        rateLabel = h <= 1 ? '฿20 (ชม.แรก)' : `฿20 + ${h - 1}×฿10`
+      } else {
+        fee = h * cfg.extraHour
+        rateLabel = `${h} ชม. × ฿${cfg.extraHour}/ชม.`
+      }
       segments.push({
         kind: 'outside', from: new Date(cursor), to: new Date(w.start),
-        minutes: min, hours: h,
-        fee: h * cfg.extraHour,
-        rateLabel: `${h} ชม. × ฿${cfg.extraHour}/ชม.`,
+        minutes: min, hours: h, fee, rateLabel,
       })
     }
 

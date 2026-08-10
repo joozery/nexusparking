@@ -160,7 +160,25 @@ Dev tool page — not behind a role guard. Two features:
 
 ### CCTV Monitor (`/monitor`)
 
-Dashboard page showing 3 camera feeds: กล้องป้ายทะเบียน (CAM-01, large), กล้องหน้าคนขับ (CAM-02), กล้อง Rear (CAM-03). Polls snapshot URLs every 2 s or renders MJPEG streams directly via `<img>`. Camera URLs are stored in `localStorage` under key `np_cctv_urls` — no DB involvement.
+Dashboard page showing 3 camera feeds: กล้องป้ายทะเบียน (CAM-01, large), กล้องหน้าคนขับ (CAM-02), กล้อง Rear (CAM-03). Camera URLs stored in `localStorage` under key `np_cctv_urls` — no DB involvement.
+
+**URL types supported:**
+- Snapshot JPEG (e.g. `http://IP/snapshot.jpg`) — polled every 2 s via `<img src={url + '?_t=' + ticker}>`
+- MJPEG stream (URL contains `stream.mjpeg`, `.mjpg`, or `mjpeg`) — set as static `<img>` src, no ticker
+- `rtsp://` URLs — detected and blocked with a warning; must go through go2rtc first
+
+**go2rtc proxy** (`go2rtc.yaml` in project root, binary `./go2rtc`):
+- Converts IP camera streams (RTSP, MJPEG-over-HTTP) to browser-viewable MJPEG
+- Listens on port 1984; MJPEG endpoint: `http://localhost:1984/api/stream.mjpeg?src=STREAM_NAME`
+- Uses ffmpeg source for MJPEG cameras: `ffmpeg:http://user:pass@IP:PORT/video#video=mjpeg`
+- Runs as launchd service: `~/Library/LaunchAgents/com.parkingcar.go2rtc.plist` (wrapper at `~/bin/go2rtc-parkingcar.sh` sets `PATH=/opt/homebrew/bin:...`)
+- launchd must have `PATH` set to include Homebrew (`/opt/homebrew/bin`) for ffmpeg to be found
+
+**Camera proxy API** (`/api/camera`) — fallback when go2rtc can't handle a source:
+- Proxies any HTTP camera URL with Basic Auth via query params: `?url=...&u=admin&p=pass`
+- Uses Next.js `fetch` streaming — less stable than go2rtc for long-lived MJPEG connections
+
+**Keyboard shortcut**: `Alt+C` (Option+C on Mac) toggles CAM-01 fullscreen. Uses `document.addEventListener('keydown')` — skips when focus is in an input/textarea.
 
 ### Hardware Integration (`src/lib/hardware.ts`)
 

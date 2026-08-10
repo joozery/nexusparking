@@ -7,14 +7,14 @@ api:
 # ─────────────────────────────────────────────────────────────────────────────
 
 streams:
-  # กล้องป้ายทะเบียน (CAM-01)
-  cam_plate: rtsp://192.168.1.108/stream1
+  # กล้องป้ายทะเบียน (CAM-01) — iPhone ที่รัน IP Camera Lite
+  cam_plate: ffmpeg:http://admin:joozery1234@192.168.1.107:8081/video#video=mjpeg
 
-  # กล้องหน้าคนขับ (CAM-02)  — ถ้ามีแค่ 1 กล้อง ให้ comment บรรทัดนี้ออก
-  # cam_face: rtsp://192.168.1.109/stream1
+  # กล้องหน้าคนขับ (CAM-02)
+  # cam_face: http://192.168.1.xxx:8081/video
 
   # กล้อง Rear (CAM-03)
-  # cam_rear: rtsp://192.168.1.110/stream1
+  # cam_rear: rtsp://192.168.1.113/stream1
 
 # ── RTSP URL format ของ Xiaomi แต่ละรุ่น ─────────────────────────────────────
 #

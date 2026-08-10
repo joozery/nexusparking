@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+
 import {
   LogIn, LogOut, AlertTriangle,
   Car, Bike, Moon, RefreshCw, Clock, Search,
@@ -191,6 +192,7 @@ export default function OperatorPage() {
     const t = setInterval(() => { fetchData(); fetchSettings() }, 15000)
     return () => clearInterval(t)
   }, [fetchData, fetchSettings])
+
 
   // Queue actions
   async function simulateQScan() {

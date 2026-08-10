@@ -51,15 +51,19 @@ function CameraCard({ slot, url, onExpand }: { slot: CameraSlot; url: string; on
   const [ticker, setTicker] = useState(Date.now())
   const timer = useRef<ReturnType<typeof setInterval> | null>(null)
 
+  const isRtsp   = url.startsWith('rtsp://')
+  const isMjpeg  = url.includes('stream.mjpeg') || url.includes('.mjpg') || url.includes('mjpeg')
+
   useEffect(() => {
     if (timer.current) clearInterval(timer.current)
-    if (!url) { setStatus('idle'); return }
+    if (!url || isRtsp || isMjpeg) { setStatus(url && !isRtsp ? 'loading' : 'idle'); return }
     setStatus('loading')
     timer.current = setInterval(() => setTicker(Date.now()), 2000)
     return () => { if (timer.current) clearInterval(timer.current) }
-  }, [url])
+  }, [url, isRtsp, isMjpeg])
 
-  const src = url ? `${url}${url.includes('?') ? '&' : '?'}_t=${ticker}` : ''
+  // MJPEG stream — ไม่ต้องเพิ่ม _t เพราะ browser จัดการ continuous stream เอง
+  const src = isRtsp ? '' : isMjpeg ? url : url ? `${url}${url.includes('?') ? '&' : '?'}_t=${ticker}` : ''
 
   const statusColor =
     status === 'online'  ? '#059669' :
@@ -75,7 +79,21 @@ function CameraCard({ slot, url, onExpand }: { slot: CameraSlot; url: string; on
 
       {/* ── video area ── */}
       <div className="relative flex-1 bg-[#0D1117] flex items-center justify-center overflow-hidden">
-        {url ? (
+        {isRtsp ? (
+          <div className="flex flex-col items-center gap-3 px-6 text-center select-none">
+            <div className="flex size-12 items-center justify-center rounded-xl"
+              style={{ background: 'rgba(251,191,36,0.12)', border: '1px dashed rgba(251,191,36,0.3)' }}>
+              <WifiOff className="size-5" style={{ color: 'rgba(251,191,36,0.7)' }} />
+            </div>
+            <p className="text-[11px] font-bold" style={{ color: 'rgba(251,191,36,0.8)' }}>ไม่รองรับ RTSP โดยตรง</p>
+            <p className="text-[10px] leading-relaxed" style={{ color: 'rgba(255,255,255,0.3)' }}>
+              ต้องผ่าน go2rtc ก่อน<br />ใส่ URL นี้แทน:<br />
+              <span style={{ color: 'rgba(96,165,250,0.9)' }} className="font-mono">
+                http://localhost:1984/api/stream.mjpeg?src=cam_plate
+              </span>
+            </p>
+          </div>
+        ) : url ? (
           <img src={src} alt={slot.label}
             className="absolute inset-0 w-full h-full object-cover"
             onLoad={() => setStatus('online')}
@@ -159,7 +177,8 @@ function FullscreenView({ slot, url, onClose }: { slot: CameraSlot; url: string;
     return () => window.removeEventListener('keydown', fn)
   }, [onClose])
 
-  const src = url ? `${url}${url.includes('?') ? '&' : '?'}_t=${ticker}` : ''
+  const isMjpegFull = url.includes('stream.mjpeg') || url.includes('.mjpg') || url.includes('mjpeg')
+  const src = isMjpegFull ? url : url ? `${url}${url.includes('?') ? '&' : '?'}_t=${ticker}` : ''
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-black">
@@ -204,6 +223,7 @@ function FullscreenView({ slot, url, onClose }: { slot: CameraSlot; url: string;
 
 /* ── page ── */
 export default function MonitorPage() {
+  const containerRef = useRef<HTMLDivElement>(null)
   const [urls, setUrls]             = useState<CameraUrls>({ plate: '', face: '', rear: '' })
   const [showSettings, setShowSettings] = useState(false)
   const [draft, setDraft]           = useState<CameraUrls>({ plate: '', face: '', rear: '' })
@@ -217,6 +237,19 @@ export default function MonitorPage() {
     } catch {}
   }, [])
 
+
+  useEffect(() => {
+    const fn = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+      if (e.altKey && e.code === 'KeyC') {
+        e.preventDefault()
+        setExpanded(prev => prev ? null : CAMERAS[0])
+      }
+    }
+    document.addEventListener('keydown', fn)
+    return () => document.removeEventListener('keydown', fn)
+  }, [])
+
   function openSettings() { setDraft({ ...urls }); setShowSettings(true) }
   function saveSettings() { localStorage.setItem(STORAGE_KEY, JSON.stringify(draft)); setUrls({ ...draft }); setShowSettings(false) }
 
@@ -225,8 +258,16 @@ export default function MonitorPage() {
 
   const configuredCount = CAMERAS.filter(c => urls[c.id]).length
 
+  function handleKey(e: React.KeyboardEvent) {
+    if (e.altKey && e.code === 'KeyC') {
+      e.preventDefault()
+      setExpanded(prev => prev ? null : CAMERAS[0])
+    }
+  }
+
   return (
-    <div className="flex flex-col h-full overflow-hidden" style={{ background: '#F0F4FF' }}>
+    <div ref={containerRef} tabIndex={0} onKeyDown={handleKey}
+      className="flex flex-col h-full overflow-hidden outline-none" style={{ background: '#F0F4FF' }}>
 
       {/* ─── Header ─── */}
       <header className="shrink-0 flex items-center justify-between px-6 py-3.5 bg-white"
@@ -265,6 +306,14 @@ export default function MonitorPage() {
             <Clock className="size-3 text-slate-400" />
             <span className="text-sm font-black text-slate-700 tabular-nums"><LiveClock /></span>
           </div>
+
+          {/* Alt+C — fullscreen กล้องขาออก */}
+          <button onClick={() => setExpanded(prev => prev ? null : CAMERAS[0])}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white transition-all hover:opacity-90"
+            style={{ background: 'linear-gradient(135deg,#1E3A8A,#1D4ED8)', boxShadow: '0 2px 8px rgba(29,78,216,0.3)' }}>
+            กล้องขาออก
+            <kbd className="text-[9px] bg-white/20 px-1.5 py-0.5 rounded font-mono">Alt+C</kbd>
+          </button>
 
           {/* settings button */}
           <button onClick={openSettings}
@@ -341,15 +390,15 @@ export default function MonitorPage() {
                       type={showUrl[c.id] ? 'text' : 'password'}
                       value={draft[c.id]}
                       onChange={e => setDraft(p => ({ ...p, [c.id]: e.target.value }))}
-                      placeholder="http://camera-ip/snapshot.jpg"
+                      placeholder="http://localhost:1984/api/stream.mjpeg?src=cam_plate"
                       className="w-full h-9 pl-3 pr-9 rounded-lg text-xs text-slate-700 placeholder-slate-300 outline-none font-mono"
                       style={{
                         background: '#FAFBFF',
-                        border: `1.5px solid ${draft[c.id] ? c.accent + '60' : '#E2E8F0'}`,
+                        border: `1.5px solid ${draft[c.id]?.startsWith('rtsp://') ? '#F59E0B' : draft[c.id] ? c.accent + '60' : '#E2E8F0'}`,
                         transition: 'border-color .15s',
                       }}
-                      onFocus={e => { e.currentTarget.style.borderColor = c.accent }}
-                      onBlur={e => { e.currentTarget.style.borderColor = draft[c.id] ? c.accent + '60' : '#E2E8F0' }}
+                      onFocus={e => { e.currentTarget.style.borderColor = draft[c.id]?.startsWith('rtsp://') ? '#F59E0B' : c.accent }}
+                      onBlur={e => { e.currentTarget.style.borderColor = draft[c.id]?.startsWith('rtsp://') ? '#F59E0B' : draft[c.id] ? c.accent + '60' : '#E2E8F0' }}
                     />
                     <button type="button"
                       onClick={() => setShowUrl(p => ({ ...p, [c.id]: !p[c.id] }))}
@@ -357,6 +406,12 @@ export default function MonitorPage() {
                       {showUrl[c.id] ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
                     </button>
                   </div>
+                  {draft[c.id]?.startsWith('rtsp://') && (
+                    <p className="mt-1 text-[10px] text-amber-600 leading-relaxed">
+                      ⚠️ Browser ใช้ rtsp:// ไม่ได้โดยตรง — ต้องผ่าน go2rtc ก่อน
+                      ใช้ <code className="font-mono">http://localhost:1984/api/stream.mjpeg?src=cam_plate</code> แทน
+                    </p>
+                  )}
                 </div>
               ))}
 
