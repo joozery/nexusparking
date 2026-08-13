@@ -120,12 +120,20 @@ export default function HardwareMonitorPage() {
     return () => { if (timerRef.current) clearInterval(timerRef.current) }
   }, [fetchAll])
 
-  async function pingDevice(device: string) {
+  async function pingDevice(device: string, direction?: 'checkin' | 'checkout') {
     if (device === 'reader') return
-    setPinging(p => ({ ...p, [device]: true }))
+    const key = device === 'barrier' && direction ? `barrier_${direction}` : device
+    setPinging(p => ({ ...p, [key]: true }))
     try {
-      await fetch(`/api/hardware/trigger?device=${device}`)
-      // re-fetch status after ping
+      if (device === 'barrier' && direction) {
+        await fetch('/api/hardware/trigger', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ device: 'barrier', direction }),
+        })
+      } else {
+        await fetch(`/api/hardware/trigger?device=${device}`)
+      }
       const [sRes, lRes] = await Promise.all([
         fetch('/api/hardware/status'),
         fetch('/api/hardware/log?limit=50'),
@@ -133,7 +141,7 @@ export default function HardwareMonitorPage() {
       setStatuses(await sRes.json())
       setLogs(await lRes.json())
     } finally {
-      setPinging(p => ({ ...p, [device]: false }))
+      setPinging(p => ({ ...p, [key]: false }))
     }
   }
 
@@ -270,14 +278,35 @@ export default function HardwareMonitorPage() {
 
                 {/* Ping button */}
                 {!meta.passive && (
-                  <button onClick={() => pingDevice(d)} disabled={busy}
-                    className="w-full h-7 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50"
-                    style={{ background: 'rgba(99,102,241,0.08)', color: '#6366F1' }}>
-                    {busy
-                      ? <><RefreshCw className="size-3 animate-spin" /> กำลัง Ping...</>
-                      : <><Play className="size-3" /> Ping Device</>
-                    }
-                  </button>
+                  d === 'barrier' ? (
+                    <div className="flex gap-1.5">
+                      <button onClick={() => pingDevice('barrier', 'checkin')}
+                        disabled={pinging['barrier_checkin']}
+                        className="flex-1 h-7 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1 transition-colors disabled:opacity-50"
+                        style={{ background: 'rgba(5,150,105,0.08)', color: '#059669' }}>
+                        {pinging['barrier_checkin']
+                          ? <RefreshCw className="size-3 animate-spin" />
+                          : <><Play className="size-3" /> ขาเข้า</>}
+                      </button>
+                      <button onClick={() => pingDevice('barrier', 'checkout')}
+                        disabled={pinging['barrier_checkout']}
+                        className="flex-1 h-7 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1 transition-colors disabled:opacity-50"
+                        style={{ background: 'rgba(220,38,38,0.08)', color: '#DC2626' }}>
+                        {pinging['barrier_checkout']
+                          ? <RefreshCw className="size-3 animate-spin" />
+                          : <><Play className="size-3" /> ขาออก</>}
+                      </button>
+                    </div>
+                  ) : (
+                    <button onClick={() => pingDevice(d)} disabled={busy}
+                      className="w-full h-7 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50"
+                      style={{ background: 'rgba(99,102,241,0.08)', color: '#6366F1' }}>
+                      {busy
+                        ? <><RefreshCw className="size-3 animate-spin" /> กำลัง Ping...</>
+                        : <><Play className="size-3" /> Ping Device</>
+                      }
+                    </button>
+                  )
                 )}
               </div>
             )

@@ -15,7 +15,8 @@ export async function POST(req: NextRequest) {
 
   switch (device) {
     case 'barrier': {
-      const r = await triggerBarrier(hw)
+      const direction = params.direction === 'checkout' ? 'checkout' : 'checkin'
+      const r = await triggerBarrier(hw, direction)
       return NextResponse.json({ success: r.success, latencyMs: r.latencyMs, device })
     }
     case 'camera': {
