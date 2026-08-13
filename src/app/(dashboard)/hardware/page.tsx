@@ -143,8 +143,12 @@ export default function HardwareMonitorPage() {
   }
 
   async function pingAll() {
-    const pingable = ['camera', 'barrier', 'drawer', 'printer']
-    await Promise.all(pingable.map(d => pingDevice(d)))
+    await Promise.all([
+      pingDevice('camera'),
+      pingDevice('barrier', 'checkin'),
+      pingDevice('drawer'),
+      pingDevice('printer'),
+    ])
   }
 
   function manualRefresh() {

@@ -52,7 +52,7 @@ export async function GET(req: NextRequest) {
   let success = false
   let latencyMs = 0
 
-  if (device === 'barrier') { const r = await triggerBarrier(hw); success = r.success; latencyMs = r.latencyMs }
+  if (device === 'barrier') return NextResponse.json({ error: 'barrier must be triggered from browser' }, { status: 400 })
   if (device === 'drawer')  { const r = await triggerDrawer(hw);  success = r.success; latencyMs = r.latencyMs }
   if (device === 'camera')  { const r = await triggerCamera(hw, { cardUid: 'TEST', plate: 'TEST', event: 'checkin' }); success = r.success; latencyMs = r.latencyMs }
   if (device === 'printer') { const r = await triggerPrinter(hw, { plate: 'TEST', cardType: 'car', entryTime: new Date().toISOString(), exitTime: new Date().toISOString(), duration: '0h', fee: 0, total: 0 }); success = r.success; latencyMs = r.latencyMs }
