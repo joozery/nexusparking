@@ -180,9 +180,28 @@ Dashboard page showing 3 camera feeds: กล้องป้ายทะเบ�
 
 **Keyboard shortcut**: `Alt+C` (Option+C on Mac) toggles CAM-01 fullscreen. Uses `document.addEventListener('keydown')` — skips when focus is in an input/textarea.
 
-### Hardware Integration (`src/lib/hardware.ts`)
+### Hardware Integration
 
-Fire-and-forget HTTP calls to physical devices (camera, barrier, printer, drawer). Triggered after checkin/checkout. Enabled per-device via `settings.hardware[device].enabled`.
+**Critical split — barrier must be triggered from the browser, not from Vercel server-side:**
+
+| Device | Trigger location | Reason |
+|--------|-----------------|--------|
+| Camera, Printer, Drawer | `src/lib/hardware.ts` (server-side, API routes) | Fine on Vercel |
+| **Barrier** | `src/lib/barrierClient.ts` (client-side, browser) | Windows machine is on Tailscale — only reachable from the parking lot browser, not from Vercel cloud |
+
+`src/lib/hardware.ts` — server-side fire-and-forget HTTP calls. `runCheckinSequence` triggers camera only. `runCheckoutSequence` triggers camera + drawer + printer. **Do not add barrier back here.**
+
+`src/lib/barrierClient.ts` — fetches `settings.hardware.barrier` from `/api/settings`, then calls `http://{ip}:{port}{endpoint}?cmd={direction}` directly from the browser. Called in `operator/page.tsx` after successful checkin/checkout API response.
+
+**barrier_server.js** (runs on Windows at the parking lot, not committed as a Next.js file):
+- Node.js HTTP server on port 8080, connected to Arduino Uno on COM3 @ 9600 baud
+- `cmd=checkin` → sends `'1\n'` via serial (entry barrier open)
+- `cmd=checkout` → sends `'2\n'` via serial (exit barrier open)
+- Includes CORS headers — required because browser makes cross-origin requests to `http://100.121.70.116:8080`
+- Tailscale IP of Windows machine: `100.121.70.116`
+- Run with: `node barrier_server.js` (requires `npm install serialport` in `C:\barrier\`)
+
+`GET /api/hardware/trigger?device=barrier` intentionally returns 400 — barrier cannot be pinged server-side. The `/hardware` dashboard ping buttons for barrier call `triggerBarrierClient()` directly.
 
 ### UI Stack
 
@@ -191,3 +210,4 @@ Fire-and-forget HTTP calls to physical devices (camera, barrier, printer, drawer
 - Lucide React for icons
 - Recharts for dashboard charts
 - Custom `useToast()` hook from `src/components/ui/Toast.tsx`
+- **Noto Sans Thai** loaded via `<link>` in `layout.tsx` (Google Fonts CDN), **not** via `next/font/google` — Turbopack on Vercel cannot handle multi-weight `next/font` for this font family. Do not revert to `next/font` for Noto Sans Thai.
