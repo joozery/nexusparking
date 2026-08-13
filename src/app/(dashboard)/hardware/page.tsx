@@ -6,6 +6,7 @@ import {
   Wifi, WifiOff, HelpCircle, RefreshCw, Play, CheckCircle2,
   XCircle, Clock, Zap,
 } from 'lucide-react'
+import { triggerBarrierClient } from '@/lib/barrierClient'
 
 interface DeviceStatus {
   device:    string
@@ -126,11 +127,7 @@ export default function HardwareMonitorPage() {
     setPinging(p => ({ ...p, [key]: true }))
     try {
       if (device === 'barrier' && direction) {
-        await fetch('/api/hardware/trigger', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ device: 'barrier', direction }),
-        })
+        await triggerBarrierClient(direction)
       } else {
         await fetch(`/api/hardware/trigger?device=${device}`)
       }
