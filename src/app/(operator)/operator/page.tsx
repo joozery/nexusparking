@@ -14,6 +14,7 @@ import { LostCardDialog } from '@/components/parking/LostCardDialog'
 import { type CardType } from '@/components/parking/types'
 import { calcFeeFromMinutes, type OvernightConfig, type AfterHoursConfig } from '@/lib/calcFee'
 import { useToast } from '@/components/ui/Toast'
+import { triggerBarrierClient } from '@/lib/barrierClient'
 
 interface Session {
   _id: string
@@ -334,6 +335,7 @@ export default function OperatorPage() {
     })
     if (res.ok) {
       setCheckInOpen(false); resetCI()
+      void triggerBarrierClient('checkin')
       await Promise.all([fetchData(), fetchShift()])
       success('ขาเข้าสำเร็จ', `ทะเบียน ${ciPlate} เข้าลานเรียบร้อย`)
     } else {
@@ -393,6 +395,7 @@ export default function OperatorPage() {
     })
     if (res.ok) {
       setCheckOutOpen(false); resetCO()
+      void triggerBarrierClient('checkout')
       await Promise.all([fetchData(), fetchShift()])
       const label = paymentMethod === 'qr' ? 'โอนเงิน' : 'เงินสด'
       success('ขาออกสำเร็จ', `รับ${label} เรียบร้อย`)

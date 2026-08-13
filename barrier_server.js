@@ -63,11 +63,24 @@ function sendCmd(cmd) {
   })
 }
 
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin':  '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type',
+}
+
 const server = http.createServer(async (req, res) => {
   const url    = new URL(req.url, `http://localhost`)
   const path   = url.pathname
   const cmd    = url.searchParams.get('cmd')
   const method = req.method
+
+  // CORS preflight
+  if (method === 'OPTIONS') {
+    res.writeHead(204, CORS_HEADERS)
+    res.end()
+    return
+  }
 
   console.log(`[HTTP] ${method} ${req.url}`)
 
@@ -76,10 +89,10 @@ const server = http.createServer(async (req, res) => {
     if (cmd === 'checkout') buf = CMD_CHECKOUT
     else if (cmd === 'all')  buf = CMD_ALL
     const ok = await sendCmd(buf)
-    res.writeHead(ok ? 200 : 503, { 'Content-Type': 'application/json' })
+    res.writeHead(ok ? 200 : 503, { ...CORS_HEADERS, 'Content-Type': 'application/json' })
     res.end(JSON.stringify({ ok }))
   } else {
-    res.writeHead(400)
+    res.writeHead(400, CORS_HEADERS)
     res.end()
   }
 })

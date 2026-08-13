@@ -109,25 +109,21 @@ export async function triggerPrinter(
   }
 }
 
-// ── Check-in sequence: กล้อง + ไม้กั้นขาเข้า ─────────────────
+// ── Check-in sequence: กล้อง (barrier ย้ายไปฝั่ง client) ────────
 export function runCheckinSequence(
   hw: HardwareConfig,
   data: { cardUid: string; plate: string }
 ) {
-  void Promise.all([
-    triggerCamera(hw, { ...data, event: 'checkin' }),
-    triggerBarrier(hw, 'checkin'),
-  ])
+  void triggerCamera(hw, { ...data, event: 'checkin' })
 }
 
-// ── Check-out sequence: กล้อง + ลิ้นชัก + ไม้กั้นขาออก ───────
+// ── Check-out sequence: กล้อง + ลิ้นชัก + พิมพ์ (barrier ย้ายไปฝั่ง client) ──
 export function runCheckoutSequence(
   hw: HardwareConfig,
   data: { cardUid: string; plate: string; receipt: Parameters<typeof triggerPrinter>[1] }
 ) {
   void Promise.all([
     triggerCamera(hw, { cardUid: data.cardUid, plate: data.plate, event: 'checkout' }),
-    triggerBarrier(hw, 'checkout'),
     triggerDrawer(hw),
     triggerPrinter(hw, data.receipt),
   ])
