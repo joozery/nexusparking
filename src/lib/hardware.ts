@@ -58,9 +58,12 @@ export async function triggerCamera(
 }
 
 // ── ไม้กั้น ───────────────────────────────────────────────────
-export async function triggerBarrier(hw: HardwareConfig): Promise<TriggerResult> {
-  const result = await httpTrigger(hw.barrier, { cmd: 'open' })
-  void saveLog('barrier', 'trigger', hw.barrier.ip, result)
+export async function triggerBarrier(
+  hw: HardwareConfig,
+  direction: 'checkin' | 'checkout' = 'checkin'
+): Promise<TriggerResult> {
+  const result = await httpTrigger(hw.barrier, { cmd: direction })
+  void saveLog('barrier', direction, hw.barrier.ip, result)
   return result
 }
 
@@ -106,25 +109,25 @@ export async function triggerPrinter(
   }
 }
 
-// ── Check-in sequence: กล้อง + ไม้กั้น ────────────────────────
+// ── Check-in sequence: กล้อง + ไม้กั้นขาเข้า ─────────────────
 export function runCheckinSequence(
   hw: HardwareConfig,
   data: { cardUid: string; plate: string }
 ) {
   void Promise.all([
     triggerCamera(hw, { ...data, event: 'checkin' }),
-    triggerBarrier(hw),
+    triggerBarrier(hw, 'checkin'),
   ])
 }
 
-// ── Check-out sequence: กล้อง + ลิ้นชัก + ไม้กั้น ────────────
+// ── Check-out sequence: กล้อง + ลิ้นชัก + ไม้กั้นขาออก ───────
 export function runCheckoutSequence(
   hw: HardwareConfig,
   data: { cardUid: string; plate: string; receipt: Parameters<typeof triggerPrinter>[1] }
 ) {
   void Promise.all([
     triggerCamera(hw, { cardUid: data.cardUid, plate: data.plate, event: 'checkout' }),
-    triggerBarrier(hw),
+    triggerBarrier(hw, 'checkout'),
     triggerDrawer(hw),
     triggerPrinter(hw, data.receipt),
   ])

@@ -408,8 +408,11 @@ export default function MonitorPage() {
                   </div>
                   {draft[c.id]?.startsWith('rtsp://') && (
                     <p className="mt-1 text-[10px] text-amber-600 leading-relaxed">
-                      ⚠️ Browser ใช้ rtsp:// ไม่ได้โดยตรง — ต้องผ่าน go2rtc ก่อน
-                      ใช้ <code className="font-mono">http://localhost:1984/api/stream.mjpeg?src=cam_plate</code> แทน
+                      ⚠️ Browser ใช้ rtsp:// ไม่ได้โดยตรง — ต้องผ่าน go2rtc ก่อน<br />
+                      <span className="text-slate-500">บน Windows (Tailscale): ติดตั้ง go2rtc → ใส่ URL</span>{' '}
+                      <code className="font-mono text-blue-600">http://100.x.x.x:1984/api/stream.mjpeg?src=cam_plate</code><br />
+                      <span className="text-slate-500">หรือบน Mac นี้:</span>{' '}
+                      <code className="font-mono">http://localhost:1984/api/stream.mjpeg?src=cam_plate</code>
                     </p>
                   )}
                 </div>
@@ -420,6 +423,12 @@ export default function MonitorPage() {
                 <p className="font-semibold text-slate-500 mb-1.5">รูปแบบ URL ที่รองรับ</p>
                 <p><code className="font-mono text-slate-600">http://IP/snapshot.jpg</code> — polling ทุก 2 วินาที</p>
                 <p><code className="font-mono text-slate-600">http://IP:PORT/stream.mjpg</code> — MJPEG stream ต่อเนื่อง</p>
+                <div className="mt-2 pt-2" style={{ borderTop: '1px solid #E8ECF4' }}>
+                  <p className="font-semibold text-slate-500 mb-1">ใช้ผ่าน Tailscale (Windows ที่ลานจอดรถ)</p>
+                  <p>1. ติดตั้ง go2rtc บน Windows → เปิด port 1984</p>
+                  <p>2. ใส่ URL:<code className="font-mono text-blue-600 ml-1">http://100.x.x.x:1984/api/stream.mjpeg?src=cam_plate</code></p>
+                  <p className="mt-1 text-slate-400">แทนที่ <code className="font-mono">100.x.x.x</code> ด้วย Tailscale IP ของ Windows</p>
+                </div>
                 <p className="mt-1.5 text-slate-400">URL บันทึกใน localStorage ของ browser นี้เท่านั้น</p>
               </div>
             </div>

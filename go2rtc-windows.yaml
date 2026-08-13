@@ -1,0 +1,51 @@
+api:
+  listen: ":1984"       # เปิด Firewall ให้ port นี้ใน Windows Defender
+
+# Tailscale IP ของ Windows นี้ดูได้จาก Tailscale systray icon
+# Monitor page จะใช้ URL: http://<TAILSCALE_IP>:1984/api/stream.mjpeg?src=cam_plate
+
+streams:
+  # ── กล้อง Hikvision 192.168.1.3 (CAM-01 ป้ายทะเบียน) ──────────────────────
+  # แก้ YOUR_PASSWORD เป็น password จริงของกล้อง
+  cam_plate: rtsp://admin:YOUR_PASSWORD@192.168.1.3:554/Streaming/Channels/101
+
+  # ถ้า URL ด้านบนใช้ไม่ได้ ลองแบบนี้ตามลำดับ:
+  # cam_plate: rtsp://admin:YOUR_PASSWORD@192.168.1.3:554/Streaming/Channels/1
+  # cam_plate: rtsp://admin:YOUR_PASSWORD@192.168.1.3/h264/ch1/main/av_stream
+  # cam_plate: rtsp://admin:YOUR_PASSWORD@192.168.1.3:554/stream1
+
+  # ── CAM-02 / CAM-03 (เพิ่มเติมถ้ามี) ───────────────────────────────────────
+  # cam_face: rtsp://admin:YOUR_PASSWORD@192.168.1.x:554/Streaming/Channels/101
+  # cam_rear: rtsp://admin:YOUR_PASSWORD@192.168.1.x:554/Streaming/Channels/101
+
+# ── วิธีติดตั้งบน Windows ─────────────────────────────────────────────────────
+#
+# 1. ดาวน์โหลด go2rtc.exe:
+#    https://github.com/AlexxIT/go2rtc/releases/latest  → go2rtc_win64.exe
+#
+# 2. วางไฟล์นี้ในโฟลเดอร์เดียวกัน แล้ว rename เป็น go2rtc.yaml
+#    แก้ YOUR_PASSWORD ก่อนรัน
+#
+# 3. รัน go2rtc (เปิด cmd แล้วพิมพ์):
+#    go2rtc_win64.exe -config go2rtc.yaml
+#
+# 4. ทดสอบใน browser ของ Windows:
+#    http://localhost:1984  → ถ้าเห็น go2rtc web UI = สำเร็จ
+#    http://localhost:1984/api/stream.mjpeg?src=cam_plate  → ต้องเห็นภาพกล้อง
+#
+# 5. เปิด Windows Firewall port 1984 (รันใน cmd แบบ Admin):
+#    netsh advfirewall firewall add rule name="go2rtc" dir=in action=allow protocol=TCP localport=1984
+#
+# 6. ในหน้า Monitor ของแอป → ตั้งค่ากล้อง → ใส่:
+#    http://<TAILSCALE_IP_ของ_Windows>:1984/api/stream.mjpeg?src=cam_plate
+#
+# ── Hikvision port 8000 vs 554 ────────────────────────────────────────────────
+# port 8000 = Hikvision SDK/iVMS (ไม่ใช่ video stream)
+# port 554  = RTSP video stream → ใช้ port นี้สำหรับ go2rtc
+#
+# ── รัน go2rtc เป็น Windows Service (auto-start) ──────────────────────────────
+# ใช้ NSSM: https://nssm.cc/download
+#   nssm install go2rtc "C:\go2rtc\go2rtc_win64.exe"
+#   nssm set go2rtc AppParameters "-config C:\go2rtc\go2rtc.yaml"
+#   nssm start go2rtc
+# ─────────────────────────────────────────────────────────────────────────────
