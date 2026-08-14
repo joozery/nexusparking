@@ -15,7 +15,7 @@ const BAUD_RATE    = 9600
 const CMD_CHECKIN  = Buffer.from('1\n')   // ขาเข้า
 const CMD_CHECKOUT = Buffer.from('2\n')   // ขาออก
 const CMD_ALL      = Buffer.from('0\n')   // เปิดทั้งหมด
-const HTTP_PORT    = 8080
+const HTTP_PORT    = 8181  // ต้องตรงกับ BARRIER_PORT ใน electron/main.js
 // ────────────────────────────────────────────────────────────────────────────
 
 let port = null
@@ -99,8 +99,18 @@ const server = http.createServer(async (req, res) => {
 
 connectSerial()
 
+server.on('error', (e) => {
+  if (e.code === 'EADDRINUSE') {
+    console.error(`[HTTP] Port ${HTTP_PORT} ถูกใช้งานอยู่แล้ว — มี process อื่นรันอยู่`)
+    console.error(`[HTTP] ให้ปิด process นั้นก่อน: netstat -ano | findstr :${HTTP_PORT}`)
+    process.exit(1)
+  } else {
+    console.error('[HTTP] Server error:', e.message)
+  }
+})
+
 server.listen(HTTP_PORT, '0.0.0.0', () => {
   console.log(`[HTTP] Listening on port ${HTTP_PORT}`)
-  console.log(`[HTTP] URL: http://100.121.70.116:${HTTP_PORT}/barrier?cmd=open`)
+  console.log(`[HTTP] URL: http://localhost:${HTTP_PORT}/barrier?cmd=open`)
   console.log('กด Ctrl+C เพื่อหยุด')
 })

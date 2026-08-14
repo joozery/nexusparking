@@ -9,28 +9,40 @@ try { SerialPort = require('serialport').SerialPort } catch (e) {
 const path = require('path')
 const url = require('url')
 
+// ── กันแอป crash จาก uncaught error ──────────────────────────────
+process.on('uncaughtException', (err) => {
+  console.error('[FATAL] Uncaught Exception:', err.message)
+  // ไม่ exit — ให้แอปยังทำงานต่อได้
+})
+process.on('unhandledRejection', (reason) => {
+  console.error('[FATAL] Unhandled Rejection:', reason)
+})
+
 const isDev = !app.isPackaged
 const appRoot = isDev
   ? path.join(__dirname, '..')
   : path.join(process.resourcesPath, 'app')
 
-const APP_PORT    = 3000
-const BARRIER_PORT = 8181
-const APP_URL     = `http://localhost:${APP_PORT}`
-const SERIAL_PORT = 'COM3'
-const BAUD_RATE   = 9600
+const APP_PORT     = 3000
+const BARRIER_PORT = 8181  // เปลี่ยนจาก 8080 → 8181 หลีกเลี่ยงชน service อื่น
+const APP_URL      = `http://localhost:${APP_PORT}`
+const SERIAL_PORT  = 'COM3'
+const BAUD_RATE    = 9600
 
 let tray = null
 let serialPort = null
 
 // ── Barrier HTTP + Serial ─────────────────────────────────────────
 function startBarrierServer() {
-  try {
-    serialPort = new SerialPort({ path: SERIAL_PORT, baudRate: BAUD_RATE })
-    serialPort.on('open', () => console.log(`[Barrier] Serial connected: ${SERIAL_PORT}`))
-    serialPort.on('error', e => console.error('[Barrier] Serial error:', e.message))
-  } catch (e) {
-    console.error('[Barrier] Cannot open serial port:', e.message)
+  // เปิด Serial Port (ไม่ crash ถ้าเปิดไม่ได้)
+  if (SerialPort) {
+    try {
+      serialPort = new SerialPort({ path: SERIAL_PORT, baudRate: BAUD_RATE })
+      serialPort.on('open',  () => console.log(`[Barrier] Serial connected: ${SERIAL_PORT}`))
+      serialPort.on('error', e  => console.error('[Barrier] Serial error:', e.message))
+    } catch (e) {
+      console.error('[Barrier] Cannot open serial port:', e.message)
+    }
   }
 
   const CORS = {
@@ -60,15 +72,18 @@ function startBarrierServer() {
     }
   })
 
+  // จัดการ error โดยไม่ให้ crash แอป
   server.on('error', (e) => {
     if (e.code === 'EADDRINUSE') {
-      console.error(`[Barrier] Port ${BARRIER_PORT} already in use — is barrier_server.js still running?`)
+      console.warn(`[Barrier] Port ${BARRIER_PORT} already in use — barrier อาจรันอยู่แล้ว, ข้ามการเริ่มต้น`)
     } else {
       console.error('[Barrier] Server error:', e.message)
     }
   })
 
-  server.listen(BARRIER_PORT, () => console.log(`[Barrier] HTTP :${BARRIER_PORT}`))
+  server.listen(BARRIER_PORT, '127.0.0.1', () => {
+    console.log(`[Barrier] HTTP listening on :${BARRIER_PORT}`)
+  })
 }
 
 // ── Next.js Server ────────────────────────────────────────────────
