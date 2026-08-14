@@ -1,10 +1,12 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, Fragment } from 'react'
 import {
   FlaskConical, Car, Bike, Moon, Plus, Trash2,
   Play, RefreshCw, CheckCircle2, AlertTriangle, X, Info,
+  Upload, Download, FileSpreadsheet, ChevronDown, ChevronRight,
 } from 'lucide-react'
+import * as XLSX from 'xlsx'
 import { calcFeeBreakdown, type CardType, type FeeSegment, type OvernightConfig } from '@/lib/calcFee'
 import { useToast } from '@/components/ui/Toast'
 
@@ -493,6 +495,357 @@ function BatchSeed({ overnightCfg }: { overnightCfg: OvernightConfig | null }) {
   )
 }
 
+// ── Excel Tester ──────────────────────────────────────────────────────────────
+
+interface TestRow {
+  id:            string
+  rowNum:        number
+  plate:         string
+  cardType:      CardType
+  entryTime:     string        // ISO
+  exitTime:      string        // ISO
+  expectedFee:   number | null
+  calculatedFee: number
+  segments:      FeeSegment[]
+  pass:          boolean | null // null = no expectedFee
+  error:         string | null
+}
+
+function parseExcelDate(val: unknown): Date | null {
+  if (!val) return null
+  if (val instanceof Date) return isNaN(val.getTime()) ? null : val
+  if (typeof val === 'number') {
+    try {
+      const p = XLSX.SSF.parse_date_code(val)
+      return new Date(p.y, p.m - 1, p.d, p.H, p.M, p.S)
+    } catch { return null }
+  }
+  if (typeof val === 'string') {
+    const s = val.trim()
+    // ISO string
+    const d0 = new Date(s)
+    if (!isNaN(d0.getTime())) return d0
+    // DD/MM/YYYY HH:mm[:ss]
+    const m1 = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?$/)
+    if (m1) {
+      let y = parseInt(m1[3]); if (y < 100) y += 2000; if (y > 2500) y -= 543
+      return new Date(y, parseInt(m1[2]) - 1, parseInt(m1[1]), parseInt(m1[4]), parseInt(m1[5]), parseInt(m1[6] ?? '0'))
+    }
+    // YYYY-MM-DD HH:mm (space-separated, not ISO)
+    const m2 = s.match(/^(\d{4})[\/\-](\d{2})[\/\-](\d{2})\s+(\d{2}):(\d{2})(?::(\d{2}))?$/)
+    if (m2) {
+      return new Date(parseInt(m2[1]), parseInt(m2[2]) - 1, parseInt(m2[3]), parseInt(m2[4]), parseInt(m2[5]), parseInt(m2[6] ?? '0'))
+    }
+  }
+  return null
+}
+
+function normalizeCardType(val: unknown): CardType | null {
+  const s = String(val ?? '').toLowerCase().trim()
+  if (['car', 'รถยนต์', 'ยนต์', 'c'].includes(s)) return 'car'
+  if (['motorcycle', 'มอเตอร์ไซค์', 'moto', 'bike', 'm', 'motor'].includes(s)) return 'motorcycle'
+  if (['overnight', 'ค้างคืน', 'o', 'night'].includes(s)) return 'overnight'
+  return null
+}
+
+function downloadTemplate() {
+  const wb = XLSX.utils.book_new()
+  const rows = [
+    ['ทะเบียน', 'ประเภท (car/motorcycle/overnight)', 'เวลาเข้า', 'เวลาออก', 'ค่าที่คาดหวัง (ไม่บังคับ)'],
+    ['1234', 'car',        '2024-08-14 09:00', '2024-08-14 11:30', 50],
+    ['5678', 'motorcycle', '2024-08-14 08:00', '2024-08-14 09:00', 20],
+    ['9999', 'car',        '2024-08-14 20:00', '2024-08-15 07:30', 120],
+    ['ABCD', 'overnight',  '2024-08-14 18:00', '2024-08-15 08:00', 120],
+  ]
+  const ws = XLSX.utils.aoa_to_sheet(rows)
+  ws['!cols'] = [{ wch: 14 }, { wch: 30 }, { wch: 22 }, { wch: 22 }, { wch: 28 }]
+  XLSX.utils.book_append_sheet(wb, ws, 'fee_test')
+  XLSX.writeFile(wb, 'fee_test_template.xlsx')
+}
+
+function ExcelTester({ overnightCfg }: { overnightCfg: OvernightConfig | null }) {
+  const [rows,       setRows]       = useState<TestRow[]>([])
+  const [fileName,   setFileName]   = useState('')
+  const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [dragging,   setDragging]   = useState(false)
+
+  function processFile(file: File) {
+    setFileName(file.name)
+    const reader = new FileReader()
+    reader.onload = e => {
+      try {
+        const data = new Uint8Array(e.target!.result as ArrayBuffer)
+        const wb   = XLSX.read(data, { type: 'array', cellDates: true })
+        const ws   = wb.Sheets[wb.SheetNames[0]]
+        const raw  = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: null }) as unknown[][]
+        const dataRows = raw.slice(1).filter(r => r && (r as unknown[]).some(c => c !== null && c !== ''))
+
+        const parsed: TestRow[] = dataRows.map((r, i) => {
+          const rowNum    = i + 2
+          const plate     = String(r[0] ?? '').trim().toUpperCase()
+          const cardType  = normalizeCardType(r[1])
+          const entryDate = parseExcelDate(r[2])
+          const exitDate  = parseExcelDate(r[3])
+          const expectedFee = (r[4] != null && r[4] !== '') ? Number(r[4]) : null
+
+          const base = { id: crypto.randomUUID(), rowNum, plate, cardType: (cardType ?? 'car') as CardType, expectedFee, calculatedFee: 0, segments: [] as FeeSegment[], pass: null as boolean | null }
+
+          if (!plate)     return { ...base, entryTime: '', exitTime: '', error: 'ไม่มีทะเบียน' }
+          if (!cardType)  return { ...base, entryTime: '', exitTime: '', error: `ประเภทไม่ถูกต้อง: "${r[1]}"` }
+          if (!entryDate) return { ...base, entryTime: '', exitTime: '', error: 'เวลาเข้าไม่ถูกต้อง' }
+          if (!exitDate)  return { ...base, entryTime: entryDate.toISOString(), exitTime: '', error: 'เวลาออกไม่ถูกต้อง' }
+          if (exitDate <= entryDate) return { ...base, entryTime: entryDate.toISOString(), exitTime: exitDate.toISOString(), error: 'เวลาออกต้องมากกว่าเวลาเข้า' }
+
+          try {
+            const { total, segments } = calcFeeBreakdown(cardType, entryDate, exitDate, overnightCfg ?? undefined)
+            return {
+              ...base, cardType,
+              entryTime: entryDate.toISOString(), exitTime: exitDate.toISOString(),
+              calculatedFee: total, segments,
+              pass: expectedFee !== null ? total === expectedFee : null,
+              error: null,
+            }
+          } catch (err) {
+            return { ...base, entryTime: entryDate.toISOString(), exitTime: exitDate.toISOString(), error: String(err) }
+          }
+        })
+
+        setRows(parsed)
+        setExpandedId(null)
+      } catch (err) {
+        alert(`อ่านไฟล์ไม่ได้: ${err}`)
+      }
+    }
+    reader.readAsArrayBuffer(file)
+  }
+
+  function onFileInput(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0]; if (f) processFile(f); e.target.value = ''
+  }
+  function onDrop(e: React.DragEvent) {
+    e.preventDefault(); setDragging(false); const f = e.dataTransfer.files[0]; if (f) processFile(f)
+  }
+
+  const passCount  = rows.filter(r => r.pass === true).length
+  const failCount  = rows.filter(r => r.pass === false).length
+  const errorCount = rows.filter(r => r.error !== null).length
+  const hasExpected = rows.some(r => r.expectedFee !== null)
+
+  return (
+    <div className="bg-white rounded-xl overflow-hidden" style={{ border: '1px solid #E8ECF4' }}>
+
+      {/* header */}
+      <div className="px-5 py-4 flex items-center justify-between"
+        style={{ borderBottom: '1px solid #E8ECF4', background: '#FAFBFF' }}>
+        <div className="flex items-center gap-3">
+          <div className="size-8 rounded-lg flex items-center justify-center"
+            style={{ background: 'rgba(217,119,6,0.08)' }}>
+            <FileSpreadsheet className="size-4" style={{ color: '#B45309' }} />
+          </div>
+          <div>
+            <p className="text-sm font-black text-slate-900">ทดสอบจาก Excel</p>
+            <p className="text-[10px] text-slate-400">import .xlsx แล้วเช็คผลคำนวณ vs ค่าที่คาดหวัง — คลิกแถวเพื่อดู breakdown</p>
+          </div>
+        </div>
+        <button onClick={downloadTemplate}
+          className="flex items-center gap-1.5 h-8 px-3 rounded-lg text-xs font-bold transition-colors hover:opacity-80"
+          style={{ background: 'rgba(217,119,6,0.06)', color: '#B45309', border: '1px solid rgba(217,119,6,0.2)' }}>
+          <Download className="size-3.5" />ดาวน์โหลด Template
+        </button>
+      </div>
+
+      {/* drop zone */}
+      <div className="p-5" style={{ borderBottom: rows.length ? '1px solid #E8ECF4' : 'none' }}>
+        <label
+          onDragOver={e => { e.preventDefault(); setDragging(true) }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={onDrop}
+          className="flex flex-col items-center justify-center gap-3 rounded-xl cursor-pointer py-8 transition-all"
+          style={{
+            border: `2px dashed ${dragging ? '#B45309' : '#D1D9F0'}`,
+            background: dragging ? 'rgba(217,119,6,0.04)' : '#FAFBFF',
+          }}>
+          <div className="size-10 rounded-xl flex items-center justify-center"
+            style={{ background: 'rgba(217,119,6,0.08)' }}>
+            <Upload className="size-5" style={{ color: '#B45309' }} />
+          </div>
+          <div className="text-center">
+            <p className="text-xs font-bold text-slate-700">
+              {fileName ? `✓ ${fileName}` : 'วาง .xlsx ที่นี่ หรือคลิกเพื่อเลือกไฟล์'}
+            </p>
+            <p className="text-[10px] text-slate-400 mt-1">รองรับ .xlsx, .xls, .csv — แถวแรกเป็น header ข้ามอัตโนมัติ</p>
+          </div>
+          <input type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={onFileInput} />
+        </label>
+      </div>
+
+      {/* summary bar */}
+      {rows.length > 0 && (
+        <div className="px-5 py-3 flex items-center gap-4 flex-wrap"
+          style={{ borderBottom: '1px solid #E8ECF4', background: '#F8FAFF' }}>
+          <span className="text-xs font-black text-slate-700">{rows.length} แถว</span>
+          {hasExpected && <>
+            <span className="flex items-center gap-1.5 text-xs font-bold" style={{ color: '#059669' }}>
+              <CheckCircle2 className="size-3.5" />PASS {passCount}
+            </span>
+            <span className="flex items-center gap-1.5 text-xs font-bold" style={{ color: '#DC2626' }}>
+              <AlertTriangle className="size-3.5" />FAIL {failCount}
+            </span>
+          </>}
+          {errorCount > 0 && (
+            <span className="text-xs font-bold text-amber-600">⚠ ข้อผิดพลาด {errorCount} แถว</span>
+          )}
+          {hasExpected && failCount === 0 && errorCount === 0 && (
+            <span className="ml-auto text-xs font-black" style={{ color: '#059669' }}>ทุกแถว PASS ✓</span>
+          )}
+        </div>
+      )}
+
+      {/* results table */}
+      {rows.length > 0 && (
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr style={{ background: '#F8FAFF', borderBottom: '1px solid #E8ECF4' }}>
+                {(['แถว', 'ทะเบียน', 'ประเภท', 'เข้า', 'ออก', 'ระยะ', 'คำนวณ',
+                  ...(hasExpected ? ['คาดหวัง', 'ผล'] : []), '']).map(h => (
+                  <th key={h} className="px-3 py-2 text-left font-black text-slate-500 text-[10px] uppercase whitespace-nowrap">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(r => {
+                const meta = TYPE_META[r.cardType]; const Icon = meta.icon
+                const durMin = r.entryTime && r.exitTime
+                  ? (new Date(r.exitTime).getTime() - new Date(r.entryTime).getTime()) / 60000 : 0
+                const isExp = expandedId === r.id
+
+                return (
+                  <Fragment key={r.id}>
+                    <tr
+                      onClick={() => !r.error && setExpandedId(isExp ? null : r.id)}
+                      style={{
+                        borderBottom: (isExp || r.error) ? 'none' : '1px solid #F1F5F9',
+                        background: r.error ? 'rgba(220,38,38,0.02)' : isExp ? '#FAFBFF' : 'transparent',
+                        cursor: r.error ? 'default' : 'pointer',
+                      }}
+                      onMouseEnter={e => { if (!r.error && !isExp) e.currentTarget.style.background = '#FAFBFF' }}
+                      onMouseLeave={e => { if (!isExp) e.currentTarget.style.background = r.error ? 'rgba(220,38,38,0.02)' : 'transparent' }}>
+                      <td className="px-3 py-2.5 text-slate-400 text-[10px]">#{r.rowNum}</td>
+                      <td className="px-3 py-2.5 font-black text-slate-800 tracking-widest">{r.plate || '—'}</td>
+                      <td className="px-3 py-2.5">
+                        {r.error
+                          ? <span className="text-[10px] text-slate-400">—</span>
+                          : <span className="flex items-center gap-1 text-[10px] font-bold" style={{ color: meta.color }}>
+                              <Icon className="size-3" />{meta.label}
+                            </span>}
+                      </td>
+                      <td className="px-3 py-2.5 text-[10px] text-slate-500 font-mono">{r.entryTime ? fmtDatetime(r.entryTime) : '—'}</td>
+                      <td className="px-3 py-2.5 text-[10px] text-slate-500 font-mono">{r.exitTime ? fmtDatetime(r.exitTime) : '—'}</td>
+                      <td className="px-3 py-2.5 text-[10px] text-slate-500">{durMin > 0 ? fmtDuration(durMin) : '—'}</td>
+                      <td className="px-3 py-2.5">
+                        {r.error
+                          ? <span className="text-[10px] text-slate-400">—</span>
+                          : <span className="font-black text-slate-800">฿{r.calculatedFee}</span>}
+                      </td>
+                      {hasExpected && (
+                        <td className="px-3 py-2.5 text-[10px] text-slate-400">
+                          {r.expectedFee != null ? `฿${r.expectedFee}` : '—'}
+                        </td>
+                      )}
+                      {hasExpected && (
+                        <td className="px-3 py-2.5">
+                          {r.error ? (
+                            <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full"
+                              style={{ background: 'rgba(217,119,6,0.1)', color: '#B45309' }}>ERROR</span>
+                          ) : r.pass === true ? (
+                            <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full"
+                              style={{ background: 'rgba(5,150,105,0.1)', color: '#059669' }}>PASS</span>
+                          ) : r.pass === false ? (
+                            <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full"
+                              style={{ background: 'rgba(220,38,38,0.1)', color: '#DC2626' }}>FAIL</span>
+                          ) : (
+                            <span className="text-[9px] text-slate-300">—</span>
+                          )}
+                        </td>
+                      )}
+                      <td className="px-3 py-2.5 text-slate-300">
+                        {!r.error && (isExp
+                          ? <ChevronDown className="size-3.5 text-slate-400" />
+                          : <ChevronRight className="size-3.5" />)}
+                      </td>
+                    </tr>
+
+                    {/* error detail */}
+                    {r.error && (
+                      <tr style={{ borderBottom: '1px solid #F1F5F9', background: 'rgba(220,38,38,0.02)' }}>
+                        <td colSpan={99} className="px-4 pb-2.5 pt-0">
+                          <span className="text-[10px] text-amber-600">⚠ {r.error}</span>
+                        </td>
+                      </tr>
+                    )}
+
+                    {/* expanded breakdown */}
+                    {isExp && !r.error && (
+                      <tr style={{ borderBottom: '1px solid #F1F5F9' }}>
+                        <td colSpan={99} className="px-4 pb-3 pt-1">
+                          <div className="rounded-xl overflow-hidden" style={{ border: '1px solid #E8ECF4' }}>
+                            <table className="w-full text-xs">
+                              <thead>
+                                <tr style={{ background: '#F8FAFF', borderBottom: '1px solid #E8ECF4' }}>
+                                  {['ช่วงเวลา', 'ระยะเวลา', 'อัตรา', 'ค่าบริการ'].map(h => (
+                                    <th key={h} className="px-3 py-1.5 text-left font-black text-slate-400 text-[9px] uppercase">{h}</th>
+                                  ))}
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {r.segments.map((seg, si) => {
+                                  const s = KIND_STYLE[seg.kind]
+                                  return (
+                                    <tr key={si} style={{ background: s.bg, borderBottom: '1px solid #E8ECF4' }}>
+                                      <td className="px-3 py-2">
+                                        <span className="text-[8px] font-black px-1.5 py-0.5 rounded-full mr-1"
+                                          style={{ background: s.border, color: s.color }}>{s.label}</span>
+                                        <span className="text-[9px] text-slate-500">
+                                          {fmtDatetime(seg.from.toISOString())} → {fmtDatetime(seg.to.toISOString())}
+                                        </span>
+                                      </td>
+                                      <td className="px-3 py-2 text-[9px] text-slate-500">{fmtDuration(seg.minutes)}</td>
+                                      <td className="px-3 py-2 text-[9px]" style={{ color: s.color }}>{seg.rateLabel}</td>
+                                      <td className="px-3 py-2 text-right font-black text-[10px]" style={{ color: s.color }}>฿{seg.fee}</td>
+                                    </tr>
+                                  )
+                                })}
+                              </tbody>
+                              <tfoot>
+                                <tr style={{ background: '#F0F2F8', borderTop: '2px solid #E8ECF4' }}>
+                                  <td colSpan={3} className="px-3 py-2 font-black text-slate-600 text-[10px]">รวม</td>
+                                  <td className="px-3 py-2 text-right font-black text-sm" style={{ color: '#1D4ED8' }}>
+                                    ฿{r.calculatedFee}
+                                    {r.pass === false && r.expectedFee != null && (
+                                      <span className="ml-2 text-[9px] font-bold" style={{ color: '#DC2626' }}>
+                                        (คาดหวัง ฿{r.expectedFee} ต่างกัน ฿{Math.abs(r.calculatedFee - r.expectedFee)})
+                                      </span>
+                                    )}
+                                  </td>
+                                </tr>
+                              </tfoot>
+                            </table>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function SimulatorPage() {
@@ -527,6 +880,7 @@ export default function SimulatorPage() {
 
       <div className="flex-1 overflow-auto p-5 space-y-5">
         <FeeCalculator overnightCfg={overnightCfg} />
+        <ExcelTester overnightCfg={overnightCfg} />
         <BatchSeed overnightCfg={overnightCfg} />
       </div>
     </>
