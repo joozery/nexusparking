@@ -15,7 +15,7 @@ const appRoot = isDev
   : path.join(process.resourcesPath, 'app')
 
 const APP_PORT    = 3000
-const BARRIER_PORT = 8080
+const BARRIER_PORT = 8181
 const APP_URL     = `http://localhost:${APP_PORT}`
 const SERIAL_PORT = 'COM3'
 const BAUD_RATE   = 9600
