@@ -39,7 +39,7 @@ function startBarrierServer() {
     'Access-Control-Allow-Headers': 'Content-Type',
   }
 
-  createServer((req, res) => {
+  const server = createServer((req, res) => {
     const parsed = url.parse(req.url, true)
     Object.entries(CORS).forEach(([k, v]) => res.setHeader(k, v))
 
@@ -58,7 +58,17 @@ function startBarrierServer() {
       res.writeHead(503, { 'Content-Type': 'application/json' })
       res.end(JSON.stringify({ ok: false, error: 'Serial port not connected' }))
     }
-  }).listen(BARRIER_PORT, () => console.log(`[Barrier] HTTP :${BARRIER_PORT}`))
+  })
+
+  server.on('error', (e) => {
+    if (e.code === 'EADDRINUSE') {
+      console.error(`[Barrier] Port ${BARRIER_PORT} already in use — is barrier_server.js still running?`)
+    } else {
+      console.error('[Barrier] Server error:', e.message)
+    }
+  })
+
+  server.listen(BARRIER_PORT, () => console.log(`[Barrier] HTTP :${BARRIER_PORT}`))
 }
 
 // ── Next.js Server ────────────────────────────────────────────────
