@@ -43,8 +43,6 @@ nsis:
   runAfterFinish: true
   installerIcon: electron/icon.ico
   uninstallerIcon: electron/icon.ico
-  installerHeader: electron/installer-header.bmp
-  license: null
 
 # macOS (for dev testing)
 mac:
