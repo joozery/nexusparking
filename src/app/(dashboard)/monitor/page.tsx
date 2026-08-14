@@ -8,21 +8,22 @@ import {
 const STORAGE_KEY = 'np_cctv_urls'
 
 interface CameraSlot {
-  id:       'plate' | 'face' | 'rear'
+  id:       'plate' | 'face' | 'rear' | 'exit'
   label:    string
   subLabel: string
   camNum:   string
-  accent:   string   // tailwind-safe hex for dot/badge
+  accent:   string
 }
 
 const CAMERAS: CameraSlot[] = [
   { id: 'plate', label: 'กล้องป้ายทะเบียน', subLabel: 'License Plate', camNum: 'CAM-01', accent: '#1D4ED8' },
   { id: 'face',  label: 'กล้องหน้าคนขับ',  subLabel: 'Driver Face',   camNum: 'CAM-02', accent: '#059669' },
   { id: 'rear',  label: 'กล้อง Rear',       subLabel: 'Rear View',     camNum: 'CAM-03', accent: '#7C3AED' },
+  { id: 'exit',  label: 'กล้องขาออก',       subLabel: 'Exit View',     camNum: 'CAM-04', accent: '#EA580C' },
 ]
 
 type Status    = 'idle' | 'loading' | 'online' | 'offline'
-type CameraUrls = Record<'plate' | 'face' | 'rear', string>
+type CameraUrls = Record<'plate' | 'face' | 'rear' | 'exit', string>
 
 function LiveClock() {
   const [ts, setTs] = useState('')
@@ -51,19 +52,19 @@ function CameraCard({ slot, url, onExpand }: { slot: CameraSlot; url: string; on
   const [ticker, setTicker] = useState(Date.now())
   const timer = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  const isRtsp   = url.startsWith('rtsp://')
-  const isMjpeg  = url.includes('stream.mjpeg') || url.includes('.mjpg') || url.includes('mjpeg')
+  const safeUrl  = url ?? ''
+  const isRtsp   = safeUrl.startsWith('rtsp://')
+  const isMjpeg  = safeUrl.includes('stream.mjpeg') || safeUrl.includes('.mjpg') || safeUrl.includes('mjpeg')
 
   useEffect(() => {
     if (timer.current) clearInterval(timer.current)
-    if (!url || isRtsp || isMjpeg) { setStatus(url && !isRtsp ? 'loading' : 'idle'); return }
+    if (!safeUrl || isRtsp || isMjpeg) { setStatus(safeUrl && !isRtsp ? 'loading' : 'idle'); return }
     setStatus('loading')
     timer.current = setInterval(() => setTicker(Date.now()), 500)
     return () => { if (timer.current) clearInterval(timer.current) }
-  }, [url, isRtsp, isMjpeg])
+  }, [safeUrl, isRtsp, isMjpeg])
 
-  // MJPEG stream — ไม่ต้องเพิ่ม _t เพราะ browser จัดการ continuous stream เอง
-  const src = isRtsp ? '' : isMjpeg ? url : url ? `${url}${url.includes('?') ? '&' : '?'}_t=${ticker}` : ''
+  const src = isRtsp ? '' : isMjpeg ? safeUrl : safeUrl ? `${safeUrl}${safeUrl.includes('?') ? '&' : '?'}_t=${ticker}` : ''
 
   const statusColor =
     status === 'online'  ? '#059669' :
@@ -93,7 +94,7 @@ function CameraCard({ slot, url, onExpand }: { slot: CameraSlot; url: string; on
               </span>
             </p>
           </div>
-        ) : url ? (
+        ) : safeUrl ? (
           <img src={src} alt={slot.label}
             className="absolute inset-0 w-full h-full object-cover"
             onLoad={() => setStatus('online')}
@@ -224,17 +225,22 @@ function FullscreenView({ slot, url, onClose }: { slot: CameraSlot; url: string;
 /* ── page ── */
 export default function MonitorPage() {
   const containerRef = useRef<HTMLDivElement>(null)
-  const [urls, setUrls]             = useState<CameraUrls>({ plate: '', face: '', rear: '' })
+  const [urls, setUrls]             = useState<CameraUrls>({ plate: '', face: '', rear: '', exit: '' })
   const [showSettings, setShowSettings] = useState(false)
-  const [draft, setDraft]           = useState<CameraUrls>({ plate: '', face: '', rear: '' })
-  const [showUrl, setShowUrl]       = useState<Record<string, boolean>>({ plate: false, face: false, rear: false })
+  const [draft, setDraft]           = useState<CameraUrls>({ plate: '', face: '', rear: '', exit: '' })
+  const [showUrl, setShowUrl]       = useState<Record<string, boolean>>({ plate: false, face: false, rear: false, exit: false })
   const [expanded, setExpanded]     = useState<CameraSlot | null>(null)
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY)
-      if (raw) { const p = JSON.parse(raw) as CameraUrls; setUrls(p); setDraft(p) }
-    } catch {}
+    fetch('/api/cctv')
+      .then(r => r.json())
+      .then((p: CameraUrls) => { setUrls(p); setDraft(p) })
+      .catch(() => {
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY)
+          if (raw) { const p = JSON.parse(raw) as CameraUrls; setUrls(p); setDraft(p) }
+        } catch {}
+      })
   }, [])
 
 
@@ -251,7 +257,19 @@ export default function MonitorPage() {
   }, [])
 
   function openSettings() { setDraft({ ...urls }); setShowSettings(true) }
-  function saveSettings() { localStorage.setItem(STORAGE_KEY, JSON.stringify(draft)); setUrls({ ...draft }); setShowSettings(false) }
+  async function saveSettings() {
+    setUrls({ ...draft })
+    setShowSettings(false)
+    try {
+      await fetch('/api/cctv', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(draft),
+      })
+    } catch (e) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(draft))
+    }
+  }
 
   const doExpand = useCallback((s: CameraSlot) => setExpanded(s), [])
   const doClose  = useCallback(() => setExpanded(null), [])
@@ -325,25 +343,13 @@ export default function MonitorPage() {
         </div>
       </header>
 
-      {/* ─── Camera grid ─── */}
+      {/* ─── Camera grid 2×2 ─── */}
       <div className="flex-1 p-5 overflow-hidden">
         <div className="h-full grid gap-4"
-          style={{ gridTemplateColumns: '2fr 1fr', gridTemplateRows: '1fr 1fr' }}>
-
-          {/* CAM-01 plate — spans both rows */}
-          <div style={{ gridRow: '1 / 3' }}>
-            <CameraCard slot={CAMERAS[0]} url={urls.plate} onExpand={() => doExpand(CAMERAS[0])} />
-          </div>
-
-          {/* CAM-02 face — top-right */}
-          <div style={{ gridRow: '1 / 2' }}>
-            <CameraCard slot={CAMERAS[1]} url={urls.face} onExpand={() => doExpand(CAMERAS[1])} />
-          </div>
-
-          {/* CAM-03 rear — bottom-right */}
-          <div style={{ gridRow: '2 / 3' }}>
-            <CameraCard slot={CAMERAS[2]} url={urls.rear} onExpand={() => doExpand(CAMERAS[2])} />
-          </div>
+          style={{ gridTemplateColumns: '1fr 1fr', gridTemplateRows: '1fr 1fr' }}>
+          {CAMERAS.map(c => (
+            <CameraCard key={c.id} slot={c} url={urls[c.id]} onExpand={() => doExpand(c)} />
+          ))}
         </div>
       </div>
 
@@ -429,7 +435,7 @@ export default function MonitorPage() {
                   <p>2. ใส่ URL:<code className="font-mono text-blue-600 ml-1">http://100.x.x.x:1984/api/stream.mjpeg?src=cam_plate</code></p>
                   <p className="mt-1 text-slate-400">แทนที่ <code className="font-mono">100.x.x.x</code> ด้วย Tailscale IP ของ Windows</p>
                 </div>
-                <p className="mt-1.5 text-slate-400">URL บันทึกใน localStorage ของ browser นี้เท่านั้น</p>
+                <p className="mt-1.5 text-slate-400">URL บันทึกใน MongoDB — ทุกเครื่องเห็นค่าเดียวกัน</p>
               </div>
             </div>
 

@@ -17,6 +17,7 @@ export interface ISystemSettings extends Document {
   }
   lostCardFine:   number
   afterHoursFine: number
+  cctvUrls: { plate: string; face: string; rear: string; exit: string }
 }
 
 const hwDevice = {
@@ -49,6 +50,12 @@ const SystemSettingsSchema = new Schema<ISystemSettings>({
   },
   lostCardFine:   { type: Number, default: 300 },
   afterHoursFine: { type: Number, default: 300 },
+  cctvUrls: {
+    plate: { type: String, default: '' },
+    face:  { type: String, default: '' },
+    rear:  { type: String, default: '' },
+    exit:  { type: String, default: '' },
+  },
 }, { timestamps: true })
 
 export const SystemSettings = mongoose.models.SystemSettings as mongoose.Model<ISystemSettings>
