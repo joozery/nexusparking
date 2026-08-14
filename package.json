@@ -2,11 +2,16 @@
   "name": "parkingcar",
   "version": "0.1.0",
   "private": true,
+  "main": "electron/main.js",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "electron": "electron .",
+    "dist:win": "npm run build && electron-builder --win",
+    "dist:mac": "npm run build && electron-builder --mac",
+    "postinstall": "electron-rebuild -f -w serialport"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
@@ -37,6 +42,9 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "electron": "^31.0.0",
+    "electron-builder": "^24.0.0",
+    "electron-rebuild": "^3.2.9",
     "eslint": "^9",
     "eslint-config-next": "16.2.12",
     "tailwindcss": "^4",

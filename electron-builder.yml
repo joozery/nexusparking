@@ -1,0 +1,53 @@
+appId: com.parking.nexusparking
+productName: Parking System
+copyright: Copyright © 2025 NexusParking
+
+directories:
+  buildResources: electron
+  output: dist
+
+# Entry point
+extraMetadata:
+  main: electron/main.js
+
+# Files to bundle into the installer
+asar: false
+files:
+  - electron/**/*
+  - src/**/*
+  - public/**/*
+  - .next/**/*
+  - '!.next/dev/**'
+  - '!.next/cache/**'
+  - next.config.*
+  - postcss.config.*
+  - tailwind.config.*
+  - tsconfig.json
+  - package.json
+  - barrier_server.js
+  - .env.local
+  - node_modules/**/*
+  - '!node_modules/.cache/**'
+
+# Windows installer (NSIS)
+win:
+  target: nsis
+  icon: electron/icon.ico
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Parking System
+  runAfterFinish: true
+  installerIcon: electron/icon.ico
+  uninstallerIcon: electron/icon.ico
+  installerHeader: electron/installer-header.bmp
+  license: null
+
+# macOS (for dev testing)
+mac:
+  target: dmg
+  icon: electron/icon.icns
+  category: public.app-category.utilities
