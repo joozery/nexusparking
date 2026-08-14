@@ -58,7 +58,7 @@ function CameraCard({ slot, url, onExpand }: { slot: CameraSlot; url: string; on
     if (timer.current) clearInterval(timer.current)
     if (!url || isRtsp || isMjpeg) { setStatus(url && !isRtsp ? 'loading' : 'idle'); return }
     setStatus('loading')
-    timer.current = setInterval(() => setTicker(Date.now()), 2000)
+    timer.current = setInterval(() => setTicker(Date.now()), 500)
     return () => { if (timer.current) clearInterval(timer.current) }
   }, [url, isRtsp, isMjpeg])
 
