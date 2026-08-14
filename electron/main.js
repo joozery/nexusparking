@@ -1,7 +1,11 @@
 const { app, Tray, Menu, shell, nativeImage, Notification } = require('electron')
 const { createServer } = require('http')
-const { SerialPort } = require('serialport')
 const next = require('next')
+
+let SerialPort
+try { SerialPort = require('serialport').SerialPort } catch (e) {
+  console.error('[Barrier] serialport module not found:', e.message)
+}
 const path = require('path')
 const url = require('url')
 
