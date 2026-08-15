@@ -16,26 +16,8 @@ import { type CardType } from '@/components/parking/types'
 import { calcFeeFromMinutes, type OvernightConfig, type AfterHoursConfig } from '@/lib/calcFee'
 import { useToast } from '@/components/ui/Toast'
 import { triggerBarrierClient } from '@/lib/barrierClient'
+import { convertThaiToEn } from '@/lib/thaiInput'
 
-// ── Thai Kedmanee → ASCII (USB card-reader keyboard-wedge fix) ──────────────
-const THAI_TO_EN: Record<string, string> = {
-  'ๅ': '`', 'ภ': '3', 'ถ': '4', 'ุ': '5', 'ึ': '6',
-  'ค': '7', 'ต': '8', 'จ': '9', 'ข': '0', 'ช': '-',
-  '๑': '1', '๒': '2', '๓': '3', '๔': '4', '๕': '5',
-  '๖': '6', '๗': '7', '๘': '8', '๙': '9', '๐': '0',
-  'ๆ': 'q', 'ไ': 'w', 'ำ': 'e', 'พ': 'r', 'ะ': 't',
-  'ั': 'y', 'ี': 'u', 'ร': 'i', 'น': 'o', 'ย': 'p',
-  'บ': '[', 'ล': ']',
-  'ฟ': 'a', 'ห': 's', 'ก': 'd', 'ด': 'f', 'เ': 'g',
-  '้': 'h', '่': 'j', 'า': 'k', 'ส': 'l', 'ว': ';', 'ง': "'",
-  'ผ': 'z', 'ป': 'x', 'แ': 'c', 'อ': 'v', 'ิ': 'b',
-  'ื': 'n', 'ท': 'm', 'ม': ',', 'ใ': '.', 'ฝ': '/',
-  'ฎ': 'E', 'ฑ': 'R', 'ธ': 'T', 'ณ': 'I', 'ฯ': 'O', 'ญ': 'P',
-  'ฤ': 'A', 'ฆ': 'S', 'ฏ': 'D', 'โ': 'F', 'ฌ': 'G',
-  '็': 'H', '๋': 'J', 'ษ': 'K', 'ศ': 'L', 'ซ': ':',
-  'ฉ': 'C', 'ฮ': 'V', 'ฺ': 'B', 'ฒ': 'M',
-}
-function convertThaiToEn(s: string) { return s.split('').map(c => THAI_TO_EN[c] ?? c).join('') }
 function sanitizeUid(s: string) { return s.replace(/[\x00-\x1F\x7F]/g, '').trim() }
 
 interface Session {
@@ -450,6 +432,8 @@ export default function OperatorPage() {
   // Updated every render via ref so the keydown useEffect (deps=[]) is never stale
   useEffect(() => {
     onCardScanRef.current = async (uid: string) => {
+      // Ignore scan when any dialog is already open — prevents resetting in-progress forms
+      if (checkInOpen || checkOutOpen || lostOpen || queueOpen || shiftEnding || regOpen) return
       const activeSession = sessions.find(s => s.status === 'active' && s.cardUid === uid)
       if (activeSession) {
         // Card already inside → checkout

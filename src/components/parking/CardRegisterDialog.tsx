@@ -10,6 +10,7 @@ import {
   DialogDescription, DialogBody, DialogFooter,
 } from '@/components/ui/dialog'
 import { type CardType } from './types'
+import { toAsciiPlate } from '@/lib/thaiInput'
 
 interface Props {
   open: boolean
@@ -126,7 +127,7 @@ export function CardRegisterDialog({ open, onOpenChange, uid, monthlyDeposit = 5
               placeholder="เช่น 1234"
               maxLength={4}
               value={plate}
-              onChange={e => setPlate(e.target.value.replace(/[^0-9๐-๙]/g, '').replace(/[๐-๙]/g, c => String(c.codePointAt(0)! - 0x0E50)))}
+              onChange={e => setPlate(toAsciiPlate(e.target.value))}
               className="h-9 text-xl font-mono text-center tracking-[0.4em]"
             />
           </div>

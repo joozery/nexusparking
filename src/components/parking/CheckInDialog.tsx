@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/dialog'
 import { CardBadge } from './CardBadge'
 import { type CardType, cardMeta } from './types'
+import { toAsciiPlate } from '@/lib/thaiInput'
 
 const icons = { car: Car, motorcycle: Bike, overnight: Moon }
 
@@ -27,11 +28,6 @@ interface Props {
   onCustomEntryTimeChange?: (v: string) => void
   onBack: () => void
   onConfirm: () => void
-}
-
-// Convert Thai digits ๐-๙ (U+0E50–U+0E59) → ASCII 0-9
-function toAsciiDigits(s: string) {
-  return s.replace(/[๐-๙]/g, c => String(c.codePointAt(0)! - 0x0E50))
 }
 
 export function CheckInDialog({
@@ -120,7 +116,7 @@ export function CheckInDialog({
                   placeholder="เช่น 1234"
                   maxLength={4}
                   value={plate}
-                  onChange={(e) => onPlateChange(toAsciiDigits(e.target.value).replace(/\D/g, ''))}
+                  onChange={(e) => onPlateChange(toAsciiPlate(e.target.value))}
                   onKeyDown={(e) => { if (e.key === 'Enter' && plate.length === 4) onConfirm() }}
                   className="text-xl font-mono text-center tracking-[0.4em] h-10"
                 />
