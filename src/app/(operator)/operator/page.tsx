@@ -498,11 +498,7 @@ export default function OperatorPage() {
       // ป้องกันการทำงานซ้อนถ้ามี modal เปิดอยู่แล้ว
       if (checkInOpen || checkOutOpen || lostOpen || queueOpen || shiftEnding || regOpen) return
 
-      if (e.key === 'F12' || e.code === 'F12') {
-        e.preventDefault()
-        resetCO()
-        setCheckOutOpen(true)
-      }
+      // เผื่อมีปุ่มลัดอื่นๆ ในอนาคต
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
@@ -525,12 +521,6 @@ export default function OperatorPage() {
           }, 300)
         }}
         onKeyDown={e => {
-          if (e.key === 'F12' || e.code === 'F12') {
-            e.preventDefault()
-            resetCO()
-            setCheckOutOpen(true)
-            return
-          }
           if (e.key === 'Enter') {
             if (scanTimerRef.current) clearTimeout(scanTimerRef.current)
             const uid = sanitizeUid(convertThaiToEn(scanBuf))
@@ -656,16 +646,13 @@ export default function OperatorPage() {
 
           <button
             onClick={() => { resetCO(); setCheckOutOpen(true) }}
-            className="flex items-center justify-center gap-2 rounded-xl transition-all active:scale-[0.97] hover:brightness-110 relative"
+            className="flex items-center justify-center gap-2 rounded-xl transition-all active:scale-[0.97] hover:brightness-110"
             style={{ background: 'linear-gradient(135deg,#064E3B,#059669)', boxShadow: '0 4px 16px rgba(5,150,105,0.38)' }}
           >
             <div className="size-6 rounded-md flex items-center justify-center shrink-0" style={{ background: 'rgba(255,255,255,0.18)' }}>
               <LogOut className="size-3.5 text-white" strokeWidth={2} />
             </div>
-            <div className="flex items-center gap-2">
-              <p className="text-xs font-black text-white leading-none tracking-wide">CHECK OUT</p>
-              <kbd className="text-[9px] bg-white/20 text-white px-1.5 py-0.5 rounded font-mono shadow-sm">F12</kbd>
-            </div>
+            <p className="text-xs font-black text-white leading-none tracking-wide">CHECK OUT</p>
           </button>
 
           <button
