@@ -175,8 +175,8 @@ export function CctvStrip() {
   const toggleExit = useCallback(() => setIsExit(v => !v), [])
   useEffect(() => {
     const fn = (e: KeyboardEvent) => {
-      // รองรับทั้ง Alt + C (หรือ Option + C บน Mac) และ F2
-      if ((e.altKey && e.key.toLowerCase() === 'c') || e.key === 'F2') {
+      // ใช้ e.code เพื่อแก้ปัญหาเปลี่ยนภาษาไทยเป็น 'ช' หรือบน Mac Option+C ได้ตัว 'ç'
+      if ((e.altKey && e.code === 'KeyC') || e.code === 'F2' || e.code === 'F9') {
         e.preventDefault()
         toggleExit()
       }
