@@ -498,7 +498,7 @@ export default function OperatorPage() {
       // ป้องกันการทำงานซ้อนถ้ามี modal เปิดอยู่แล้ว
       if (checkInOpen || checkOutOpen || lostOpen || queueOpen || shiftEnding || regOpen) return
 
-      if (e.code === 'F12') {
+      if (e.key === 'F12' || e.code === 'F12') {
         e.preventDefault()
         resetCO()
         setCheckOutOpen(true)
@@ -525,6 +525,12 @@ export default function OperatorPage() {
           }, 300)
         }}
         onKeyDown={e => {
+          if (e.key === 'F12' || e.code === 'F12') {
+            e.preventDefault()
+            resetCO()
+            setCheckOutOpen(true)
+            return
+          }
           if (e.key === 'Enter') {
             if (scanTimerRef.current) clearTimeout(scanTimerRef.current)
             const uid = sanitizeUid(convertThaiToEn(scanBuf))
