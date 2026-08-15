@@ -159,7 +159,10 @@ export function CctvStrip() {
   const [isExit, setIsExit]     = useState(false)   // false = ขาเข้า, true = ขาออก
   const [expanded, setExpanded] = useState<CamDef | null>(null)
 
+  const [isMac, setIsMac] = useState(false)
+
   useEffect(() => {
+    setIsMac(navigator.userAgent.toUpperCase().indexOf('MAC') >= 0)
     fetch('/api/cctv')
       .then(r => r.json())
       .then((p: CameraUrls) => setUrls(p))
@@ -213,7 +216,9 @@ export function CctvStrip() {
           >
             {isExit ? <><LogIn className="size-3" />ขาเข้า</> : <><LogOut className="size-3" />ขาออก</>}
             <kbd className="text-[9px] bg-white px-1.5 py-0.5 rounded font-mono shadow-sm"
-              style={{ border: '1px solid #E2E8F0', color: '#94A3B8' }}>Alt+C / F12</kbd>
+              style={{ border: '1px solid #E2E8F0', color: '#94A3B8' }}>
+              {isMac ? 'Option+C' : 'F12'}
+            </kbd>
           </button>
         </div>
 
