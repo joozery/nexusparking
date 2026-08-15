@@ -493,6 +493,21 @@ export default function OperatorPage() {
     .filter(s => s.status === 'active')
     .filter(s => !search || s.plate.toLowerCase().includes(search.toLowerCase()))
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // ป้องกันการทำงานซ้อนถ้ามี modal เปิดอยู่แล้ว
+      if (checkInOpen || checkOutOpen || lostOpen || queueOpen || shiftEnding || regOpen) return
+
+      if (e.code === 'F12') {
+        e.preventDefault()
+        resetCO()
+        setCheckOutOpen(true)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [checkInOpen, checkOutOpen, lostOpen, queueOpen, shiftEnding, regOpen])
+
   return (
     <div className="h-screen flex flex-col bg-[#F0F4FF]">
       {/* Hidden input — always focused when no dialog is open, captures card-reader keystrokes */}
@@ -635,13 +650,16 @@ export default function OperatorPage() {
 
           <button
             onClick={() => { resetCO(); setCheckOutOpen(true) }}
-            className="flex items-center justify-center gap-2 rounded-xl transition-all active:scale-[0.97] hover:brightness-110"
+            className="flex items-center justify-center gap-2 rounded-xl transition-all active:scale-[0.97] hover:brightness-110 relative"
             style={{ background: 'linear-gradient(135deg,#064E3B,#059669)', boxShadow: '0 4px 16px rgba(5,150,105,0.38)' }}
           >
             <div className="size-6 rounded-md flex items-center justify-center shrink-0" style={{ background: 'rgba(255,255,255,0.18)' }}>
               <LogOut className="size-3.5 text-white" strokeWidth={2} />
             </div>
-            <p className="text-xs font-black text-white leading-none tracking-wide">CHECK OUT</p>
+            <div className="flex items-center gap-2">
+              <p className="text-xs font-black text-white leading-none tracking-wide">CHECK OUT</p>
+              <kbd className="text-[9px] bg-white/20 text-white px-1.5 py-0.5 rounded font-mono shadow-sm">F12</kbd>
+            </div>
           </button>
 
           <button

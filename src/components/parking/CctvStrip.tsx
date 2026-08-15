@@ -171,18 +171,7 @@ export function CctvStrip() {
       })
   }, [])
 
-  // F12 → toggle entry / exit
   const toggleExit = useCallback(() => setIsExit(v => !v), [])
-  useEffect(() => {
-    const fn = (e: KeyboardEvent) => {
-      if (e.code === 'F12') {
-        e.preventDefault()
-        toggleExit()
-      }
-    }
-    window.addEventListener('keydown', fn)
-    return () => window.removeEventListener('keydown', fn)
-  }, [toggleExit])
 
   const cams = isExit ? EXIT_CAMS : ENTRY_CAMS
 
@@ -210,8 +199,6 @@ export function CctvStrip() {
             onMouseLeave={e => e.currentTarget.style.background = '#F1F5F9'}
           >
             {isExit ? <><LogIn className="size-3" />ขาเข้า</> : <><LogOut className="size-3" />ขาออก</>}
-            <kbd className="text-[9px] bg-white px-1.5 py-0.5 rounded font-mono shadow-sm"
-              style={{ border: '1px solid #E2E8F0', color: '#94A3B8' }}>F12</kbd>
           </button>
         </div>
 
