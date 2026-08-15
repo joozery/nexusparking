@@ -107,7 +107,8 @@ export function calcFeeBreakdown(
   let isOvernight = cardType === 'overnight' || windows.some(w => w.isFlatRate)
 
   // คำนวณราคากรณีปกติ (ไม่คิด windows) เพื่อเปรียบเทียบ
-  const totalMin = (exitTime.getTime() - entryTime.getTime()) / 60000
+  // ปัดเศษวินาทีทิ้งด้วย Math.floor เพื่อให้ 09:02:05 ถึง 13:02:29 นับเป็น 240 นาที (4 ชั่วโมงพอดี)
+  const totalMin = Math.floor((exitTime.getTime() - entryTime.getTime()) / 60000)
   const totalH = ceilHours(totalMin)
   let normalFee: number
   let normalRateLabel: string
@@ -150,8 +151,8 @@ export function calcFeeBreakdown(
   for (const w of windows) {
     // ช่วงนอก window ก่อน
     if (cursor < w.start) {
-      const min = (w.start.getTime() - cursor.getTime()) / 60000
-      const h   = Math.ceil(min / 60)
+      const min = Math.floor((w.start.getTime() - cursor.getTime()) / 60000)
+      const h   = ceilHours(min)
       const isFirst = segments.length === 0
       let fee: number
       let rateLabel: string
@@ -171,7 +172,7 @@ export function calcFeeBreakdown(
       })
     }
 
-    const min = (w.end.getTime() - w.start.getTime()) / 60000
+    const min = Math.floor((w.end.getTime() - w.start.getTime()) / 60000)
 
     if (w.isFlatRate) {
       // รถอยู่เลย flatRateStart → เหมาจ่ายค้างคืน
@@ -183,7 +184,7 @@ export function calcFeeBreakdown(
       })
     } else {
       // รถออกก่อน flatRateStart → คิดชั่วโมง (ยังไม่เกิน ${cfg.flatRateStart ?? '22:00'})
-      const h = Math.ceil(min / 60)
+      const h = ceilHours(min)
       segments.push({
         kind: 'outside', from: new Date(w.start), to: new Date(w.end),
         minutes: min, hours: h,
@@ -197,8 +198,8 @@ export function calcFeeBreakdown(
 
   // ช่วงนอก window หลัง
   if (cursor < exitTime) {
-    const min = (exitTime.getTime() - cursor.getTime()) / 60000
-    const h   = Math.ceil(min / 60)
+    const min = Math.floor((exitTime.getTime() - cursor.getTime()) / 60000)
+    const h   = ceilHours(min)
     segments.push({
       kind: 'outside', from: new Date(cursor), to: new Date(exitTime),
       minutes: min, hours: h,
