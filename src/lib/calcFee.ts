@@ -33,12 +33,7 @@ const DEFAULT_OVERNIGHT: OvernightConfig = {
 }
 
 function ceilHours(minutes: number) {
-  if (minutes <= 0) return 1
-  const h = Math.floor(minutes / 60)
-  const rem = minutes % 60
-  // ให้เวลาผ่อนผัน 30 นาที: ถ้าเศษนาที <= 30 จะไม่ปัดเป็นชั่วโมงใหม่
-  const total = rem <= 30 ? h : h + 1
-  return Math.max(1, total)
+  return Math.max(1, Math.ceil(minutes / 60))
 }
 
 function spansOvernightWindow(entry: Date, exit: Date, cfg: OvernightConfig): boolean {
