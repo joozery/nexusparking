@@ -747,7 +747,7 @@ function ExcelTester({ overnightCfg, discounts }: { overnightCfg: OvernightConfi
     reader.onload = e => {
       try {
         const data = new Uint8Array(e.target!.result as ArrayBuffer)
-        const wb   = XLSX.read(data, { type: 'array', cellDates: true })
+        const wb   = XLSX.read(data, { type: 'array' })
         const ws   = wb.Sheets[wb.SheetNames[0]]
         const raw  = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: null }) as unknown[][]
         const dataRows = raw.slice(1).filter(r => r && (r as unknown[]).some(c => c !== null && c !== ''))
