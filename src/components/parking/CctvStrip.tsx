@@ -171,11 +171,15 @@ export function CctvStrip() {
       })
   }, [])
 
-  // F9 → toggle entry / exit
+  // Alt+C or F2 → toggle entry / exit
   const toggleExit = useCallback(() => setIsExit(v => !v), [])
   useEffect(() => {
     const fn = (e: KeyboardEvent) => {
-      if (e.key === 'F9') { e.preventDefault(); toggleExit() }
+      // รองรับทั้ง Alt + C (หรือ Option + C บน Mac) และ F2
+      if ((e.altKey && e.key.toLowerCase() === 'c') || e.key === 'F2') {
+        e.preventDefault()
+        toggleExit()
+      }
     }
     window.addEventListener('keydown', fn)
     return () => window.removeEventListener('keydown', fn)
@@ -187,7 +191,7 @@ export function CctvStrip() {
     <>
       <div className="flex-1 flex flex-col gap-2 min-h-0">
 
-        {/* header row: mode badge + F9 hint */}
+        {/* header row: mode badge + Shortcut hint */}
         <div className="shrink-0 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold"
@@ -208,7 +212,7 @@ export function CctvStrip() {
           >
             {isExit ? <><LogIn className="size-3" />ขาเข้า</> : <><LogOut className="size-3" />ขาออก</>}
             <kbd className="text-[9px] bg-white px-1.5 py-0.5 rounded font-mono shadow-sm"
-              style={{ border: '1px solid #E2E8F0', color: '#94A3B8' }}>F9</kbd>
+              style={{ border: '1px solid #E2E8F0', color: '#94A3B8' }}>Alt + C</kbd>
           </button>
         </div>
 
