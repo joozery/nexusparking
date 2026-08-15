@@ -76,8 +76,19 @@ function overnightWindowsIn(entry: Date, exit: Date, cfg: OvernightConfig) {
       // billing threshold: frsH:frsM บน calendar day เดียวกับ wStart
       const billingThreshold = new Date(d)
       billingThreshold.setHours(frsH, frsM, 0, 0)
-      // ถ้ารถออกเลย billingThreshold → flatRate, ถ้าออกก่อน → คิดชั่วโมง
-      const isFlatRate = oEnd.getTime() > billingThreshold.getTime()
+      // ถ้ารถออกเลย billingThreshold → ลองคิดแบบเหมาจ่าย
+      let isFlatRate = oEnd.getTime() > billingThreshold.getTime()
+
+      // ถ้าราคาแบบชั่วโมงถูกกว่าแบบเหมาจ่าย (เช่น เข้า 06:30 ออก 07:00 หรือจอดแค่ 2 ชั่วโมง)
+      // ให้ปรับกลับไปคิดแบบชั่วโมงแทน เพื่อไม่ให้เป็นการเอาเปรียบหรือคิดเรทเหมาในกรณีที่จอดสั้นๆ
+      if (isFlatRate) {
+        const minInWindow = Math.floor((oEnd.getTime() - oStart.getTime()) / 60000)
+        const hInWindow = Math.max(1, Math.ceil(minInWindow / 60))
+        if (hInWindow * (cfg.extraHour ?? 20) < cfg.flatRate) {
+          isFlatRate = false
+        }
+      }
+
       windows.push({ start: oStart, end: oEnd, isFlatRate })
     }
   }
