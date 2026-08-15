@@ -104,21 +104,33 @@ export function calcFeeBreakdown(
   // คำนวณ windows ก่อน — overnight mode จะ active ก็ต่อเมื่อมี window ที่ถึง flatRateStart จริง
   const spansWindow = cardType === 'overnight' || spansOvernightWindow(entryTime, exitTime, cfg)
   const windows = spansWindow ? overnightWindowsIn(entryTime, exitTime, cfg) : []
-  const isOvernight = cardType === 'overnight' || windows.some(w => w.isFlatRate)
+  let isOvernight = cardType === 'overnight' || windows.some(w => w.isFlatRate)
+
+  // คำนวณราคากรณีปกติ (ไม่คิด windows) เพื่อเปรียบเทียบ
+  const totalMin = (exitTime.getTime() - entryTime.getTime()) / 60000
+  const totalH = ceilHours(totalMin)
+  let normalFee: number
+  let normalRateLabel: string
+  if (cardType === 'car') {
+    normalFee = totalH <= 1 ? 30 : 30 + (totalH - 1) * 20
+    normalRateLabel = totalH <= 1 ? '฿30 (ชม.แรก)' : `฿30 + ${totalH - 1}×฿20`
+  } else {
+    normalFee = totalH <= 1 ? 20 : 20 + (totalH - 1) * 10
+    normalRateLabel = totalH <= 1 ? '฿20 (ชม.แรก)' : `฿20 + ${totalH - 1}×฿10`
+  }
+
+  // ถ้าเป็นรถปกติ (ไม่ใช่บัตรค้างคืน) และค่าจอดแบบปกติถูกกว่าหรือเท่ากับเหมาจ่าย
+  // แปลว่าเขาแค่จอดสั้นๆ แล้วบังเอิญคร่อมเวลา หรือไม่ได้จอดนานพอที่จะคุ้มค่าเหมา
+  // ให้คิดแบบปกติไปเลย จะได้ไม่ถูก split window แล้วคิดเหมาจ่ายแพงกว่าความเป็นจริง
+  if (cardType !== 'overnight' && isOvernight && normalFee <= cfg.flatRate) {
+    isOvernight = false
+  }
 
   if (!isOvernight) {
-    const minutes = (exitTime.getTime() - entryTime.getTime()) / 60000
-    const h = ceilHours(minutes)
-    let fee: number
-    let rateLabel: string
-    if (cardType === 'car') {
-      fee = h <= 1 ? 30 : 30 + (h - 1) * 20
-      rateLabel = h <= 1 ? '฿30 (ชม.แรก)' : `฿30 + ${h - 1}×฿20`
-    } else {
-      fee = h <= 1 ? 20 : 20 + (h - 1) * 10
-      rateLabel = h <= 1 ? '฿20 (ชม.แรก)' : `฿20 + ${h - 1}×฿10`
-    }
-    const segs: FeeSegment[] = [{ kind: 'normal', from: entryTime, to: exitTime, minutes, hours: h, fee, rateLabel }]
+    const segs: FeeSegment[] = [{
+      kind: 'normal', from: entryTime, to: exitTime, 
+      minutes: totalMin, hours: totalH, fee: normalFee, rateLabel: normalRateLabel
+    }]
     if (afterHours && isInAfterHours(exitTime, afterHours)) {
       segs.push({
         kind: 'after-hours',
