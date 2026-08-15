@@ -19,7 +19,9 @@ interface AppSettings {
     overnight:  { windowStart: string; windowEnd: string; flatRate: number; extraHour: number }
   }
   hardware: { camera: HWDevice; barrier: HWDevice; reader: HWDevice; printer: HWDevice; drawer: HWDevice }
-  lostCardFine: number
+  lostCardFine:   number
+  monthlyDeposit: number
+  monthlyFee:     number
 }
 
 const TABS = [
@@ -322,6 +324,33 @@ export default function SettingsPage() {
                     onChange={e => setSettings(s => s ? ({ ...s, lostCardFine: +e.target.value }) : s)}
                     className="w-24 h-9 px-3 rounded-lg text-sm font-black text-slate-800 outline-none text-center"
                     style={{ border: '1.5px solid rgba(220,38,38,0.2)', background: 'white' }} />
+                </div>
+
+                {/* Monthly card fees */}
+                <div className="rounded-lg overflow-hidden" style={{ border: '1px solid rgba(124,58,237,0.2)' }}>
+                  <div className="px-4 py-2.5 flex items-center gap-2" style={{ background: 'rgba(124,58,237,0.06)', borderBottom: '1px solid rgba(124,58,237,0.12)' }}>
+                    <Moon className="size-4 shrink-0" style={{ color: '#7C3AED' }} />
+                    <div>
+                      <p className="text-xs font-black text-slate-800">บัตรรายเดือน</p>
+                      <p className="text-[10px] text-slate-400">เรียกเก็บตอนลงทะเบียนบัตรใหม่</p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 p-4">
+                    <div>
+                      <label className="text-[9px] font-black text-slate-500 uppercase block mb-1">ค่ามัดจำบัตร (฿)</label>
+                      <input type="number" min={0} value={settings.monthlyDeposit ?? 500}
+                        onChange={e => setSettings(s => s ? ({ ...s, monthlyDeposit: +e.target.value }) : s)}
+                        className="w-full h-9 px-3 rounded-lg text-sm font-black text-slate-800 outline-none text-center"
+                        style={{ border: '1.5px solid rgba(124,58,237,0.25)', background: 'white' }} />
+                    </div>
+                    <div>
+                      <label className="text-[9px] font-black text-slate-500 uppercase block mb-1">ค่าบัตรรายเดือน (฿)</label>
+                      <input type="number" min={0} value={settings.monthlyFee ?? 300}
+                        onChange={e => setSettings(s => s ? ({ ...s, monthlyFee: +e.target.value }) : s)}
+                        className="w-full h-9 px-3 rounded-lg text-sm font-black text-slate-800 outline-none text-center"
+                        style={{ border: '1.5px solid rgba(124,58,237,0.25)', background: 'white' }} />
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>

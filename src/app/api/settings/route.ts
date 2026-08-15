@@ -34,7 +34,10 @@ export async function PUT(req: NextRequest) {
         if (body.hardware[key]) Object.assign(settings.hardware[key], body.hardware[key])
       }
     }
-    if (body.lostCardFine !== undefined) settings.lostCardFine = body.lostCardFine
+    if (body.lostCardFine   !== undefined) settings.lostCardFine   = body.lostCardFine
+    if (body.afterHoursFine !== undefined) settings.afterHoursFine = body.afterHoursFine
+    if (body.monthlyDeposit !== undefined) settings.monthlyDeposit = body.monthlyDeposit
+    if (body.monthlyFee     !== undefined) settings.monthlyFee     = body.monthlyFee
     settings.markModified('rates')
     settings.markModified('hardware')
     settings.markModified('businessHours')

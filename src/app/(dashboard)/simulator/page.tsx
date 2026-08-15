@@ -585,19 +585,17 @@ function BatchSeed({ overnightCfg }: { overnightCfg: OvernightConfig | null }) {
 // ── Excel Tester ──────────────────────────────────────────────────────────────
 
 interface TestRow {
-  id:            string
-  rowNum:        number
-  plate:         string
-  cardType:      CardType
-  entryTime:     string        // ISO
-  exitTime:      string        // ISO
-  discountAmt:   number        // col F — fixed discount in baht (0 = no discount)
-  expectedFee:   number | null // col E — expected net fee (after discount)
-  calculatedFee: number        // fee from calcFeeBreakdown
-  finalFee:      number        // calculatedFee - discountAmt
-  segments:      FeeSegment[]
-  pass:          boolean | null // null = no expectedFee; compares finalFee vs expectedFee
-  error:         string | null
+  id:                string
+  rowNum:            number
+  plate:             string
+  cardType:          CardType
+  entryTime:         string    // ISO
+  exitTime:          string    // ISO
+  calculatedFee:     number    // gross fee
+  segments:          FeeSegment[]
+  shopDiscountName:  string    // col G — ชื่อส่วนลดร้านค้า (ค่าว่าง = ไม่มี)
+  hotelDiscountName: string    // col H — ชื่อส่วนลดรถโรงแรม (ค่าว่าง = ไม่มี)
+  error:             string | null
 }
 
 function parseExcelDate(val: unknown): Date | null {
@@ -637,26 +635,96 @@ function normalizeCardType(val: unknown): CardType | null {
   return null
 }
 
+// รวมคอลัมน์ วันที่ (C/E) + เวลา (D/F) ให้เป็น Date เดียว
+function parseDateTimeSplit(dateCol: unknown, timeCol: unknown): Date | null {
+  if (!dateCol) return null
+  // ถ้า dateCol เป็นตัวเลข Excel (serial) ให้ดึง y/m/d ออกมาก่อน แล้วใส่เวลาจาก timeCol
+  let base: Date | null
+  if (typeof dateCol === 'number') {
+    try {
+      const p = XLSX.SSF.parse_date_code(dateCol)
+      base = new Date(p.y, p.m - 1, p.d, 0, 0, 0)
+    } catch { return null }
+  } else {
+    base = parseExcelDate(dateCol)
+    if (!base) return null
+    // ถ้า parseExcelDate คืน Date ที่มีเวลา (เช่น กรณี datetime-string) ก็ใช้ได้เลย
+    // แต่เราต้องการแค่ date part ก่อน แล้วค่อย override เวลาจาก timeCol
+    base = new Date(base.getFullYear(), base.getMonth(), base.getDate(), 0, 0, 0)
+  }
+
+  // parse timeCol: รองรับ "09:30", "9:30", "09:30:00", ตัวเลข Excel (fraction of day)
+  if (timeCol != null && timeCol !== '') {
+    if (typeof timeCol === 'number') {
+      // Excel time fraction: 0.5 = 12:00, 0.375 = 09:00
+      const totalMin = Math.round(timeCol * 24 * 60)
+      base.setHours(Math.floor(totalMin / 60), totalMin % 60, 0, 0)
+    } else {
+      const t = String(timeCol).trim()
+      const m = t.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/)
+      if (m) base.setHours(parseInt(m[1]), parseInt(m[2]), parseInt(m[3] ?? '0'), 0)
+    }
+  }
+  return base
+}
+
+// ค้นหา discount จากชื่อ (ตรงทันที, พอ partial match)
+function findDiscountByName(name: string, list: DiscountDoc[]): DiscountDoc | null {
+  if (!name.trim()) return null
+  const n = name.trim().toLowerCase()
+  return list.find(d => d.name.toLowerCase() === n)
+      ?? list.find(d => d.name.toLowerCase().includes(n) || n.includes(d.name.toLowerCase()))
+      ?? null
+}
+
 function downloadTemplate() {
   const wb = XLSX.utils.book_new()
   const rows = [
-    ['ทะเบียน', 'ประเภท (car/motorcycle/overnight)', 'เวลาเข้า', 'เวลาออก', 'ส่วนลด ฿ (ไม่บังคับ)', 'ค่าที่คาดหวัง (หลังส่วนลด, ไม่บังคับ)'],
-    ['1234', 'car',        '2024-08-14 09:00', '2024-08-14 11:30',  0,  50],
-    ['5678', 'motorcycle', '2024-08-14 08:00', '2024-08-14 09:00',  0,  20],
-    ['9999', 'car',        '2024-08-14 20:00', '2024-08-15 07:30', 20, 100],
-    ['ABCD', 'overnight',  '2024-08-14 18:00', '2024-08-15 08:00', 50,  70],
+    [
+      'ทะเบียน',
+      'ประเภท (car/motorcycle/overnight)',
+      'วันที่เข้า (DD/MM/YYYY)',
+      'เวลาเข้า (HH:MM)',
+      'วันที่ออก (DD/MM/YYYY)',
+      'เวลาออก (HH:MM)',
+      'ชื่อส่วนลดร้านค้า (ไม่บังคับ)',
+      'ชื่อส่วนลดรถโรงแรม (ไม่บังคับ)',
+    ],
+    ['1234', 'car',        '14/08/2024', '09:00', '14/08/2024', '11:30', 'คูปองร้านอาหาร', ''],
+    ['5678', 'motorcycle', '14/08/2024', '08:00', '14/08/2024', '09:00', '', ''],
+    ['9999', 'car',        '14/08/2024', '20:00', '15/08/2024', '07:30', 'คูปอง VIP', ''],
+    ['ABCD', 'overnight',  '14/08/2024', '18:00', '15/08/2024', '08:00', '', 'โรงแรม ABC'],
   ]
   const ws = XLSX.utils.aoa_to_sheet(rows)
-  ws['!cols'] = [{ wch: 14 }, { wch: 30 }, { wch: 22 }, { wch: 22 }, { wch: 24 }, { wch: 32 }]
+  ws['!cols'] = [
+    { wch: 12 }, { wch: 28 },
+    { wch: 20 }, { wch: 14 },
+    { wch: 20 }, { wch: 14 },
+    { wch: 24 }, { wch: 24 },
+  ]
   XLSX.utils.book_append_sheet(wb, ws, 'fee_test')
   XLSX.writeFile(wb, 'fee_test_template.xlsx')
 }
 
-function ExcelTester({ overnightCfg }: { overnightCfg: OvernightConfig | null }) {
-  const [rows,       setRows]       = useState<TestRow[]>([])
-  const [fileName,   setFileName]   = useState('')
-  const [expandedId, setExpandedId] = useState<string | null>(null)
-  const [dragging,   setDragging]   = useState(false)
+function ExcelTester({ overnightCfg, discounts }: { overnightCfg: OvernightConfig | null; discounts: DiscountDoc[] }) {
+  const [rows,      setRows]      = useState<TestRow[]>([])
+  const [fileName,  setFileName]  = useState('')
+  const [expandedId,setExpandedId]= useState<string | null>(null)
+  const [dragging,  setDragging]  = useState(false)
+
+  // คำนวณ discount ราย row โดย match ชื่อจาก DB
+  function rowDiscounts(r: TestRow) {
+    const empty = { shopDisc: null as DiscountDoc|null, hotelDisc: null as DiscountDoc|null, shopAmt: 0, hotelAmt: 0, total: 0, final: r.calculatedFee }
+    if (r.error || !r.calculatedFee) return empty
+    const nightCount = r.segments.filter(s => s.kind === 'overnight').length
+    const shopDisc   = findDiscountByName(r.shopDiscountName, discounts)
+    const hotelDisc  = findDiscountByName(r.hotelDiscountName, discounts)
+    const shopAmt    = calcDiscount(r.calculatedFee, shopDisc, nightCount)
+    const hotelAmt   = calcDiscount(r.calculatedFee, hotelDisc, nightCount)
+    const total      = Math.min(shopAmt + hotelAmt, r.calculatedFee)
+    const final      = Math.max(0, r.calculatedFee - total)
+    return { shopDisc, hotelDisc, shopAmt, hotelAmt, total, final }
+  }
 
   function processFile(file: File) {
     setFileName(file.name)
@@ -670,46 +738,33 @@ function ExcelTester({ overnightCfg }: { overnightCfg: OvernightConfig | null })
         const dataRows = raw.slice(1).filter(r => r && (r as unknown[]).some(c => c !== null && c !== ''))
 
         const parsed: TestRow[] = dataRows.map((r, i) => {
-          const rowNum      = i + 2
-          const plate       = String(r[0] ?? '').trim().toUpperCase()
-          const cardType    = normalizeCardType(r[1])
-          const entryDate   = parseExcelDate(r[2])
-          const exitDate    = parseExcelDate(r[3])
-          // col E = discount baht (optional), col F = expected fee (optional)
-          // backward-compat: if col E is missing / text then treat as expectedFee at col E
-          const colE = r[4]; const colF = r[5]
-          let discountAmt = 0
-          let expectedFee: number | null = null
-          if (colF != null && colF !== '' && !isNaN(Number(colF))) {
-            // New format: col E = discount, col F = expected
-            discountAmt = Number(colE) || 0
-            expectedFee = Number(colF)
-          } else if (colE != null && colE !== '' && !isNaN(Number(colE))) {
-            // Old format: col E = expected fee, no discount
-            expectedFee = Number(colE)
-          }
+          const rowNum    = i + 2
+          const plate     = String(r[0] ?? '').trim().toUpperCase()
+          const cardType  = normalizeCardType(r[1])
+          const entryDate = parseDateTimeSplit(r[2], r[3])
+          const exitDate  = parseDateTimeSplit(r[4], r[5])
+          // G = ชื่อส่วนลดร้านค้า, H = ชื่อส่วนลดรถโรงแรม
+          const shopDiscountName  = String(r[6] ?? '').trim()
+          const hotelDiscountName = String(r[7] ?? '').trim()
 
           const base = {
             id: crypto.randomUUID(), rowNum, plate, cardType: (cardType ?? 'car') as CardType,
-            discountAmt, expectedFee, calculatedFee: 0, finalFee: 0,
-            segments: [] as FeeSegment[], pass: null as boolean | null,
+            shopDiscountName, hotelDiscountName,
+            calculatedFee: 0, segments: [] as FeeSegment[],
           }
 
           if (!plate)     return { ...base, entryTime: '', exitTime: '', error: 'ไม่มีทะเบียน' }
           if (!cardType)  return { ...base, entryTime: '', exitTime: '', error: `ประเภทไม่ถูกต้อง: "${r[1]}"` }
-          if (!entryDate) return { ...base, entryTime: '', exitTime: '', error: 'เวลาเข้าไม่ถูกต้อง' }
-          if (!exitDate)  return { ...base, entryTime: entryDate.toISOString(), exitTime: '', error: 'เวลาออกไม่ถูกต้อง' }
+          if (!entryDate) return { ...base, entryTime: '', exitTime: '', error: 'วันที่/เวลาเข้าไม่ถูกต้อง (col C-D)' }
+          if (!exitDate)  return { ...base, entryTime: entryDate.toISOString(), exitTime: '', error: 'วันที่/เวลาออกไม่ถูกต้อง (col E-F)' }
           if (exitDate <= entryDate) return { ...base, entryTime: entryDate.toISOString(), exitTime: exitDate.toISOString(), error: 'เวลาออกต้องมากกว่าเวลาเข้า' }
 
           try {
             const { total, segments } = calcFeeBreakdown(cardType, entryDate, exitDate, overnightCfg ?? undefined)
-            const finalFee = Math.max(0, total - discountAmt)
             return {
               ...base, cardType,
               entryTime: entryDate.toISOString(), exitTime: exitDate.toISOString(),
-              calculatedFee: total, finalFee, segments,
-              pass: expectedFee !== null ? finalFee === expectedFee : null,
-              error: null,
+              calculatedFee: total, segments, error: null,
             }
           } catch (err) {
             return { ...base, entryTime: entryDate.toISOString(), exitTime: exitDate.toISOString(), error: String(err) }
@@ -732,11 +787,10 @@ function ExcelTester({ overnightCfg }: { overnightCfg: OvernightConfig | null })
     e.preventDefault(); setDragging(false); const f = e.dataTransfer.files[0]; if (f) processFile(f)
   }
 
-  const passCount    = rows.filter(r => r.pass === true).length
-  const failCount    = rows.filter(r => r.pass === false).length
-  const errorCount   = rows.filter(r => r.error !== null).length
-  const hasExpected  = rows.some(r => r.expectedFee !== null)
-  const hasDiscount  = rows.some(r => r.discountAmt > 0)
+  const errorCount  = rows.filter(r => r.error !== null).length
+  const hasShopDiscount  = rows.some(r => r.shopDiscountName)
+  const hasHotelDiscount = rows.some(r => r.hotelDiscountName)
+  const hasDiscount = hasShopDiscount || hasHotelDiscount
 
   return (
     <div className="bg-white rounded-xl overflow-hidden" style={{ border: '1px solid #E8ECF4' }}>
@@ -762,7 +816,7 @@ function ExcelTester({ overnightCfg }: { overnightCfg: OvernightConfig | null })
       </div>
 
       {/* drop zone */}
-      <div className="p-5" style={{ borderBottom: rows.length ? '1px solid #E8ECF4' : 'none' }}>
+      <div className="p-5" style={{ borderBottom: '1px solid #E8ECF4' }}>
         <label
           onDragOver={e => { e.preventDefault(); setDragging(true) }}
           onDragLeave={() => setDragging(false)}
@@ -786,27 +840,31 @@ function ExcelTester({ overnightCfg }: { overnightCfg: OvernightConfig | null })
         </label>
       </div>
 
+
       {/* summary bar */}
-      {rows.length > 0 && (
-        <div className="px-5 py-3 flex items-center gap-4 flex-wrap"
-          style={{ borderBottom: '1px solid #E8ECF4', background: '#F8FAFF' }}>
-          <span className="text-xs font-black text-slate-700">{rows.length} แถว</span>
-          {hasExpected && <>
-            <span className="flex items-center gap-1.5 text-xs font-bold" style={{ color: '#059669' }}>
-              <CheckCircle2 className="size-3.5" />PASS {passCount}
+      {rows.length > 0 && (() => {
+        const totalShop  = rows.filter(r => !r.error).reduce((s, r) => s + rowDiscounts(r).shopAmt,  0)
+        const totalHotel = rows.filter(r => !r.error).reduce((s, r) => s + rowDiscounts(r).hotelAmt, 0)
+        const totalFinal = rows.filter(r => !r.error).reduce((s, r) => s + rowDiscounts(r).final,    0)
+        return (
+          <div className="px-5 py-3 flex items-center gap-4 flex-wrap"
+            style={{ borderBottom: '1px solid #E8ECF4', background: '#F8FAFF' }}>
+            <span className="text-xs font-black text-slate-700">{rows.length} แถว</span>
+            {errorCount > 0 && (
+              <span className="text-xs font-bold text-amber-600">⚠ ข้อผิดพลาด {errorCount} แถว</span>
+            )}
+            {hasDiscount && totalShop > 0 && (
+              <span className="text-[10px] font-bold" style={{ color: '#6D28D9' }}>ส่วนลดร้านค้า ฿{totalShop}</span>
+            )}
+            {hasDiscount && totalHotel > 0 && (
+              <span className="text-[10px] font-bold" style={{ color: '#B45309' }}>ส่วนลดโรงแรม ฿{totalHotel}</span>
+            )}
+            <span className="ml-auto text-xs font-black" style={{ color: '#059669' }}>
+              ยอดสุทธิรวม ฿{totalFinal}
             </span>
-            <span className="flex items-center gap-1.5 text-xs font-bold" style={{ color: '#DC2626' }}>
-              <AlertTriangle className="size-3.5" />FAIL {failCount}
-            </span>
-          </>}
-          {errorCount > 0 && (
-            <span className="text-xs font-bold text-amber-600">⚠ ข้อผิดพลาด {errorCount} แถว</span>
-          )}
-          {hasExpected && failCount === 0 && errorCount === 0 && (
-            <span className="ml-auto text-xs font-black" style={{ color: '#059669' }}>ทุกแถว PASS ✓</span>
-          )}
-        </div>
-      )}
+          </div>
+        )
+      })()}
 
       {/* results table */}
       {rows.length > 0 && (
@@ -815,8 +873,10 @@ function ExcelTester({ overnightCfg }: { overnightCfg: OvernightConfig | null })
             <thead>
               <tr style={{ background: '#F8FAFF', borderBottom: '1px solid #E8ECF4' }}>
                 {(['แถว', 'ทะเบียน', 'ประเภท', 'เข้า', 'ออก', 'ระยะ', 'คำนวณ',
-                  ...(hasDiscount ? ['ส่วนลด', 'สุทธิ'] : []),
-                  ...(hasExpected ? ['คาดหวัง', 'ผล'] : []), '']).map(h => (
+                  ...(hasShopDiscount  ? ['ส่วนลดร้านค้า'] : []),
+                  ...(hasHotelDiscount ? ['ส่วนลดโรงแรม'] : []),
+                  ...(hasDiscount      ? ['สุทธิ'] : []),
+                  '']).map(h => (
                   <th key={h} className="px-3 py-2 text-left font-black text-slate-500 text-[10px] uppercase whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -827,6 +887,7 @@ function ExcelTester({ overnightCfg }: { overnightCfg: OvernightConfig | null })
                 const durMin = r.entryTime && r.exitTime
                   ? (new Date(r.exitTime).getTime() - new Date(r.entryTime).getTime()) / 60000 : 0
                 const isExp = expandedId === r.id
+                const disc  = rowDiscounts(r)
 
                 return (
                   <Fragment key={r.id}>
@@ -856,37 +917,29 @@ function ExcelTester({ overnightCfg }: { overnightCfg: OvernightConfig | null })
                           ? <span className="text-[10px] text-slate-400">—</span>
                           : <span className="font-black text-slate-700">฿{r.calculatedFee}</span>}
                       </td>
-                      {hasDiscount && (
-                        <td className="px-3 py-2.5 text-[10px]" style={{ color: r.discountAmt > 0 ? '#6D28D9' : '#94A3B8' }}>
-                          {r.discountAmt > 0 ? `-฿${r.discountAmt}` : '—'}
+                      {hasShopDiscount && (
+                        <td className="px-3 py-2.5 text-[10px]">
+                          {r.shopDiscountName
+                            ? disc.shopDisc
+                              ? <span style={{ color: '#6D28D9' }}>-฿{disc.shopAmt} <span className="font-normal opacity-60">({disc.shopDisc.name})</span></span>
+                              : <span className="px-1 py-0.5 rounded text-[9px] font-black" style={{ background: 'rgba(220,38,38,0.08)', color: '#DC2626' }}>ไม่พบ: {r.shopDiscountName}</span>
+                            : <span className="text-slate-300">—</span>}
+                        </td>
+                      )}
+                      {hasHotelDiscount && (
+                        <td className="px-3 py-2.5 text-[10px]">
+                          {r.hotelDiscountName
+                            ? disc.hotelDisc
+                              ? <span style={{ color: '#B45309' }}>-฿{disc.hotelAmt} <span className="font-normal opacity-60">({disc.hotelDisc.name})</span></span>
+                              : <span className="px-1 py-0.5 rounded text-[9px] font-black" style={{ background: 'rgba(220,38,38,0.08)', color: '#DC2626' }}>ไม่พบ: {r.hotelDiscountName}</span>
+                            : <span className="text-slate-300">—</span>}
                         </td>
                       )}
                       {hasDiscount && (
                         <td className="px-3 py-2.5">
                           {r.error
                             ? <span className="text-[10px] text-slate-400">—</span>
-                            : <span className="font-black" style={{ color: '#059669' }}>฿{r.finalFee}</span>}
-                        </td>
-                      )}
-                      {hasExpected && (
-                        <td className="px-3 py-2.5 text-[10px] text-slate-400">
-                          {r.expectedFee != null ? `฿${r.expectedFee}` : '—'}
-                        </td>
-                      )}
-                      {hasExpected && (
-                        <td className="px-3 py-2.5">
-                          {r.error ? (
-                            <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full"
-                              style={{ background: 'rgba(217,119,6,0.1)', color: '#B45309' }}>ERROR</span>
-                          ) : r.pass === true ? (
-                            <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full"
-                              style={{ background: 'rgba(5,150,105,0.1)', color: '#059669' }}>PASS</span>
-                          ) : r.pass === false ? (
-                            <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full"
-                              style={{ background: 'rgba(220,38,38,0.1)', color: '#DC2626' }}>FAIL</span>
-                          ) : (
-                            <span className="text-[9px] text-slate-300">—</span>
-                          )}
+                            : <span className="font-black" style={{ color: disc.total > 0 ? '#059669' : '#1D4ED8' }}>฿{disc.final}</span>}
                         </td>
                       )}
                       <td className="px-3 py-2.5 text-slate-300">
@@ -938,41 +991,37 @@ function ExcelTester({ overnightCfg }: { overnightCfg: OvernightConfig | null })
                                 })}
                               </tbody>
                               <tfoot>
-                                {r.discountAmt > 0 ? (
+                                {disc.total > 0 ? (
                                   <>
                                     <tr style={{ background: '#F8FAFF', borderTop: '1px solid #E8ECF4' }}>
                                       <td colSpan={3} className="px-3 py-1.5 text-slate-500 text-[10px]">ก่อนส่วนลด</td>
                                       <td className="px-3 py-1.5 text-right font-bold text-slate-600 text-[10px]">฿{r.calculatedFee}</td>
                                     </tr>
-                                    <tr style={{ background: 'rgba(109,40,217,0.04)' }}>
-                                      <td colSpan={3} className="px-3 py-1.5 text-[10px] font-bold" style={{ color: '#6D28D9' }}>
-                                        <Tag className="size-2.5 inline mr-1" />ส่วนลด
-                                      </td>
-                                      <td className="px-3 py-1.5 text-right font-black text-[10px]" style={{ color: '#6D28D9' }}>-฿{r.discountAmt}</td>
-                                    </tr>
+                                    {disc.shopAmt > 0 && (
+                                      <tr style={{ background: 'rgba(109,40,217,0.04)' }}>
+                                        <td colSpan={3} className="px-3 py-1 text-[10px] font-bold" style={{ color: '#6D28D9' }}>
+                                          <Tag className="size-2.5 inline mr-1" />ส่วนลดร้านค้า ({disc.shopDisc?.name})
+                                        </td>
+                                        <td className="px-3 py-1 text-right font-black text-[10px]" style={{ color: '#6D28D9' }}>-฿{disc.shopAmt}</td>
+                                      </tr>
+                                    )}
+                                    {disc.hotelAmt > 0 && (
+                                      <tr style={{ background: 'rgba(180,83,9,0.04)' }}>
+                                        <td colSpan={3} className="px-3 py-1 text-[10px] font-bold" style={{ color: '#B45309' }}>
+                                          <Tag className="size-2.5 inline mr-1" />ส่วนลดรถโรงแรม ({disc.hotelDisc?.name})
+                                        </td>
+                                        <td className="px-3 py-1 text-right font-black text-[10px]" style={{ color: '#B45309' }}>-฿{disc.hotelAmt}</td>
+                                      </tr>
+                                    )}
                                     <tr style={{ background: '#F0F2F8', borderTop: '2px solid #E8ECF4' }}>
                                       <td colSpan={3} className="px-3 py-2 font-black text-slate-600 text-[10px]">ยอดสุทธิ</td>
-                                      <td className="px-3 py-2 text-right font-black text-sm" style={{ color: '#059669' }}>
-                                        ฿{r.finalFee}
-                                        {r.pass === false && r.expectedFee != null && (
-                                          <span className="ml-2 text-[9px] font-bold" style={{ color: '#DC2626' }}>
-                                            (คาดหวัง ฿{r.expectedFee} ต่างกัน ฿{Math.abs(r.finalFee - r.expectedFee)})
-                                          </span>
-                                        )}
-                                      </td>
+                                      <td className="px-3 py-2 text-right font-black text-sm" style={{ color: '#059669' }}>฿{disc.final}</td>
                                     </tr>
                                   </>
                                 ) : (
                                   <tr style={{ background: '#F0F2F8', borderTop: '2px solid #E8ECF4' }}>
                                     <td colSpan={3} className="px-3 py-2 font-black text-slate-600 text-[10px]">รวม</td>
-                                    <td className="px-3 py-2 text-right font-black text-sm" style={{ color: '#1D4ED8' }}>
-                                      ฿{r.calculatedFee}
-                                      {r.pass === false && r.expectedFee != null && (
-                                        <span className="ml-2 text-[9px] font-bold" style={{ color: '#DC2626' }}>
-                                          (คาดหวัง ฿{r.expectedFee} ต่างกัน ฿{Math.abs(r.calculatedFee - r.expectedFee)})
-                                        </span>
-                                      )}
-                                    </td>
+                                    <td className="px-3 py-2 text-right font-black text-sm" style={{ color: '#1D4ED8' }}>฿{r.calculatedFee}</td>
                                   </tr>
                                 )}
                               </tfoot>
@@ -1031,7 +1080,7 @@ export default function SimulatorPage() {
 
       <div className="flex-1 overflow-auto p-5 space-y-5">
         <FeeCalculator overnightCfg={overnightCfg} discounts={discounts} />
-        <ExcelTester overnightCfg={overnightCfg} />
+        <ExcelTester overnightCfg={overnightCfg} discounts={discounts} />
         <BatchSeed overnightCfg={overnightCfg} />
       </div>
     </>

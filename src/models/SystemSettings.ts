@@ -15,8 +15,10 @@ export interface ISystemSettings extends Document {
     printer: { ip: string; port: number; endpoint: string; enabled: boolean }
     drawer:  { ip: string; port: number; endpoint: string; enabled: boolean }
   }
-  lostCardFine:   number
-  afterHoursFine: number
+  lostCardFine:    number
+  afterHoursFine:  number
+  monthlyDeposit:  number
+  monthlyFee:      number
   cctvUrls: { plate: string; face: string; rear: string; exit: string }
 }
 
@@ -50,6 +52,8 @@ const SystemSettingsSchema = new Schema<ISystemSettings>({
   },
   lostCardFine:   { type: Number, default: 300 },
   afterHoursFine: { type: Number, default: 300 },
+  monthlyDeposit: { type: Number, default: 500 },
+  monthlyFee:     { type: Number, default: 300 },
   cctvUrls: {
     plate: { type: String, default: '' },
     face:  { type: String, default: '' },

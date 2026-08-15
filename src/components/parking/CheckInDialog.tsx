@@ -1,5 +1,6 @@
 'use client'
 
+import { useRef, useEffect } from 'react'
 import { CreditCard, LogIn, CheckCircle2, Car, Bike, Moon, Clock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -28,14 +29,37 @@ interface Props {
   onConfirm: () => void
 }
 
+// Convert Thai digits ๐-๙ (U+0E50–U+0E59) → ASCII 0-9
+function toAsciiDigits(s: string) {
+  return s.replace(/[๐-๙]/g, c => String(c.codePointAt(0)! - 0x0E50))
+}
+
 export function CheckInDialog({
   open, onOpenChange, step, cardType, plate,
   customEntryTime, onCustomEntryTimeChange,
   onSimulateScan, onSelectType, onPlateChange, onBack, onConfirm,
 }: Props) {
+  const plateRef = useRef<HTMLInputElement>(null)
+
+  // Focus plate input whenever we land on the confirm step (card tap or simulate)
+  useEffect(() => {
+    if (open && step === 'confirm') {
+      const t = setTimeout(() => plateRef.current?.focus(), 50)
+      return () => clearTimeout(t)
+    }
+  }, [open, step])
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-sm" showCloseButton>
+      <DialogContent
+        className="sm:max-w-sm"
+        showCloseButton
+        onOpenAutoFocus={e => {
+          // Prevent Radix from picking an arbitrary first element;
+          // we handle focus ourselves via the useEffect above.
+          e.preventDefault()
+        }}
+      >
 
         <DialogHeader className="bg-gradient-to-r from-blue-600 to-blue-500">
           <div className="flex items-center gap-3 px-4 py-3">
@@ -91,11 +115,13 @@ export function CheckInDialog({
               <div className="space-y-1">
                 <Label htmlFor="plate-in" className="text-xs">เลขทะเบียน 4 ตัวท้าย</Label>
                 <Input
+                  ref={plateRef}
                   id="plate-in"
                   placeholder="เช่น 1234"
                   maxLength={4}
                   value={plate}
-                  onChange={(e) => onPlateChange(e.target.value.replace(/\D/g, ''))}
+                  onChange={(e) => onPlateChange(toAsciiDigits(e.target.value).replace(/\D/g, ''))}
+                  onKeyDown={(e) => { if (e.key === 'Enter' && plate.length === 4) onConfirm() }}
                   className="text-xl font-mono text-center tracking-[0.4em] h-10"
                 />
                 <p className="text-[10px] text-slate-400">กรอกเฉพาะตัวเลข 4 หลักท้าย</p>

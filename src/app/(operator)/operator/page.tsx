@@ -11,6 +11,7 @@ import {
 import { CheckInDialog } from '@/components/parking/CheckInDialog'
 import { CheckOutDialog, type PaymentMethod } from '@/components/parking/CheckOutDialog'
 import { LostCardDialog } from '@/components/parking/LostCardDialog'
+import { CardRegisterDialog } from '@/components/parking/CardRegisterDialog'
 import { type CardType } from '@/components/parking/types'
 import { calcFeeFromMinutes, type OvernightConfig, type AfterHoursConfig } from '@/lib/calcFee'
 import { useToast } from '@/components/ui/Toast'
@@ -110,6 +111,8 @@ export default function OperatorPage() {
 
   const [overnightCfg,   setOvernightCfg]   = useState<OvernightConfig | undefined>(undefined)
   const [afterHoursCfg,  setAfterHoursCfg]  = useState<AfterHoursConfig | undefined>(undefined)
+  const [monthlyDeposit, setMonthlyDeposit] = useState(500)
+  const [monthlyFee,     setMonthlyFee]     = useState(300)
   const [sessions, setSessions] = useState<Session[]>([])
   const [stats, setStats] = useState<Stats | null>(null)
   const [shift, setShift] = useState<Shift | null | undefined>(undefined) // undefined = loading
@@ -153,10 +156,12 @@ export default function OperatorPage() {
   // Lost card
   const [lostOpen, setLostOpen] = useState(false)
 
-  // Card-reader popup (direction picker)
-  const [cardPopup, setCardPopup] = useState<{ uid: string } | null>(null)
-  const readerBuf = useRef('')
-  const readerLastAt = useRef(0)
+  const [regOpen, setRegOpen] = useState(false)
+  const [regUid,  setRegUid]  = useState('')
+  const onCardScanRef = useRef<(uid: string) => void>(() => {})
+  const scanInputRef = useRef<HTMLInputElement>(null)
+  const scanTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [scanBuf, setScanBuf] = useState('')
 
   function resetCI() { setCiStep('scan'); setCiPlate(''); setCiType('car'); setCiUid(''); setCiCustomTime('') }
   function resetCO() { setCoStep('scan'); setCoSessionId(''); setCoCustomTime(''); setCoEntryTime(null) }
@@ -205,6 +210,8 @@ export default function OperatorPage() {
             fine:  s.afterHoursFine      ?? 300,
           })
         }
+        if (s?.monthlyDeposit !== undefined) setMonthlyDeposit(s.monthlyDeposit)
+        if (s?.monthlyFee     !== undefined) setMonthlyFee(s.monthlyFee)
       })
       .catch(() => {})
   }, [])
@@ -220,55 +227,13 @@ export default function OperatorPage() {
     return () => clearInterval(t)
   }, [fetchData, fetchSettings])
 
-  // ── Global card-reader (keyboard-wedge) listener ────────────────────────
+  // ── Scan input focus management ─────────────────────────────────────────
+  const noDialogOpen = !checkInOpen && !checkOutOpen && !lostOpen && !queueOpen && !shiftEnding && !regOpen && shift !== null
   useEffect(() => {
-    // Card readers type char-to-char in < 5 ms; humans type > 100 ms/char.
-    const READER_MAX_GAP = 30   // ms — anything faster than this = card reader
-    const IDLE_TRIGGER_MS = 250 // ms — fallback for readers that don't send Enter
-    const MIN_LEN = 4
-
-    let idleTimer: ReturnType<typeof setTimeout> | null = null
-
-    function processBuffer() {
-      if (idleTimer) { clearTimeout(idleTimer); idleTimer = null }
-      const raw = readerBuf.current
-      readerBuf.current = ''
-      if (raw.length < MIN_LEN) return
-      const uid = sanitizeUid(convertThaiToEn(raw))
-      if (uid.length >= MIN_LEN) setCardPopup({ uid })
+    if (noDialogOpen) {
+      setTimeout(() => scanInputRef.current?.focus(), 50)
     }
-
-    function onKey(e: KeyboardEvent) {
-      const now = Date.now()
-      const tag = (e.target as HTMLElement)?.tagName
-      const inForm = ['INPUT', 'TEXTAREA', 'SELECT'].includes(tag)
-
-      if (e.key === 'Enter') {
-        // Fire immediately if buffer looks like a card scan, even when an input is focused
-        if (!inForm || readerBuf.current.length >= MIN_LEN) processBuffer()
-        return
-      }
-
-      if (e.key.length !== 1) return
-
-      const gap = now - readerLastAt.current
-      readerLastAt.current = now
-
-      if (gap > READER_MAX_GAP) {
-        readerBuf.current = ''
-      }
-
-      readerBuf.current += e.key
-      if (idleTimer) clearTimeout(idleTimer)
-      idleTimer = setTimeout(processBuffer, IDLE_TRIGGER_MS)
-    }
-
-    document.addEventListener('keydown', onKey)
-    return () => {
-      document.removeEventListener('keydown', onKey)
-      if (idleTimer) clearTimeout(idleTimer)
-    }
-  }, [])
+  }, [noDialogOpen])
 
 
   // Queue actions
@@ -481,33 +446,37 @@ export default function OperatorPage() {
     }
   }
 
-  // ── Card-reader popup handlers ─────────────────────────────────────────
-  async function handleCardCheckin(uid: string) {
-    setCardPopup(null)
-    // Try to resolve card type from server
-    try {
-      const res = await fetch('/api/cards')
-      if (res.ok) {
-        const cards: Array<{ uid: string; type: CardType }> = await res.json()
-        const found = cards.find(c => c.uid === uid)
-        if (found) setCiType(found.type)
+  // ── Card-reader auto-route: checkin or checkout based on active sessions ──
+  // Updated every render via ref so the keydown useEffect (deps=[]) is never stale
+  useEffect(() => {
+    onCardScanRef.current = async (uid: string) => {
+      const activeSession = sessions.find(s => s.status === 'active' && s.cardUid === uid)
+      if (activeSession) {
+        // Card already inside → checkout
+        openCheckoutFromCard(activeSession)
+      } else {
+        // Card not inside → checkin: resolve card type + plate from registration
+        try {
+          const res = await fetch('/api/cards')
+          if (res.ok) {
+            const cards: Array<{ uid: string; type: CardType; plate: string }> = await res.json()
+            const found = cards.find(c => c.uid === uid)
+            if (found) {
+              setCiType(found.type)
+              if (found.plate) setCiPlate(found.plate)
+              setCiUid(uid)
+              setCiStep('confirm')
+              setCheckInOpen(true)
+              return
+            }
+          }
+        } catch { /* ignore */ }
+        // ไม่พบบัตรในระบบ → เปิดฟอร์มลงทะเบียน
+        setRegUid(uid)
+        setRegOpen(true)
       }
-    } catch { /* ignore */ }
-    setCiUid(uid)
-    setCiStep('confirm')
-    setCheckInOpen(true)
-  }
-
-  async function handleCardCheckout(uid: string) {
-    setCardPopup(null)
-    fetchSettings()
-    const session = sessions.find(s => s.status === 'active' && s.cardUid === uid)
-    if (!session) {
-      toastError('ไม่พบรถในลาน', `UID: ${uid} — ไม่มีรถที่ใช้บัตรนี้อยู่ในลาน`)
-      return
     }
-    openCheckoutFromCard(session)
-  }
+  })
 
   async function handleLostCard(plate: string, estimatedHours: number, cardType: 'car' | 'motorcycle') {
     const res = await fetch('/api/sessions/lost', {
@@ -536,6 +505,41 @@ export default function OperatorPage() {
 
   return (
     <div className="h-screen flex flex-col bg-[#F0F4FF]">
+      {/* Hidden input — always focused when no dialog is open, captures card-reader keystrokes */}
+      <input
+        ref={scanInputRef}
+        value={scanBuf}
+        onChange={e => {
+          const val = e.target.value
+          setScanBuf(val)
+          if (scanTimerRef.current) clearTimeout(scanTimerRef.current)
+          scanTimerRef.current = setTimeout(() => {
+            const uid = sanitizeUid(convertThaiToEn(val))
+            setScanBuf('')
+            if (uid.length >= 4) onCardScanRef.current(uid)
+          }, 300)
+        }}
+        onKeyDown={e => {
+          if (e.key === 'Enter') {
+            if (scanTimerRef.current) clearTimeout(scanTimerRef.current)
+            const uid = sanitizeUid(convertThaiToEn(scanBuf))
+            setScanBuf('')
+            if (uid.length >= 4) onCardScanRef.current(uid)
+          }
+        }}
+        onBlur={e => {
+          // Don't steal focus from a real input the operator clicked (e.g. search box)
+          const target = e.relatedTarget as HTMLElement | null
+          if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT')) return
+          if (!checkInOpen && !checkOutOpen && !lostOpen && !queueOpen && !shiftEnding && shift !== null) {
+            setTimeout(() => scanInputRef.current?.focus(), 50)
+          }
+        }}
+        style={{ position: 'fixed', opacity: 0, pointerEvents: 'none', width: 1, height: 1, top: 0, left: 0, zIndex: -1 }}
+        readOnly={false}
+        aria-hidden="true"
+        tabIndex={-1}
+      />
 
       {/* ─── Header ─── */}
       <header
@@ -1203,10 +1207,8 @@ export default function OperatorPage() {
         onOpenChange={o => { setCheckOutOpen(o); if (!o) resetCO() }}
         step={coStep} cardType={coType} hours={coHours} fee={coFee}
         entryTime={coEntryTime}
-        customExitTime={coCustomTime}
         overnightCfg={overnightCfg}
         afterHoursCfg={afterHoursCfg}
-        onCustomExitTimeChange={handleCoCustomTimeChange}
         onSimulateScan={simulateCOScan}
         onBack={() => setCoStep('scan')}
         onConfirm={handleCheckout}
@@ -1216,80 +1218,22 @@ export default function OperatorPage() {
         onOpenChange={setLostOpen}
         onConfirm={handleLostCard}
       />
+      <CardRegisterDialog
+        open={regOpen}
+        onOpenChange={setRegOpen}
+        uid={regUid}
+        monthlyDeposit={monthlyDeposit}
+        monthlyFee={monthlyFee}
+        onRegistered={card => {
+          success('ลงทะเบียนสำเร็จ', `UID: ${card.uid}`)
+          setCiUid(card.uid)
+          setCiType(card.type)
+          setCiPlate(card.plate)
+          setCiStep('confirm')
+          setCheckInOpen(true)
+        }}
+      />
 
-      {/* ─── Card-reader Direction Popup ─── */}
-      {cardPopup && (
-        <div
-          className="fixed inset-0 z-[60] flex items-center justify-center"
-          style={{ background: 'rgba(2,6,23,0.7)', backdropFilter: 'blur(6px)' }}
-          onClick={() => setCardPopup(null)}
-        >
-          <div
-            className="bg-white rounded-3xl w-full max-w-xs mx-4 overflow-hidden shadow-2xl"
-            onClick={e => e.stopPropagation()}
-          >
-            {/* Header */}
-            <div className="px-5 py-4 flex items-center gap-3"
-              style={{ background: 'linear-gradient(135deg,#1E3A8A,#2563EB)' }}>
-              <div className="size-9 rounded-xl flex items-center justify-center shrink-0"
-                style={{ background: 'rgba(255,255,255,0.2)' }}>
-                <Nfc className="size-5 text-white" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-white font-black text-sm">สแกนบัตรสำเร็จ</p>
-                <p className="text-blue-200 text-xs font-mono truncate mt-0.5">{cardPopup.uid}</p>
-              </div>
-              <button onClick={() => setCardPopup(null)}
-                className="size-8 rounded-lg flex items-center justify-center shrink-0"
-                style={{ background: 'rgba(255,255,255,0.15)' }}>
-                <X className="size-4 text-white" />
-              </button>
-            </div>
-
-            {/* Prompt */}
-            <div className="px-5 pt-4 pb-2">
-              <p className="text-xs text-slate-500 text-center font-semibold">เลือกประเภทการใช้งาน</p>
-            </div>
-
-            {/* Two big action buttons */}
-            <div className="grid grid-cols-2 gap-3 px-5 pb-5 pt-2">
-              <button
-                onClick={() => handleCardCheckin(cardPopup.uid)}
-                className="flex flex-col items-center justify-center gap-2.5 rounded-2xl py-5 transition-all active:scale-[0.96] hover:brightness-105"
-                style={{ background: 'linear-gradient(145deg,#1E3A8A,#2563EB)', boxShadow: '0 4px 20px rgba(29,78,216,0.4)' }}
-              >
-                <div className="size-10 rounded-xl flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.18)' }}>
-                  <LogIn className="size-5 text-white" strokeWidth={2} />
-                </div>
-                <div className="text-center">
-                  <p className="text-white font-black text-sm tracking-wider">ขาเข้า</p>
-                  <p className="text-blue-200 text-[10px] mt-0.5">Check In</p>
-                </div>
-              </button>
-
-              <button
-                onClick={() => handleCardCheckout(cardPopup.uid)}
-                className="flex flex-col items-center justify-center gap-2.5 rounded-2xl py-5 transition-all active:scale-[0.96] hover:brightness-105"
-                style={{ background: 'linear-gradient(145deg,#064E3B,#059669)', boxShadow: '0 4px 20px rgba(5,150,105,0.4)' }}
-              >
-                <div className="size-10 rounded-xl flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.18)' }}>
-                  <LogOut className="size-5 text-white" strokeWidth={2} />
-                </div>
-                <div className="text-center">
-                  <p className="text-white font-black text-sm tracking-wider">ขาออก</p>
-                  <p className="text-emerald-200 text-[10px] mt-0.5">Check Out</p>
-                </div>
-              </button>
-            </div>
-
-            {/* UID footer */}
-            <div className="px-5 pb-4 flex items-center justify-center gap-1.5">
-              <Scan className="size-3 text-slate-300" />
-              <p className="text-[10px] text-slate-300 font-mono">{cardPopup.uid}</p>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }
