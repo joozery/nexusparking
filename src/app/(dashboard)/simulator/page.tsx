@@ -801,6 +801,47 @@ function ExcelTester({ overnightCfg, discounts }: { overnightCfg: OvernightConfi
     e.preventDefault(); setDragging(false); const f = e.dataTransfer.files[0]; if (f) processFile(f)
   }
 
+  function exportResultToExcel() {
+    if (!rows.length) return
+    const exportData = rows.map(r => {
+      const disc = rowDiscounts(r)
+      const durMin = r.entryTime && r.exitTime
+        ? (new Date(r.exitTime).getTime() - new Date(r.entryTime).getTime()) / 60000 : 0
+      
+      const meta = TYPE_META[r.cardType]
+      return {
+        'แถว': r.rowNum,
+        'ทะเบียน': r.plate || '—',
+        'ประเภท': meta ? meta.label : r.cardType,
+        'เข้า': r.entryTime ? fmtDatetime(r.entryTime) : '—',
+        'ออก': r.exitTime ? fmtDatetime(r.exitTime) : '—',
+        'ระยะ': durMin > 0 ? fmtDuration(durMin) : '—',
+        'คำนวณ': r.error ? 'Error' : r.calculatedFee,
+        'ส่วนลดร้านค้า': r.error ? 0 : disc.shopAmt,
+        'ส่วนลดโรงแรม': r.error ? 0 : disc.hotelAmt,
+        'สุทธิ': r.error ? 0 : disc.final
+      }
+    })
+
+    const ws = XLSX.utils.json_to_sheet(exportData)
+    // Adjust column widths slightly for readability
+    ws['!cols'] = [
+      { wch: 8 },  // แถว
+      { wch: 12 }, // ทะเบียน
+      { wch: 15 }, // ประเภท
+      { wch: 18 }, // เข้า
+      { wch: 18 }, // ออก
+      { wch: 15 }, // ระยะ
+      { wch: 10 }, // คำนวณ
+      { wch: 15 }, // ส่วนลดร้านค้า
+      { wch: 15 }, // ส่วนลดโรงแรม
+      { wch: 10 }, // สุทธิ
+    ]
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Results')
+    XLSX.writeFile(wb, `fee_results_${new Date().getTime()}.xlsx`)
+  }
+
   const errorCount  = rows.filter(r => r.error !== null).length
   const hasShopDiscount  = rows.some(r => r.shopDiscountName)
   const hasHotelDiscount = rows.some(r => r.hotelDiscountName)
@@ -876,6 +917,11 @@ function ExcelTester({ overnightCfg, discounts }: { overnightCfg: OvernightConfi
             <span className="ml-auto text-xs font-black" style={{ color: '#059669' }}>
               ยอดสุทธิรวม ฿{totalFinal}
             </span>
+            <button onClick={exportResultToExcel}
+              className="flex items-center gap-1.5 h-8 px-3 rounded-lg text-xs font-bold transition-colors hover:opacity-90 ml-2 shadow-sm"
+              style={{ background: '#059669', color: 'white' }}>
+              <Download className="size-3.5" />Export ผลลัพธ์
+            </button>
           </div>
         )
       })()}
