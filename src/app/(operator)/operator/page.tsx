@@ -598,11 +598,13 @@ export default function OperatorPage() {
       {/* ─── Body ─── */}
       <div className="flex-1 flex flex-col gap-4 p-5 min-h-0">
 
-        {/* ── Camera strip (4 feeds) ── */}
-        <CctvStrip />
+        {/* ── Camera strip (4 feeds) — takes 3× more flex space than session list ── */}
+        <div className="flex-[3] min-h-0 flex flex-col">
+          <CctvStrip />
+        </div>
 
-        {/* ── 3 Action buttons ── */}
-        <div className="shrink-0 grid grid-cols-3 gap-4" style={{ height: '164px' }}>
+        {/* ── 3 Action buttons (compact horizontal bar) ── */}
+        <div className="shrink-0 grid grid-cols-3 gap-3" style={{ height: '46px' }}>
 
           <button
             onClick={() => {
@@ -612,56 +614,45 @@ export default function OperatorPage() {
                 resetCI(); setCheckInOpen(true)
               }
             }}
-            className="flex flex-col items-center justify-center gap-2 rounded-2xl transition-all active:scale-[0.97] hover:brightness-110 relative overflow-hidden"
+            className="flex items-center justify-center gap-2.5 rounded-xl transition-all active:scale-[0.97] hover:brightness-110 relative overflow-hidden"
             style={stats && stats.availableSlots === 0
-              ? { background: 'linear-gradient(145deg, #7C3AED 0%, #A855F7 100%)', boxShadow: '0 6px 28px rgba(124,58,237,0.4)' }
-              : { background: 'linear-gradient(145deg, #1E3A8A 0%, #2563EB 100%)', boxShadow: '0 6px 28px rgba(29,78,216,0.38)' }}
+              ? { background: 'linear-gradient(135deg, #7C3AED 0%, #A855F7 100%)', boxShadow: '0 4px 16px rgba(124,58,237,0.4)' }
+              : { background: 'linear-gradient(135deg, #1E3A8A 0%, #2563EB 100%)', boxShadow: '0 4px 16px rgba(29,78,216,0.38)' }}
           >
             {stats && stats.availableSlots === 0 && (
-              <span className="absolute top-2.5 right-2.5 text-[9px] font-black px-1.5 py-0.5 rounded-full"
+              <span className="absolute top-1 right-1.5 text-[8px] font-black px-1 py-px rounded-full"
                 style={{ background: 'rgba(255,255,255,0.2)', color: 'white' }}>ลานเต็ม</span>
             )}
-            <div className="size-12 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.16)' }}>
+            <div className="size-6 rounded-md flex items-center justify-center shrink-0" style={{ background: 'rgba(255,255,255,0.18)' }}>
               {stats && stats.availableSlots === 0
-                ? <ListOrdered className="size-7 text-white" strokeWidth={1.75} />
-                : <LogIn className="size-7 text-white" strokeWidth={1.75} />}
+                ? <ListOrdered className="size-3.5 text-white" strokeWidth={2} />
+                : <LogIn className="size-3.5 text-white" strokeWidth={2} />}
             </div>
-            <div className="text-center">
-              <p className="text-lg font-black text-white tracking-widest">
-                {stats && stats.availableSlots === 0 ? 'คิวรอ' : 'CHECK IN'}
-              </p>
-              <p className="text-xs mt-0.5" style={{ color: 'rgba(255,255,255,0.65)' }}>
-                {stats && stats.availableSlots === 0 ? 'เพิ่มรถเข้าคิว' : 'รถเข้าลานจอด'}
-              </p>
-            </div>
+            <p className="text-xs font-black text-white leading-none tracking-wide truncate">
+              {stats && stats.availableSlots === 0 ? 'คิวรอ' : 'CHECK IN'}
+            </p>
           </button>
 
           <button
             onClick={() => { resetCO(); setCheckOutOpen(true) }}
-            className="flex flex-col items-center justify-center gap-3 rounded-2xl transition-all active:scale-[0.97] hover:brightness-110"
-            style={{ background: 'linear-gradient(145deg, #064E3B 0%, #059669 100%)', boxShadow: '0 6px 28px rgba(5,150,105,0.38)' }}
+            className="flex items-center justify-center gap-2 rounded-xl transition-all active:scale-[0.97] hover:brightness-110"
+            style={{ background: 'linear-gradient(135deg, #064E3B 0%, #059669 100%)', boxShadow: '0 4px 16px rgba(5,150,105,0.38)' }}
           >
-            <div className="size-12 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.16)' }}>
-              <LogOut className="size-7 text-white" strokeWidth={1.75} />
+            <div className="size-6 rounded-md flex items-center justify-center shrink-0" style={{ background: 'rgba(255,255,255,0.18)' }}>
+              <LogOut className="size-3.5 text-white" strokeWidth={2} />
             </div>
-            <div className="text-center">
-              <p className="text-lg font-black text-white tracking-widest">CHECK OUT</p>
-              <p className="text-xs text-emerald-200 mt-0.5">สแกนบัตร</p>
-            </div>
+            <p className="text-xs font-black text-white leading-none tracking-wide">CHECK OUT</p>
           </button>
 
           <button
             onClick={() => setLostOpen(true)}
-            className="flex flex-col items-center justify-center gap-3 rounded-2xl transition-all active:scale-[0.97] hover:brightness-110"
-            style={{ background: 'linear-gradient(145deg, #78350F 0%, #D97706 100%)', boxShadow: '0 6px 28px rgba(217,119,6,0.35)' }}
+            className="flex items-center justify-center gap-2 rounded-xl transition-all active:scale-[0.97] hover:brightness-110"
+            style={{ background: 'linear-gradient(135deg, #78350F 0%, #D97706 100%)', boxShadow: '0 4px 16px rgba(217,119,6,0.35)' }}
           >
-            <div className="size-12 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.16)' }}>
-              <AlertTriangle className="size-7 text-white" strokeWidth={1.75} />
+            <div className="size-6 rounded-md flex items-center justify-center shrink-0" style={{ background: 'rgba(255,255,255,0.18)' }}>
+              <AlertTriangle className="size-3.5 text-white" strokeWidth={2} />
             </div>
-            <div className="text-center">
-              <p className="text-lg font-black text-white tracking-widest">บัตรหาย</p>
-              <p className="text-xs text-amber-200 mt-0.5">ค่าปรับ ฿300</p>
-            </div>
+            <p className="text-xs font-black text-white leading-none tracking-wide">บัตรหาย</p>
           </button>
         </div>
 

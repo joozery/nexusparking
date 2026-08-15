@@ -10,6 +10,8 @@ type Status = 'idle' | 'loading' | 'online' | 'offline'
 const ENTRY_CAMS = [
   { id: 'plate' as CamId, label: 'ป้ายทะเบียน', num: 'CAM-01', accent: '#1D4ED8' },
   { id: 'face'  as CamId, label: 'หน้าคนขับ',   num: 'CAM-02', accent: '#059669' },
+  { id: 'rear'  as CamId, label: 'Rear',         num: 'CAM-03', accent: '#7C3AED' },
+  { id: 'exit'  as CamId, label: 'ขาออก',        num: 'CAM-04', accent: '#EA580C' },
 ]
 const EXIT_CAMS = [
   { id: 'rear' as CamId, label: 'Rear',   num: 'CAM-03', accent: '#7C3AED' },
@@ -183,7 +185,7 @@ export function CctvStrip() {
 
   return (
     <>
-      <div className="shrink-0 flex flex-col gap-2" style={{ height: '220px' }}>
+      <div className="flex-1 flex flex-col gap-2 min-h-0">
 
         {/* header row: mode badge + F12 hint */}
         <div className="shrink-0 flex items-center justify-between">
@@ -210,7 +212,7 @@ export function CctvStrip() {
           </button>
         </div>
 
-        {/* 2 cameras side-by-side */}
+        {/* camera grid: 2 cols, 2 rows (entry) or 2 cols 1 row (exit) */}
         <div className="flex-1 grid grid-cols-2 gap-2.5 min-h-0">
           {cams.map(cam => (
             <MiniCam
