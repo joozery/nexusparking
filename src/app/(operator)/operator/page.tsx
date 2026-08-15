@@ -12,11 +12,12 @@ import { CheckInDialog } from '@/components/parking/CheckInDialog'
 import { CheckOutDialog, type PaymentMethod } from '@/components/parking/CheckOutDialog'
 import { LostCardDialog } from '@/components/parking/LostCardDialog'
 import { CardRegisterDialog } from '@/components/parking/CardRegisterDialog'
+import { CctvStrip } from '@/components/parking/CctvStrip'
 import { type CardType } from '@/components/parking/types'
 import { calcFeeFromMinutes, type OvernightConfig, type AfterHoursConfig } from '@/lib/calcFee'
 import { useToast } from '@/components/ui/Toast'
 import { triggerBarrierClient } from '@/lib/barrierClient'
-import { convertThaiToEn } from '@/lib/thaiInput'
+import { convertThaiToEn, toAsciiNumber } from '@/lib/thaiInput'
 
 function sanitizeUid(s: string) { return s.replace(/[\x00-\x1F\x7F]/g, '').trim() }
 
@@ -434,7 +435,12 @@ export default function OperatorPage() {
     onCardScanRef.current = async (uid: string) => {
       // Ignore scan when any dialog is already open — prevents resetting in-progress forms
       if (checkInOpen || checkOutOpen || lostOpen || queueOpen || shiftEnding || regOpen) return
-      const activeSession = sessions.find(s => s.status === 'active' && s.cardUid === uid)
+
+      // Cards/sessions registered before Thai→ASCII conversion have Thai chars stored as UID.
+      // Match by the converted uid OR by converting the stored uid (backward-compat).
+      const matchUid = (stored: string) => stored === uid || convertThaiToEn(stored) === uid
+
+      const activeSession = sessions.find(s => s.status === 'active' && matchUid(s.cardUid))
       if (activeSession) {
         // Card already inside → checkout
         openCheckoutFromCard(activeSession)
@@ -444,7 +450,7 @@ export default function OperatorPage() {
           const res = await fetch('/api/cards')
           if (res.ok) {
             const cards: Array<{ uid: string; type: CardType; plate: string }> = await res.json()
-            const found = cards.find(c => c.uid === uid)
+            const found = cards.find(c => matchUid(c.uid))
             if (found) {
               setCiType(found.type)
               if (found.plate) setCiPlate(found.plate)
@@ -591,6 +597,9 @@ export default function OperatorPage() {
 
       {/* ─── Body ─── */}
       <div className="flex-1 flex flex-col gap-4 p-5 min-h-0">
+
+        {/* ── Camera strip (4 feeds) ── */}
+        <CctvStrip />
 
         {/* ── 3 Action buttons ── */}
         <div className="shrink-0 grid grid-cols-3 gap-4" style={{ height: '164px' }}>
@@ -1065,9 +1074,9 @@ export default function OperatorPage() {
                 <div className="relative">
                   <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-black text-slate-400">฿</span>
                   <input
-                    type="number" min="0" placeholder="0"
+                    type="text" inputMode="numeric" placeholder="0"
                     value={openingFloat}
-                    onChange={e => setOpeningFloat(e.target.value)}
+                    onChange={e => setOpeningFloat(toAsciiNumber(e.target.value))}
                     className="w-full h-12 rounded-xl pl-8 pr-4 text-lg font-black text-slate-800 outline-none"
                     style={{ border: '2px solid #E2E8F0', background: '#FAFBFF' }}
                     onFocus={e => { e.currentTarget.style.borderColor = '#1D4ED8' }}
@@ -1141,9 +1150,9 @@ export default function OperatorPage() {
                 <div className="relative">
                   <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-black text-slate-400">฿</span>
                   <input
-                    type="number" min="0" placeholder="0"
+                    type="text" inputMode="numeric" placeholder="0"
                     value={closingFloat}
-                    onChange={e => setClosingFloat(e.target.value)}
+                    onChange={e => setClosingFloat(toAsciiNumber(e.target.value))}
                     className="w-full h-12 rounded-xl pl-8 pr-4 text-lg font-black text-slate-800 outline-none"
                     style={{ border: '2px solid #E2E8F0', background: '#FAFBFF' }}
                     onFocus={e => { e.currentTarget.style.borderColor = '#DC2626' }}

@@ -29,3 +29,11 @@ export function convertThaiToEn(s: string): string {
 export function toAsciiPlate(s: string): string {
   return convertThaiToEn(s).replace(/\D/g, '')
 }
+
+/**
+ * Convert a numeric/money input to ASCII digits (+ optional decimal point).
+ * Strips everything else including Thai keyboard chars that aren't digits.
+ */
+export function toAsciiNumber(s: string): string {
+  return convertThaiToEn(s).replace(/[^0-9.]/g, '')
+}

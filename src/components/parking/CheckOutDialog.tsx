@@ -10,6 +10,7 @@ import {
 import { CardBadge } from './CardBadge'
 import { type CardType } from './types'
 import { calcFeeBreakdown, type OvernightConfig, type AfterHoursConfig } from '@/lib/calcFee'
+import { toAsciiNumber } from '@/lib/thaiInput'
 
 export type PaymentMethod = 'cash' | 'qr'
 
@@ -303,11 +304,11 @@ export function CheckOutDialog({
                   <div className="space-y-1.5">
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">รับเงิน (฿)</p>
                     <input
-                      type="number"
-                      min={0}
+                      type="text"
+                      inputMode="numeric"
                       placeholder={`≥ ฿${finalFee}`}
                       value={cashReceived}
-                      onChange={e => setCashReceived(e.target.value)}
+                      onChange={e => setCashReceived(toAsciiNumber(e.target.value))}
                       className="w-full h-10 px-3 rounded-lg text-xl font-black text-slate-800 outline-none tabular-nums"
                       style={{ border: '1.5px solid #E2E8F0', background: 'white' }}
                       onFocus={e => e.currentTarget.style.borderColor = '#059669'}
