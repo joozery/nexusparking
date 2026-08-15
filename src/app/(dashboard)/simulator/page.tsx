@@ -646,10 +646,10 @@ function parseDateTimeSplit(dateCol: unknown, timeCol: unknown): Date | null {
   if (dateCol instanceof Date) {
     const d = dateCol
     if (isNaN(d.getTime())) return null
-    // Date จาก cellDates=true เป็น UTC → ดึง UTC y/m/d
-    base = new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 0, 0, 0)
+    // Date จาก cellDates=true จะถูกแปลงใน local timezone
+    base = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0)
     // ถ้าวันที่เป็น 1899 แสดงว่าเป็น time-only fraction → ไม่ใช่ date column จริง
-    if (d.getUTCFullYear() === 1899) return null
+    if (d.getFullYear() === 1899 || d.getFullYear() === 1900) return null
   } else if (typeof dateCol === 'number') {
     try {
       const p = XLSX.SSF.parse_date_code(dateCol)
@@ -664,10 +664,11 @@ function parseDateTimeSplit(dateCol: unknown, timeCol: unknown): Date | null {
   // parse timeCol
   if (timeCol != null && timeCol !== '') {
     if (timeCol instanceof Date) {
-      // cellDates=true: time fraction → Date anchored at 1899-12-30 UTC
+      // cellDates=true: time fraction → Date anchored at 1899-12-30 local time
+      // ต้องใช้ getHours() แทน getUTCHours() เพราะ JS มี historical timezones (เช่น +6:42:04 ก่อนปี 1900)
       const t = timeCol as Date
       if (!isNaN(t.getTime())) {
-        base.setHours(t.getUTCHours(), t.getUTCMinutes(), t.getUTCSeconds(), 0)
+        base.setHours(t.getHours(), t.getMinutes(), t.getSeconds(), 0)
       }
     } else if (typeof timeCol === 'number') {
       // Excel time fraction: 0.5 = 12:00
