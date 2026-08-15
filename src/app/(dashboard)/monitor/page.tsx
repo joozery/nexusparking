@@ -230,6 +230,7 @@ export default function MonitorPage() {
   const [draft, setDraft]           = useState<CameraUrls>({ plate: '', face: '', rear: '', exit: '' })
   const [showUrl, setShowUrl]       = useState<Record<string, boolean>>({ plate: false, face: false, rear: false, exit: false })
   const [expanded, setExpanded]     = useState<CameraSlot | null>(null)
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'ok' | 'error'>('idle')
 
   useEffect(() => {
     fetch('/api/cctv')
@@ -256,18 +257,25 @@ export default function MonitorPage() {
     return () => document.removeEventListener('keydown', fn)
   }, [])
 
-  function openSettings() { setDraft({ ...urls }); setShowSettings(true) }
+  function openSettings() { setDraft({ ...urls }); setSaveStatus('idle'); setShowSettings(true) }
   async function saveSettings() {
-    setUrls({ ...draft })
-    setShowSettings(false)
+    setSaveStatus('saving')
     try {
-      await fetch('/api/cctv', {
+      const res = await fetch('/api/cctv', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(draft),
       })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      setUrls({ ...draft })
+      setSaveStatus('ok')
+      setTimeout(() => { setShowSettings(false); setSaveStatus('idle') }, 800)
     } catch (e) {
+      console.error('[cctv save]', e)
+      setSaveStatus('error')
+      // fallback: บันทึก localStorage
       localStorage.setItem(STORAGE_KEY, JSON.stringify(draft))
+      setUrls({ ...draft })
     }
   }
 
@@ -440,17 +448,28 @@ export default function MonitorPage() {
             </div>
 
             {/* footer */}
-            <div className="flex justify-end gap-2 px-5 py-4" style={{ borderTop: '1px solid #F1F5F9' }}>
-              <button onClick={() => setShowSettings(false)}
-                className="px-4 py-2 rounded-lg text-xs font-semibold text-slate-500 hover:bg-slate-100 transition-all">
-                ยกเลิก
-              </button>
-              <button onClick={saveSettings}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold text-white transition-opacity hover:opacity-90"
-                style={{ background: 'linear-gradient(135deg,#1E3A8A,#1D4ED8)', boxShadow: '0 2px 8px rgba(29,78,216,0.35)' }}>
-                <Save className="size-3.5" />
-                บันทึก
-              </button>
+            <div className="flex items-center justify-between px-5 py-4" style={{ borderTop: '1px solid #F1F5F9' }}>
+              {saveStatus === 'error' && (
+                <p className="text-xs text-red-500 font-medium">❌ บันทึกไม่สำเร็จ (เชื่อมต่อ DB ไม่ได้)</p>
+              )}
+              {saveStatus === 'ok' && (
+                <p className="text-xs text-green-600 font-medium">✓ บันทึกสำเร็จ</p>
+              )}
+              {(saveStatus === 'idle' || saveStatus === 'saving') && <span />}
+              <div className="flex gap-2">
+                <button onClick={() => setShowSettings(false)}
+                  className="px-4 py-2 rounded-lg text-xs font-semibold text-slate-500 hover:bg-slate-100 transition-all"
+                  disabled={saveStatus === 'saving'}>
+                  ยกเลิก
+                </button>
+                <button onClick={saveSettings}
+                  disabled={saveStatus === 'saving'}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+                  style={{ background: 'linear-gradient(135deg,#1E3A8A,#1D4ED8)', boxShadow: '0 2px 8px rgba(29,78,216,0.35)' }}>
+                  <Save className="size-3.5" />
+                  {saveStatus === 'saving' ? 'กำลังบันทึก…' : 'บันทึก'}
+                </button>
+              </div>
             </div>
           </div>
         </div>

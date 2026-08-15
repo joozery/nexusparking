@@ -1,12 +1,12 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 
 import {
   LogIn, LogOut, AlertTriangle,
   Car, Bike, Moon, RefreshCw, Clock, Search,
   Play, Square, X, CreditCard,
-  ListOrdered, Plus, CheckCheck, XCircle,
+  ListOrdered, Plus, CheckCheck, XCircle, Nfc, Scan,
 } from 'lucide-react'
 import { CheckInDialog } from '@/components/parking/CheckInDialog'
 import { CheckOutDialog, type PaymentMethod } from '@/components/parking/CheckOutDialog'
@@ -15,6 +15,27 @@ import { type CardType } from '@/components/parking/types'
 import { calcFeeFromMinutes, type OvernightConfig, type AfterHoursConfig } from '@/lib/calcFee'
 import { useToast } from '@/components/ui/Toast'
 import { triggerBarrierClient } from '@/lib/barrierClient'
+
+// ── Thai Kedmanee → ASCII (USB card-reader keyboard-wedge fix) ──────────────
+const THAI_TO_EN: Record<string, string> = {
+  'ๅ': '`', 'ภ': '3', 'ถ': '4', 'ุ': '5', 'ึ': '6',
+  'ค': '7', 'ต': '8', 'จ': '9', 'ข': '0', 'ช': '-',
+  '๑': '1', '๒': '2', '๓': '3', '๔': '4', '๕': '5',
+  '๖': '6', '๗': '7', '๘': '8', '๙': '9', '๐': '0',
+  'ๆ': 'q', 'ไ': 'w', 'ำ': 'e', 'พ': 'r', 'ะ': 't',
+  'ั': 'y', 'ี': 'u', 'ร': 'i', 'น': 'o', 'ย': 'p',
+  'บ': '[', 'ล': ']',
+  'ฟ': 'a', 'ห': 's', 'ก': 'd', 'ด': 'f', 'เ': 'g',
+  '้': 'h', '่': 'j', 'า': 'k', 'ส': 'l', 'ว': ';', 'ง': "'",
+  'ผ': 'z', 'ป': 'x', 'แ': 'c', 'อ': 'v', 'ิ': 'b',
+  'ื': 'n', 'ท': 'm', 'ม': ',', 'ใ': '.', 'ฝ': '/',
+  'ฎ': 'E', 'ฑ': 'R', 'ธ': 'T', 'ณ': 'I', 'ฯ': 'O', 'ญ': 'P',
+  'ฤ': 'A', 'ฆ': 'S', 'ฏ': 'D', 'โ': 'F', 'ฌ': 'G',
+  '็': 'H', '๋': 'J', 'ษ': 'K', 'ศ': 'L', 'ซ': ':',
+  'ฉ': 'C', 'ฮ': 'V', 'ฺ': 'B', 'ฒ': 'M',
+}
+function convertThaiToEn(s: string) { return s.split('').map(c => THAI_TO_EN[c] ?? c).join('') }
+function sanitizeUid(s: string) { return s.replace(/[\x00-\x1F\x7F]/g, '').trim() }
 
 interface Session {
   _id: string
@@ -132,6 +153,11 @@ export default function OperatorPage() {
   // Lost card
   const [lostOpen, setLostOpen] = useState(false)
 
+  // Card-reader popup (direction picker)
+  const [cardPopup, setCardPopup] = useState<{ uid: string } | null>(null)
+  const readerBuf = useRef('')
+  const readerLastAt = useRef(0)
+
   function resetCI() { setCiStep('scan'); setCiPlate(''); setCiType('car'); setCiUid(''); setCiCustomTime('') }
   function resetCO() { setCoStep('scan'); setCoSessionId(''); setCoCustomTime(''); setCoEntryTime(null) }
   function resetQ()  { setQStep('scan'); setQPlate(''); setQType('car'); setQUid('') }
@@ -193,6 +219,56 @@ export default function OperatorPage() {
     const t = setInterval(() => { fetchData(); fetchSettings() }, 15000)
     return () => clearInterval(t)
   }, [fetchData, fetchSettings])
+
+  // ── Global card-reader (keyboard-wedge) listener ────────────────────────
+  useEffect(() => {
+    // Card readers type char-to-char in < 5 ms; humans type > 100 ms/char.
+    const READER_MAX_GAP = 30   // ms — anything faster than this = card reader
+    const IDLE_TRIGGER_MS = 250 // ms — fallback for readers that don't send Enter
+    const MIN_LEN = 4
+
+    let idleTimer: ReturnType<typeof setTimeout> | null = null
+
+    function processBuffer() {
+      if (idleTimer) { clearTimeout(idleTimer); idleTimer = null }
+      const raw = readerBuf.current
+      readerBuf.current = ''
+      if (raw.length < MIN_LEN) return
+      const uid = sanitizeUid(convertThaiToEn(raw))
+      if (uid.length >= MIN_LEN) setCardPopup({ uid })
+    }
+
+    function onKey(e: KeyboardEvent) {
+      const now = Date.now()
+      const tag = (e.target as HTMLElement)?.tagName
+      const inForm = ['INPUT', 'TEXTAREA', 'SELECT'].includes(tag)
+
+      if (e.key === 'Enter') {
+        // Fire immediately if buffer looks like a card scan, even when an input is focused
+        if (!inForm || readerBuf.current.length >= MIN_LEN) processBuffer()
+        return
+      }
+
+      if (e.key.length !== 1) return
+
+      const gap = now - readerLastAt.current
+      readerLastAt.current = now
+
+      if (gap > READER_MAX_GAP) {
+        readerBuf.current = ''
+      }
+
+      readerBuf.current += e.key
+      if (idleTimer) clearTimeout(idleTimer)
+      idleTimer = setTimeout(processBuffer, IDLE_TRIGGER_MS)
+    }
+
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      if (idleTimer) clearTimeout(idleTimer)
+    }
+  }, [])
 
 
   // Queue actions
@@ -403,6 +479,34 @@ export default function OperatorPage() {
       const err = await res.json()
       toastError('ขาออกไม่สำเร็จ', err.error ?? 'เกิดข้อผิดพลาด')
     }
+  }
+
+  // ── Card-reader popup handlers ─────────────────────────────────────────
+  async function handleCardCheckin(uid: string) {
+    setCardPopup(null)
+    // Try to resolve card type from server
+    try {
+      const res = await fetch('/api/cards')
+      if (res.ok) {
+        const cards: Array<{ uid: string; type: CardType }> = await res.json()
+        const found = cards.find(c => c.uid === uid)
+        if (found) setCiType(found.type)
+      }
+    } catch { /* ignore */ }
+    setCiUid(uid)
+    setCiStep('confirm')
+    setCheckInOpen(true)
+  }
+
+  async function handleCardCheckout(uid: string) {
+    setCardPopup(null)
+    fetchSettings()
+    const session = sessions.find(s => s.status === 'active' && s.cardUid === uid)
+    if (!session) {
+      toastError('ไม่พบรถในลาน', `UID: ${uid} — ไม่มีรถที่ใช้บัตรนี้อยู่ในลาน`)
+      return
+    }
+    openCheckoutFromCard(session)
   }
 
   async function handleLostCard(plate: string, estimatedHours: number, cardType: 'car' | 'motorcycle') {
@@ -1112,6 +1216,80 @@ export default function OperatorPage() {
         onOpenChange={setLostOpen}
         onConfirm={handleLostCard}
       />
+
+      {/* ─── Card-reader Direction Popup ─── */}
+      {cardPopup && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center"
+          style={{ background: 'rgba(2,6,23,0.7)', backdropFilter: 'blur(6px)' }}
+          onClick={() => setCardPopup(null)}
+        >
+          <div
+            className="bg-white rounded-3xl w-full max-w-xs mx-4 overflow-hidden shadow-2xl"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="px-5 py-4 flex items-center gap-3"
+              style={{ background: 'linear-gradient(135deg,#1E3A8A,#2563EB)' }}>
+              <div className="size-9 rounded-xl flex items-center justify-center shrink-0"
+                style={{ background: 'rgba(255,255,255,0.2)' }}>
+                <Nfc className="size-5 text-white" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-white font-black text-sm">สแกนบัตรสำเร็จ</p>
+                <p className="text-blue-200 text-xs font-mono truncate mt-0.5">{cardPopup.uid}</p>
+              </div>
+              <button onClick={() => setCardPopup(null)}
+                className="size-8 rounded-lg flex items-center justify-center shrink-0"
+                style={{ background: 'rgba(255,255,255,0.15)' }}>
+                <X className="size-4 text-white" />
+              </button>
+            </div>
+
+            {/* Prompt */}
+            <div className="px-5 pt-4 pb-2">
+              <p className="text-xs text-slate-500 text-center font-semibold">เลือกประเภทการใช้งาน</p>
+            </div>
+
+            {/* Two big action buttons */}
+            <div className="grid grid-cols-2 gap-3 px-5 pb-5 pt-2">
+              <button
+                onClick={() => handleCardCheckin(cardPopup.uid)}
+                className="flex flex-col items-center justify-center gap-2.5 rounded-2xl py-5 transition-all active:scale-[0.96] hover:brightness-105"
+                style={{ background: 'linear-gradient(145deg,#1E3A8A,#2563EB)', boxShadow: '0 4px 20px rgba(29,78,216,0.4)' }}
+              >
+                <div className="size-10 rounded-xl flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.18)' }}>
+                  <LogIn className="size-5 text-white" strokeWidth={2} />
+                </div>
+                <div className="text-center">
+                  <p className="text-white font-black text-sm tracking-wider">ขาเข้า</p>
+                  <p className="text-blue-200 text-[10px] mt-0.5">Check In</p>
+                </div>
+              </button>
+
+              <button
+                onClick={() => handleCardCheckout(cardPopup.uid)}
+                className="flex flex-col items-center justify-center gap-2.5 rounded-2xl py-5 transition-all active:scale-[0.96] hover:brightness-105"
+                style={{ background: 'linear-gradient(145deg,#064E3B,#059669)', boxShadow: '0 4px 20px rgba(5,150,105,0.4)' }}
+              >
+                <div className="size-10 rounded-xl flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.18)' }}>
+                  <LogOut className="size-5 text-white" strokeWidth={2} />
+                </div>
+                <div className="text-center">
+                  <p className="text-white font-black text-sm tracking-wider">ขาออก</p>
+                  <p className="text-emerald-200 text-[10px] mt-0.5">Check Out</p>
+                </div>
+              </button>
+            </div>
+
+            {/* UID footer */}
+            <div className="px-5 pb-4 flex items-center justify-center gap-1.5">
+              <Scan className="size-3 text-slate-300" />
+              <p className="text-[10px] text-slate-300 font-mono">{cardPopup.uid}</p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

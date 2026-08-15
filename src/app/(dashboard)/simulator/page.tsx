@@ -5,6 +5,7 @@ import {
   FlaskConical, Car, Bike, Moon, Plus, Trash2,
   Play, RefreshCw, CheckCircle2, AlertTriangle, X, Info,
   Upload, Download, FileSpreadsheet, ChevronDown, ChevronRight,
+  Tag, Percent, Banknote,
 } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { calcFeeBreakdown, type CardType, type FeeSegment, type OvernightConfig } from '@/lib/calcFee'
@@ -66,6 +67,15 @@ const TYPE_META: Record<CardType, { label: string; icon: typeof Car; color: stri
 
 // ── types ─────────────────────────────────────────────────────────────────────
 
+interface DiscountDoc {
+  _id:           string
+  name:          string
+  discountType:  'fixed' | 'percent' | 'per_day'
+  discountValue: number
+  maxDiscount?:  number
+  description?:  string
+}
+
 interface SeedRow {
   id:            string
   plate:         string
@@ -75,12 +85,25 @@ interface SeedRow {
   paymentMethod: 'cash' | 'qr'
 }
 
+// ── discount helper ───────────────────────────────────────────────────
+function calcDiscount(subtotal: number, disc: DiscountDoc | null, nightCount = 1): number {
+  if (!disc || subtotal <= 0) return 0
+  if (disc.discountType === 'fixed')   return Math.min(disc.discountValue, subtotal)
+  if (disc.discountType === 'percent') {
+    const d = Math.round(subtotal * disc.discountValue / 100)
+    return disc.maxDiscount != null ? Math.min(d, disc.maxDiscount) : d
+  }
+  if (disc.discountType === 'per_day') return Math.min(disc.discountValue * Math.max(1, nightCount), subtotal)
+  return 0
+}
+
 // ── Fee Calculator ────────────────────────────────────────────────────────────
 
-function FeeCalculator({ overnightCfg }: { overnightCfg: OvernightConfig | null }) {
-  const [cardType,   setCardType]   = useState<CardType>('car')
-  const [entryTime,  setEntryTime]  = useState(nowLocal())
-  const [exitTime,   setExitTime]   = useState('')
+function FeeCalculator({ overnightCfg, discounts }: { overnightCfg: OvernightConfig | null; discounts: DiscountDoc[] }) {
+  const [cardType,         setCardType]         = useState<CardType>('car')
+  const [entryTime,        setEntryTime]        = useState(nowLocal())
+  const [exitTime,         setExitTime]         = useState('')
+  const [selectedDiscount, setSelectedDiscount] = useState<string>('')  // '' = none
 
   const breakdown = useMemo(() => {
     if (!entryTime || !exitTime) return null
@@ -89,6 +112,11 @@ function FeeCalculator({ overnightCfg }: { overnightCfg: OvernightConfig | null 
     if (isNaN(entry.getTime()) || isNaN(exit.getTime()) || exit <= entry) return null
     return calcFeeBreakdown(cardType, entry, exit, overnightCfg ?? undefined)
   }, [cardType, entryTime, exitTime, overnightCfg])
+
+  const activeDiscount = discounts.find(d => d._id === selectedDiscount) ?? null
+  const nightCount = breakdown?.segments.filter(s => s.kind === 'overnight').length ?? 1
+  const discountAmt = breakdown ? calcDiscount(breakdown.total, activeDiscount, nightCount) : 0
+  const finalTotal  = breakdown ? breakdown.total - discountAmt : 0
 
   const showDaytimeNote = exitTime && overnightCfg && exitIsDaytime(exitTime, overnightCfg) && cardType !== 'overnight'
     && breakdown != null && !breakdown.segments.some(s => s.kind === 'overnight')
@@ -161,6 +189,47 @@ function FeeCalculator({ overnightCfg }: { overnightCfg: OvernightConfig | null 
           </div>
         )}
 
+        {/* Discount selector */}
+        {discounts.length > 0 && (
+          <div>
+            <label className="text-[10px] font-black text-slate-500 uppercase tracking-wide block mb-1.5">
+              ส่วนลด
+            </label>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => setSelectedDiscount('')}
+                className="flex items-center gap-1.5 h-8 px-3 rounded-lg text-xs font-bold transition-all"
+                style={selectedDiscount === ''
+                  ? { background: '#F1F5F9', border: '1.5px solid #94A3B8', color: '#475569' }
+                  : { background: '#F8FAFF', border: '1.5px solid #E2E8F0', color: '#94A3B8' }}
+              >
+                ไม่มีส่วนลด
+              </button>
+              {discounts.map(d => {
+                const Icon = d.discountType === 'percent' ? Percent : d.discountType === 'per_day' ? Tag : Banknote
+                const label = d.discountType === 'percent'
+                  ? `${d.discountValue}%${d.maxDiscount ? ` (สูงสุด ฿${d.maxDiscount})` : ''}`
+                  : d.discountType === 'per_day'
+                  ? `฿${d.discountValue}/คืน`
+                  : `฿${d.discountValue}`
+                const isActive = selectedDiscount === d._id
+                return (
+                  <button key={d._id}
+                    onClick={() => setSelectedDiscount(d._id)}
+                    className="flex items-center gap-1.5 h-8 px-3 rounded-lg text-xs font-bold transition-all"
+                    style={isActive
+                      ? { background: 'rgba(109,40,217,0.08)', border: '1.5px solid #6D28D9', color: '#6D28D9' }
+                      : { background: '#F8FAFF', border: '1.5px solid #E2E8F0', color: '#94A3B8' }}
+                  >
+                    <Icon className="size-3" />
+                    {d.name} — {label}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Breakdown */}
         {breakdown && (
           <div className="rounded-xl overflow-hidden" style={{ border: '1px solid #E8ECF4' }}>
@@ -193,12 +262,30 @@ function FeeCalculator({ overnightCfg }: { overnightCfg: OvernightConfig | null 
                 })}
               </tbody>
               <tfoot>
-                <tr style={{ background: '#F0F2F8', borderTop: '2px solid #E8ECF4' }}>
-                  <td colSpan={3} className="px-3 py-3 font-black text-slate-700 text-xs">รวมทั้งหมด</td>
-                  <td className="px-3 py-3 text-right text-lg font-black" style={{ color: '#1D4ED8' }}>
-                    ฿{breakdown.total}
-                  </td>
-                </tr>
+                {discountAmt > 0 ? (
+                  <>
+                    <tr style={{ background: '#F8FAFF', borderTop: '1px solid #E8ECF4' }}>
+                      <td colSpan={3} className="px-3 py-2 text-slate-500 text-xs">ก่อนส่วนลด</td>
+                      <td className="px-3 py-2 text-right font-bold text-slate-600">฿{breakdown.total}</td>
+                    </tr>
+                    <tr style={{ background: 'rgba(109,40,217,0.04)' }}>
+                      <td colSpan={3} className="px-3 py-2 text-xs font-bold" style={{ color: '#6D28D9' }}>
+                        <Tag className="size-3 inline mr-1" />
+                        ส่วนลด: {activeDiscount?.name}
+                      </td>
+                      <td className="px-3 py-2 text-right font-black" style={{ color: '#6D28D9' }}>-฿{discountAmt}</td>
+                    </tr>
+                    <tr style={{ background: '#F0F2F8', borderTop: '2px solid #E8ECF4' }}>
+                      <td colSpan={3} className="px-3 py-3 font-black text-slate-700 text-xs">ยอดสุทธิ</td>
+                      <td className="px-3 py-3 text-right text-lg font-black" style={{ color: '#059669' }}>฿{finalTotal}</td>
+                    </tr>
+                  </>
+                ) : (
+                  <tr style={{ background: '#F0F2F8', borderTop: '2px solid #E8ECF4' }}>
+                    <td colSpan={3} className="px-3 py-3 font-black text-slate-700 text-xs">รวมทั้งหมด</td>
+                    <td className="px-3 py-3 text-right text-lg font-black" style={{ color: '#1D4ED8' }}>฿{breakdown.total}</td>
+                  </tr>
+                )}
               </tfoot>
             </table>
           </div>
@@ -504,10 +591,12 @@ interface TestRow {
   cardType:      CardType
   entryTime:     string        // ISO
   exitTime:      string        // ISO
-  expectedFee:   number | null
-  calculatedFee: number
+  discountAmt:   number        // col F — fixed discount in baht (0 = no discount)
+  expectedFee:   number | null // col E — expected net fee (after discount)
+  calculatedFee: number        // fee from calcFeeBreakdown
+  finalFee:      number        // calculatedFee - discountAmt
   segments:      FeeSegment[]
-  pass:          boolean | null // null = no expectedFee
+  pass:          boolean | null // null = no expectedFee; compares finalFee vs expectedFee
   error:         string | null
 }
 
@@ -551,14 +640,14 @@ function normalizeCardType(val: unknown): CardType | null {
 function downloadTemplate() {
   const wb = XLSX.utils.book_new()
   const rows = [
-    ['ทะเบียน', 'ประเภท (car/motorcycle/overnight)', 'เวลาเข้า', 'เวลาออก', 'ค่าที่คาดหวัง (ไม่บังคับ)'],
-    ['1234', 'car',        '2024-08-14 09:00', '2024-08-14 11:30', 50],
-    ['5678', 'motorcycle', '2024-08-14 08:00', '2024-08-14 09:00', 20],
-    ['9999', 'car',        '2024-08-14 20:00', '2024-08-15 07:30', 120],
-    ['ABCD', 'overnight',  '2024-08-14 18:00', '2024-08-15 08:00', 120],
+    ['ทะเบียน', 'ประเภท (car/motorcycle/overnight)', 'เวลาเข้า', 'เวลาออก', 'ส่วนลด ฿ (ไม่บังคับ)', 'ค่าที่คาดหวัง (หลังส่วนลด, ไม่บังคับ)'],
+    ['1234', 'car',        '2024-08-14 09:00', '2024-08-14 11:30',  0,  50],
+    ['5678', 'motorcycle', '2024-08-14 08:00', '2024-08-14 09:00',  0,  20],
+    ['9999', 'car',        '2024-08-14 20:00', '2024-08-15 07:30', 20, 100],
+    ['ABCD', 'overnight',  '2024-08-14 18:00', '2024-08-15 08:00', 50,  70],
   ]
   const ws = XLSX.utils.aoa_to_sheet(rows)
-  ws['!cols'] = [{ wch: 14 }, { wch: 30 }, { wch: 22 }, { wch: 22 }, { wch: 28 }]
+  ws['!cols'] = [{ wch: 14 }, { wch: 30 }, { wch: 22 }, { wch: 22 }, { wch: 24 }, { wch: 32 }]
   XLSX.utils.book_append_sheet(wb, ws, 'fee_test')
   XLSX.writeFile(wb, 'fee_test_template.xlsx')
 }
@@ -581,14 +670,30 @@ function ExcelTester({ overnightCfg }: { overnightCfg: OvernightConfig | null })
         const dataRows = raw.slice(1).filter(r => r && (r as unknown[]).some(c => c !== null && c !== ''))
 
         const parsed: TestRow[] = dataRows.map((r, i) => {
-          const rowNum    = i + 2
-          const plate     = String(r[0] ?? '').trim().toUpperCase()
-          const cardType  = normalizeCardType(r[1])
-          const entryDate = parseExcelDate(r[2])
-          const exitDate  = parseExcelDate(r[3])
-          const expectedFee = (r[4] != null && r[4] !== '') ? Number(r[4]) : null
+          const rowNum      = i + 2
+          const plate       = String(r[0] ?? '').trim().toUpperCase()
+          const cardType    = normalizeCardType(r[1])
+          const entryDate   = parseExcelDate(r[2])
+          const exitDate    = parseExcelDate(r[3])
+          // col E = discount baht (optional), col F = expected fee (optional)
+          // backward-compat: if col E is missing / text then treat as expectedFee at col E
+          const colE = r[4]; const colF = r[5]
+          let discountAmt = 0
+          let expectedFee: number | null = null
+          if (colF != null && colF !== '' && !isNaN(Number(colF))) {
+            // New format: col E = discount, col F = expected
+            discountAmt = Number(colE) || 0
+            expectedFee = Number(colF)
+          } else if (colE != null && colE !== '' && !isNaN(Number(colE))) {
+            // Old format: col E = expected fee, no discount
+            expectedFee = Number(colE)
+          }
 
-          const base = { id: crypto.randomUUID(), rowNum, plate, cardType: (cardType ?? 'car') as CardType, expectedFee, calculatedFee: 0, segments: [] as FeeSegment[], pass: null as boolean | null }
+          const base = {
+            id: crypto.randomUUID(), rowNum, plate, cardType: (cardType ?? 'car') as CardType,
+            discountAmt, expectedFee, calculatedFee: 0, finalFee: 0,
+            segments: [] as FeeSegment[], pass: null as boolean | null,
+          }
 
           if (!plate)     return { ...base, entryTime: '', exitTime: '', error: 'ไม่มีทะเบียน' }
           if (!cardType)  return { ...base, entryTime: '', exitTime: '', error: `ประเภทไม่ถูกต้อง: "${r[1]}"` }
@@ -598,11 +703,12 @@ function ExcelTester({ overnightCfg }: { overnightCfg: OvernightConfig | null })
 
           try {
             const { total, segments } = calcFeeBreakdown(cardType, entryDate, exitDate, overnightCfg ?? undefined)
+            const finalFee = Math.max(0, total - discountAmt)
             return {
               ...base, cardType,
               entryTime: entryDate.toISOString(), exitTime: exitDate.toISOString(),
-              calculatedFee: total, segments,
-              pass: expectedFee !== null ? total === expectedFee : null,
+              calculatedFee: total, finalFee, segments,
+              pass: expectedFee !== null ? finalFee === expectedFee : null,
               error: null,
             }
           } catch (err) {
@@ -626,10 +732,11 @@ function ExcelTester({ overnightCfg }: { overnightCfg: OvernightConfig | null })
     e.preventDefault(); setDragging(false); const f = e.dataTransfer.files[0]; if (f) processFile(f)
   }
 
-  const passCount  = rows.filter(r => r.pass === true).length
-  const failCount  = rows.filter(r => r.pass === false).length
-  const errorCount = rows.filter(r => r.error !== null).length
-  const hasExpected = rows.some(r => r.expectedFee !== null)
+  const passCount    = rows.filter(r => r.pass === true).length
+  const failCount    = rows.filter(r => r.pass === false).length
+  const errorCount   = rows.filter(r => r.error !== null).length
+  const hasExpected  = rows.some(r => r.expectedFee !== null)
+  const hasDiscount  = rows.some(r => r.discountAmt > 0)
 
   return (
     <div className="bg-white rounded-xl overflow-hidden" style={{ border: '1px solid #E8ECF4' }}>
@@ -708,6 +815,7 @@ function ExcelTester({ overnightCfg }: { overnightCfg: OvernightConfig | null })
             <thead>
               <tr style={{ background: '#F8FAFF', borderBottom: '1px solid #E8ECF4' }}>
                 {(['แถว', 'ทะเบียน', 'ประเภท', 'เข้า', 'ออก', 'ระยะ', 'คำนวณ',
+                  ...(hasDiscount ? ['ส่วนลด', 'สุทธิ'] : []),
                   ...(hasExpected ? ['คาดหวัง', 'ผล'] : []), '']).map(h => (
                   <th key={h} className="px-3 py-2 text-left font-black text-slate-500 text-[10px] uppercase whitespace-nowrap">{h}</th>
                 ))}
@@ -746,8 +854,20 @@ function ExcelTester({ overnightCfg }: { overnightCfg: OvernightConfig | null })
                       <td className="px-3 py-2.5">
                         {r.error
                           ? <span className="text-[10px] text-slate-400">—</span>
-                          : <span className="font-black text-slate-800">฿{r.calculatedFee}</span>}
+                          : <span className="font-black text-slate-700">฿{r.calculatedFee}</span>}
                       </td>
+                      {hasDiscount && (
+                        <td className="px-3 py-2.5 text-[10px]" style={{ color: r.discountAmt > 0 ? '#6D28D9' : '#94A3B8' }}>
+                          {r.discountAmt > 0 ? `-฿${r.discountAmt}` : '—'}
+                        </td>
+                      )}
+                      {hasDiscount && (
+                        <td className="px-3 py-2.5">
+                          {r.error
+                            ? <span className="text-[10px] text-slate-400">—</span>
+                            : <span className="font-black" style={{ color: '#059669' }}>฿{r.finalFee}</span>}
+                        </td>
+                      )}
                       {hasExpected && (
                         <td className="px-3 py-2.5 text-[10px] text-slate-400">
                           {r.expectedFee != null ? `฿${r.expectedFee}` : '—'}
@@ -818,17 +938,43 @@ function ExcelTester({ overnightCfg }: { overnightCfg: OvernightConfig | null })
                                 })}
                               </tbody>
                               <tfoot>
-                                <tr style={{ background: '#F0F2F8', borderTop: '2px solid #E8ECF4' }}>
-                                  <td colSpan={3} className="px-3 py-2 font-black text-slate-600 text-[10px]">รวม</td>
-                                  <td className="px-3 py-2 text-right font-black text-sm" style={{ color: '#1D4ED8' }}>
-                                    ฿{r.calculatedFee}
-                                    {r.pass === false && r.expectedFee != null && (
-                                      <span className="ml-2 text-[9px] font-bold" style={{ color: '#DC2626' }}>
-                                        (คาดหวัง ฿{r.expectedFee} ต่างกัน ฿{Math.abs(r.calculatedFee - r.expectedFee)})
-                                      </span>
-                                    )}
-                                  </td>
-                                </tr>
+                                {r.discountAmt > 0 ? (
+                                  <>
+                                    <tr style={{ background: '#F8FAFF', borderTop: '1px solid #E8ECF4' }}>
+                                      <td colSpan={3} className="px-3 py-1.5 text-slate-500 text-[10px]">ก่อนส่วนลด</td>
+                                      <td className="px-3 py-1.5 text-right font-bold text-slate-600 text-[10px]">฿{r.calculatedFee}</td>
+                                    </tr>
+                                    <tr style={{ background: 'rgba(109,40,217,0.04)' }}>
+                                      <td colSpan={3} className="px-3 py-1.5 text-[10px] font-bold" style={{ color: '#6D28D9' }}>
+                                        <Tag className="size-2.5 inline mr-1" />ส่วนลด
+                                      </td>
+                                      <td className="px-3 py-1.5 text-right font-black text-[10px]" style={{ color: '#6D28D9' }}>-฿{r.discountAmt}</td>
+                                    </tr>
+                                    <tr style={{ background: '#F0F2F8', borderTop: '2px solid #E8ECF4' }}>
+                                      <td colSpan={3} className="px-3 py-2 font-black text-slate-600 text-[10px]">ยอดสุทธิ</td>
+                                      <td className="px-3 py-2 text-right font-black text-sm" style={{ color: '#059669' }}>
+                                        ฿{r.finalFee}
+                                        {r.pass === false && r.expectedFee != null && (
+                                          <span className="ml-2 text-[9px] font-bold" style={{ color: '#DC2626' }}>
+                                            (คาดหวัง ฿{r.expectedFee} ต่างกัน ฿{Math.abs(r.finalFee - r.expectedFee)})
+                                          </span>
+                                        )}
+                                      </td>
+                                    </tr>
+                                  </>
+                                ) : (
+                                  <tr style={{ background: '#F0F2F8', borderTop: '2px solid #E8ECF4' }}>
+                                    <td colSpan={3} className="px-3 py-2 font-black text-slate-600 text-[10px]">รวม</td>
+                                    <td className="px-3 py-2 text-right font-black text-sm" style={{ color: '#1D4ED8' }}>
+                                      ฿{r.calculatedFee}
+                                      {r.pass === false && r.expectedFee != null && (
+                                        <span className="ml-2 text-[9px] font-bold" style={{ color: '#DC2626' }}>
+                                          (คาดหวัง ฿{r.expectedFee} ต่างกัน ฿{Math.abs(r.calculatedFee - r.expectedFee)})
+                                        </span>
+                                      )}
+                                    </td>
+                                  </tr>
+                                )}
                               </tfoot>
                             </table>
                           </div>
@@ -850,11 +996,16 @@ function ExcelTester({ overnightCfg }: { overnightCfg: OvernightConfig | null })
 
 export default function SimulatorPage() {
   const [overnightCfg, setOvernightCfg] = useState<OvernightConfig | null>(null)
+  const [discounts,    setDiscounts]    = useState<DiscountDoc[]>([])
 
   useEffect(() => {
     fetch('/api/settings')
       .then(r => r.json())
       .then(s => { if (s?.rates?.overnight) setOvernightCfg(s.rates.overnight) })
+      .catch(() => {})
+    fetch('/api/discounts?active=1')
+      .then(r => r.json())
+      .then(d => { if (Array.isArray(d)) setDiscounts(d) })
       .catch(() => {})
   }, [])
 
@@ -879,7 +1030,7 @@ export default function SimulatorPage() {
       </header>
 
       <div className="flex-1 overflow-auto p-5 space-y-5">
-        <FeeCalculator overnightCfg={overnightCfg} />
+        <FeeCalculator overnightCfg={overnightCfg} discounts={discounts} />
         <ExcelTester overnightCfg={overnightCfg} />
         <BatchSeed overnightCfg={overnightCfg} />
       </div>

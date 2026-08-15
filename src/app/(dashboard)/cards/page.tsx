@@ -1,11 +1,55 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   CreditCard, Plus, Trash2, Car, Bike, Moon,
   Search, RefreshCw, Nfc, X, Check, ShieldCheck, ShieldOff,
 } from 'lucide-react'
 import { useToast } from '@/components/ui/Toast'
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog'
+
+// Thai Kedmanee layout → English mapping (for USB card readers sending keystrokes in Thai mode)
+const THAI_TO_EN: Record<string, string> = {
+  // Number row (some systems convert number keys in Thai mode)
+  'ๅ': '`', 'ภ': '3', 'ถ': '4', 'ุ': '5', 'ึ': '6',
+  'ค': '7', 'ต': '8', 'จ': '9', 'ข': '0', 'ช': '-',
+  '๑': '1', '๒': '2', '๓': '3', '๔': '4', '๕': '5',
+  '๖': '6', '๗': '7', '๘': '8', '๙': '9', '๐': '0',
+  // QWERTY row (regular)
+  'ๆ': 'q', 'ไ': 'w', 'ำ': 'e', 'พ': 'r', 'ะ': 't',
+  'ั': 'y', 'ี': 'u', 'ร': 'i', 'น': 'o', 'ย': 'p',
+  'บ': '[', 'ล': ']',
+  // ASDF row (regular)
+  'ฟ': 'a', 'ห': 's', 'ก': 'd', 'ด': 'f', 'เ': 'g',
+  '้': 'h', '่': 'j', 'า': 'k', 'ส': 'l', 'ว': ';', 'ง': "'",
+  // ZXCV row (regular)
+  'ผ': 'z', 'ป': 'x', 'แ': 'c', 'อ': 'v', 'ิ': 'b',
+  'ื': 'n', 'ท': 'm', 'ม': ',', 'ใ': '.', 'ฝ': '/',
+  // QWERTY row (shift = uppercase)
+  'ฎ': 'E', 'ฑ': 'R', 'ธ': 'T', 'ณ': 'I', 'ฯ': 'O', 'ญ': 'P',
+  // ASDF row (shift = uppercase)
+  'ฤ': 'A', 'ฆ': 'S', 'ฏ': 'D', 'โ': 'F', 'ฌ': 'G',
+  '็': 'H', '๋': 'J', 'ษ': 'K', 'ศ': 'L', 'ซ': ':',
+  // ZXCV row (shift = uppercase)
+  'ฉ': 'C', 'ฮ': 'V', 'ฺ': 'B', 'ฒ': 'M',
+}
+
+function convertThaiToEn(text: string): string {
+  return text.split('').map(ch => THAI_TO_EN[ch] ?? ch).join('')
+}
+
+/**
+ * Sanitise a raw UID string coming from a USB card reader.
+ * After Thai→EN conversion, keep only hex-valid characters (0-9, A-F, a-f)
+ * plus common separators used in UID notation (colon, hyphen, space).
+ * Non-matching characters are stripped so garbage from the reader is removed.
+ */
+function sanitizeUid(raw: string): string {
+  // Allow hex digits and common separators; strip everything else
+  return raw.replace(/[^0-9A-Fa-f:\- ]/g, '')
+}
 
 type CardType = 'car' | 'motorcycle' | 'overnight'
 
@@ -14,8 +58,26 @@ interface ParkingCard {
   uid: string
   type: CardType
   label: string
+  ownerName: string
+  plate: string
+  expiryDate?: string
   isActive: boolean
   createdAt: string
+}
+
+function expiryStatus(expiryDate?: string): 'none' | 'active' | 'expiring' | 'expired' {
+  if (!expiryDate) return 'none'
+  const diff = Math.ceil((new Date(expiryDate).getTime() - Date.now()) / 86400000)
+  if (diff < 0) return 'expired'
+  if (diff <= 7) return 'expiring'
+  return 'active'
+}
+
+const EXPIRY_META = {
+  none:     { label: '',           color: '',        bg: '' },
+  active:   { label: 'รายเดือน',  color: '#059669', bg: 'rgba(5,150,105,0.1)' },
+  expiring: { label: 'ใกล้หมด',   color: '#D97706', bg: 'rgba(217,119,6,0.1)' },
+  expired:  { label: 'หมดอายุ',   color: '#DC2626', bg: 'rgba(220,38,38,0.1)' },
 }
 
 const TYPE_META: Record<CardType, { label: string; icon: typeof Car; color: string; bg: string; grad: string; bgImage?: string }> = {
@@ -46,9 +108,18 @@ export default function CardsPage() {
   const [confirmId, setConfirmId] = useState<string | null>(null)
   const [deleting,  setDeleting]  = useState<string | null>(null)
 
-  const [uid,   setUid]   = useState('')
-  const [type,  setType]  = useState<CardType>('car')
-  const [label, setLabel] = useState('')
+  const [uid,        setUid]        = useState('')
+  const [type,       setType]       = useState<CardType>('car')
+  const [label,      setLabel]      = useState('')
+  const [ownerName,  setOwnerName]  = useState('')
+  const [plate,      setPlate]      = useState('')
+  const [expiryDate, setExpiryDate] = useState('')
+  const [renewId,    setRenewId]    = useState<string | null>(null)
+  const uidInputRef = useRef<HTMLInputElement>(null)
+
+  // Radix Dialog has a FocusTrap that finishes setting up *after*
+  // onOpenAutoFocus fires. A double requestAnimationFrame lets the trap
+  // fully initialise before we move focus, so it doesn't steal it back.
 
   async function fetchCards() {
     setLoading(true)
@@ -70,14 +141,14 @@ export default function CardsPage() {
       const res = await fetch('/api/cards', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ uid: uid.trim(), type, label }),
+        body: JSON.stringify({ uid: uid.trim(), type, label, ownerName, plate, expiryDate: expiryDate || null }),
       })
       if (!res.ok) {
         const err = await res.json()
         toastError('ลงทะเบียนไม่สำเร็จ', err.error ?? 'เกิดข้อผิดพลาด')
         return
       }
-      setUid(''); setLabel(''); setType('car'); setShowForm(false)
+      setUid(''); setLabel(''); setType('car'); setOwnerName(''); setPlate(''); setExpiryDate(''); setShowForm(false)
       success('ลงทะเบียนบัตรสำเร็จ', `UID: ${uid.trim()}`)
       fetchCards()
     } finally {
@@ -100,6 +171,24 @@ export default function CardsPage() {
       setDeleting(null)
       setConfirmId(null)
     }
+  }
+
+  async function handleRenew(id: string) {
+    const card = cards.find(c => c._id === id)
+    if (!card) return
+    const base = card.expiryDate && new Date(card.expiryDate) > new Date()
+      ? new Date(card.expiryDate)
+      : new Date()
+    base.setMonth(base.getMonth() + 1)
+    const newExpiry = base.toISOString()
+    await fetch(`/api/cards/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ expiryDate: newExpiry }),
+    })
+    setCards(prev => prev.map(c => c._id === id ? { ...c, expiryDate: newExpiry } : c))
+    setRenewId(null)
+    success('ต่ออายุสำเร็จ', `ถึง ${new Date(newExpiry).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' })}`)
   }
 
   async function handleToggle(id: string, isActive: boolean) {
@@ -140,90 +229,124 @@ export default function CardsPage() {
               className="size-8 rounded-lg flex items-center justify-center hover:bg-slate-100 transition-colors">
               <RefreshCw className={`size-3.5 text-slate-400 ${loading ? 'animate-spin' : ''}`} />
             </button>
-            <button onClick={() => { setShowForm(v => !v) }}
+            <button onClick={() => setShowForm(true)}
               className="h-8 px-4 rounded-lg text-white text-xs font-semibold flex items-center gap-1.5 hover:opacity-90 transition-opacity"
-              style={{ background: showForm ? '#374151' : '#1D4ED8', boxShadow: '0 1px 8px rgba(29,78,216,0.3)' }}>
-              {showForm ? <X className="size-3.5" /> : <Plus className="size-3.5" />}
-              {showForm ? 'ยกเลิก' : 'เพิ่มบัตรใหม่'}
+              style={{ background: '#1D4ED8', boxShadow: '0 1px 8px rgba(29,78,216,0.3)' }}>
+              <Plus className="size-3.5" />
+              เพิ่มบัตรใหม่
             </button>
           </div>
         </div>
       </header>
 
-      <div className="flex-1 flex flex-col overflow-hidden min-h-0 bg-slate-50/60">
-
-        {/* ── ADD FORM ── */}
-        {showForm && (
-          <div className="shrink-0 mx-5 mt-4">
-            <form onSubmit={handleAdd}
-              className="bg-white rounded-xl overflow-hidden"
-              style={{ border: '1.5px solid rgba(29,78,216,0.25)', boxShadow: '0 0 0 4px rgba(29,78,216,0.05)' }}>
-              <div className="flex items-center gap-2 px-5 py-3.5"
-                style={{ background: 'rgba(29,78,216,0.04)', borderBottom: '1px solid rgba(29,78,216,0.1)' }}>
-                <Nfc className="size-4" style={{ color: '#1D4ED8' }} />
-                <p className="text-sm font-semibold text-slate-800">ลงทะเบียนบัตรใหม่</p>
+      {/* ── ADD CARD DIALOG ── */}
+      <Dialog open={showForm} onOpenChange={open => {
+        setShowForm(open)
+        if (!open) { setUid(''); setLabel(''); setType('car'); setOwnerName(''); setPlate(''); setExpiryDate('') }
+      }}>
+        <DialogContent className="max-w-md"
+          onOpenAutoFocus={e => {
+            e.preventDefault()
+            requestAnimationFrame(() => requestAnimationFrame(() => uidInputRef.current?.focus()))
+          }}>
+          <DialogHeader>
+            <div className="flex items-center gap-2 px-5 py-3.5"
+              style={{ background: 'rgba(29,78,216,0.04)', borderBottom: '1px solid rgba(29,78,216,0.1)' }}>
+              <Nfc className="size-4" style={{ color: '#1D4ED8' }} />
+              <DialogTitle>ลงทะเบียนบัตรใหม่</DialogTitle>
+            </div>
+          </DialogHeader>
+          <form onSubmit={handleAdd}>
+            <div className="p-5 space-y-4">
+              {/* Card type visual selector */}
+              <div>
+                <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide block mb-2">ประเภทบัตร</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {(['car', 'motorcycle', 'overnight'] as CardType[]).map(t => {
+                    const m = TYPE_META[t]
+                    const Icon = m.icon
+                    const active = type === t
+                    return (
+                      <button key={t} type="button" onClick={() => setType(t)}
+                        className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg transition-all text-left"
+                        style={active
+                          ? { background: m.bg, border: `1.5px solid ${m.color}`, color: m.color }
+                          : { background: '#F8FAFF', border: '1.5px solid #E8ECF4', color: '#94A3B8' }}>
+                        <Icon className="size-4 shrink-0" strokeWidth={1.75} />
+                        <span className="text-xs font-semibold">{m.label}</span>
+                      </button>
+                    )
+                  })}
+                </div>
               </div>
-              <div className="p-5 space-y-4">
-                {/* Card type visual selector */}
+
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide block mb-2">ประเภทบัตร</label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {(['car', 'motorcycle', 'overnight'] as CardType[]).map(t => {
-                      const m = TYPE_META[t]
-                      const Icon = m.icon
-                      const active = type === t
-                      return (
-                        <button key={t} type="button" onClick={() => setType(t)}
-                          className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg transition-all text-left"
-                          style={active
-                            ? { background: m.bg, border: `1.5px solid ${m.color}`, color: m.color }
-                            : { background: '#F8FAFF', border: '1.5px solid #E8ECF4', color: '#94A3B8' }}>
-                          <Icon className="size-4 shrink-0" strokeWidth={1.75} />
-                          <span className="text-xs font-semibold">{m.label}</span>
-                        </button>
-                      )
-                    })}
-                  </div>
+                  <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide block mb-1.5">UID บัตร *</label>
+                  <input ref={uidInputRef}
+                    value={uid} onChange={e => setUid(sanitizeUid(convertThaiToEn(e.target.value)))}
+                    placeholder="แตะบัตรหรือพิมพ์ UID"
+                    required
+                    className="w-full h-9 px-3 rounded-lg text-sm font-mono text-slate-800 outline-none"
+                    style={{ border: '1.5px solid #E8ECF4', background: '#F8FAFF' }}
+                    onFocus={e => e.currentTarget.style.borderColor = '#1D4ED8'}
+                    onBlur={e => e.currentTarget.style.borderColor = '#E8ECF4'} />
                 </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide block mb-1.5">UID บัตร *</label>
-                    <input value={uid} onChange={e => setUid(e.target.value)}
-                      placeholder="เช่น A1B2C3D4"
-                      required
-                      className="w-full h-9 px-3 rounded-lg text-sm font-mono text-slate-800 outline-none"
-                      style={{ border: '1.5px solid #E8ECF4', background: '#F8FAFF' }}
-                      onFocus={e => e.currentTarget.style.borderColor = '#1D4ED8'}
-                      onBlur={e => e.currentTarget.style.borderColor = '#E8ECF4'} />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide block mb-1.5">ชื่อ / หมายเหตุ</label>
-                    <input value={label} onChange={e => setLabel(e.target.value)}
-                      placeholder="เช่น บัตร VIP #001"
-                      className="w-full h-9 px-3 rounded-lg text-sm text-slate-800 outline-none"
-                      style={{ border: '1.5px solid #E8ECF4', background: '#F8FAFF' }}
-                      onFocus={e => e.currentTarget.style.borderColor = '#1D4ED8'}
-                      onBlur={e => e.currentTarget.style.borderColor = '#E8ECF4'} />
-                  </div>
+                <div>
+                  <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide block mb-1.5">ทะเบียนรถ</label>
+                  <input value={plate} onChange={e => setPlate(e.target.value)}
+                    placeholder="เช่น กข 1234"
+                    className="w-full h-9 px-3 rounded-lg text-sm text-slate-800 outline-none"
+                    style={{ border: '1.5px solid #E8ECF4', background: '#F8FAFF' }}
+                    onFocus={e => e.currentTarget.style.borderColor = '#1D4ED8'}
+                    onBlur={e => e.currentTarget.style.borderColor = '#E8ECF4'} />
                 </div>
-
-                <div className="flex justify-end gap-2 pt-1">
-                  <button type="button" onClick={() => setShowForm(false)}
-                    className="h-8 px-4 rounded-lg text-xs font-semibold text-slate-500 hover:bg-slate-100 transition-colors">
-                    ยกเลิก
-                  </button>
-                  <button type="submit" disabled={saving || !uid.trim()}
-                    className="h-8 px-5 rounded-lg text-xs font-semibold text-white flex items-center gap-1.5 hover:opacity-90 disabled:opacity-50 transition-opacity"
-                    style={{ background: '#1D4ED8' }}>
-                    {saving ? <RefreshCw className="size-3 animate-spin" /> : <Check className="size-3" />}
-                    {saving ? 'กำลังบันทึก...' : 'บันทึกบัตร'}
-                  </button>
+                <div>
+                  <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide block mb-1.5">ชื่อเจ้าของ</label>
+                  <input value={ownerName} onChange={e => setOwnerName(e.target.value)}
+                    placeholder="เช่น สมชาย ใจดี"
+                    className="w-full h-9 px-3 rounded-lg text-sm text-slate-800 outline-none"
+                    style={{ border: '1.5px solid #E8ECF4', background: '#F8FAFF' }}
+                    onFocus={e => e.currentTarget.style.borderColor = '#1D4ED8'}
+                    onBlur={e => e.currentTarget.style.borderColor = '#E8ECF4'} />
+                </div>
+                <div>
+                  <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide block mb-1.5">ชื่อ / หมายเหตุ</label>
+                  <input value={label} onChange={e => setLabel(e.target.value)}
+                    placeholder="เช่น บัตรรายเดือน #001"
+                    className="w-full h-9 px-3 rounded-lg text-sm text-slate-800 outline-none"
+                    style={{ border: '1.5px solid #E8ECF4', background: '#F8FAFF' }}
+                    onFocus={e => e.currentTarget.style.borderColor = '#1D4ED8'}
+                    onBlur={e => e.currentTarget.style.borderColor = '#E8ECF4'} />
+                </div>
+                <div className="col-span-2">
+                  <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide block mb-1.5">วันหมดอายุ (ถ้าเป็นบัตรรายเดือน)</label>
+                  <input type="date" value={expiryDate} onChange={e => setExpiryDate(e.target.value)}
+                    className="w-full h-9 px-3 rounded-lg text-sm text-slate-800 outline-none"
+                    style={{ border: '1.5px solid #E8ECF4', background: '#F8FAFF' }}
+                    onFocus={e => e.currentTarget.style.borderColor = '#1D4ED8'}
+                    onBlur={e => e.currentTarget.style.borderColor = '#E8ECF4'} />
                 </div>
               </div>
-            </form>
-          </div>
-        )}
+            </div>
+
+            <div className="flex justify-end gap-2 px-5 pb-5">
+              <button type="button" onClick={() => setShowForm(false)}
+                className="h-8 px-4 rounded-lg text-xs font-semibold text-slate-500 hover:bg-slate-100 transition-colors">
+                ยกเลิก
+              </button>
+              <button type="submit" disabled={saving || !uid.trim()}
+                className="h-8 px-5 rounded-lg text-xs font-semibold text-white flex items-center gap-1.5 hover:opacity-90 disabled:opacity-50 transition-opacity"
+                style={{ background: '#1D4ED8' }}>
+                {saving ? <RefreshCw className="size-3 animate-spin" /> : <Check className="size-3" />}
+                {saving ? 'กำลังบันทึก...' : 'บันทึกบัตร'}
+              </button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <div className="flex-1 flex flex-col overflow-hidden min-h-0 bg-slate-50/60">
 
         {/* ── SUMMARY + FILTER ── */}
         <div className="shrink-0 px-5 pt-4 pb-3 space-y-3">
@@ -318,10 +441,14 @@ export default function CardsPage() {
                 const Icon = m.icon
                 const isConfirm = confirmId === card._id
 
+                const status = expiryStatus(card.expiryDate)
+                const em = EXPIRY_META[status]
+                const isRenew = renewId === card._id
+
                 return (
                   <div key={card._id}
                     className="bg-white rounded-xl overflow-hidden transition-shadow hover:shadow-md"
-                    style={{ border: `1px solid ${isConfirm ? 'rgba(220,38,38,0.3)' : '#E8ECF4'}` }}>
+                    style={{ border: `1px solid ${isConfirm ? 'rgba(220,38,38,0.3)' : status === 'expired' ? 'rgba(220,38,38,0.2)' : '#E8ECF4'}` }}>
 
                     {/* Card header — gradient / bg image */}
                     <div className="relative px-4 pt-4 pb-3 overflow-hidden"
@@ -359,18 +486,49 @@ export default function CardsPage() {
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
                           <p className="text-xs font-semibold text-slate-700 truncate">
-                            {card.label || <span className="text-slate-300 italic">ไม่มีชื่อ</span>}
+                            {card.ownerName || card.label || <span className="text-slate-300 italic">ไม่มีชื่อ</span>}
                           </p>
-                          <p className="text-[10px] text-slate-400 mt-0.5 flex items-center gap-1">
+                          {card.plate && (
+                            <p className="text-[10px] font-mono font-semibold text-slate-600 mt-0.5">{card.plate}</p>
+                          )}
+                          <div className="flex items-center gap-1 mt-0.5 flex-wrap">
                             <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
                               style={{ background: m.bg, color: m.color }}>{m.label}</span>
-                            · {fmtDate(card.createdAt)}
-                          </p>
+                            {status !== 'none' && (
+                              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
+                                style={{ background: em.bg, color: em.color }}>
+                                {em.label} · {fmtDate(card.expiryDate!)}
+                              </span>
+                            )}
+                          </div>
                         </div>
 
-                        {/* Delete */}
-                        <div className="shrink-0">
-                          {isConfirm ? (
+                        {/* Actions */}
+                        <div className="shrink-0 flex items-center gap-1">
+                          {/* Renew */}
+                          {status !== 'none' && !isConfirm && (
+                            isRenew ? (
+                              <div className="flex items-center gap-1">
+                                <button onClick={() => handleRenew(card._id)}
+                                  className="h-6 px-2 rounded-lg text-[10px] font-semibold text-white"
+                                  style={{ background: '#059669' }}>
+                                  ยืนยัน +1 เดือน
+                                </button>
+                                <button onClick={() => setRenewId(null)}
+                                  className="size-6 rounded-lg flex items-center justify-center hover:bg-slate-100 text-slate-400">
+                                  <X className="size-3" />
+                                </button>
+                              </div>
+                            ) : (
+                              <button onClick={() => setRenewId(card._id)}
+                                className="h-6 px-2 rounded-lg text-[10px] font-semibold transition-colors hover:bg-green-50"
+                                style={{ color: '#059669', border: '1px solid rgba(5,150,105,0.3)' }}>
+                                ต่ออายุ
+                              </button>
+                            )
+                          )}
+                          {/* Delete */}
+                          {!isRenew && (isConfirm ? (
                             <div className="flex items-center gap-1">
                               <button onClick={() => handleDelete(card._id)} disabled={deleting === card._id}
                                 className="size-7 rounded-lg flex items-center justify-center transition-colors"
@@ -392,7 +550,7 @@ export default function CardsPage() {
                               onMouseLeave={e => e.currentTarget.style.color = '#CBD5E1'}>
                               <Trash2 className="size-3.5" />
                             </button>
-                          )}
+                          ))}
                         </div>
                       </div>
                     </div>

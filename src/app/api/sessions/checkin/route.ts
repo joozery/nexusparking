@@ -48,6 +48,9 @@ export async function POST(req: NextRequest) {
     if (!card) {
       return NextResponse.json({ error: 'ไม่พบบัตรนี้ในระบบ' }, { status: 404 })
     }
+    if (card.expiryDate && new Date(card.expiryDate) < new Date()) {
+      return NextResponse.json({ error: 'บัตรหมดอายุแล้ว กรุณาต่ออายุก่อนใช้งาน' }, { status: 403 })
+    }
     const existing = await ParkingSession.findOne({ cardUid: uid.trim(), status: 'active' })
     if (existing) {
       return NextResponse.json({ error: 'บัตรนี้มียานพาหนะอยู่ในลานแล้ว' }, { status: 409 })

@@ -3,20 +3,36 @@ import { connectDB } from '@/lib/mongodb'
 import { SystemSettings } from '@/models/SystemSettings'
 
 export async function GET() {
-  await connectDB()
-  const s = await SystemSettings.findOne().select('cctvUrls')
-  return NextResponse.json(s?.cctvUrls ?? { plate: '', face: '', rear: '', exit: '' })
+  try {
+    await connectDB()
+    const s = await SystemSettings.findOne().select('cctvUrls').lean()
+    const c = s?.cctvUrls as Record<string, string> | undefined
+    return NextResponse.json({
+      plate: c?.plate ?? '',
+      face:  c?.face  ?? '',
+      rear:  c?.rear  ?? '',
+      exit:  c?.exit  ?? '',
+    })
+  } catch (err) {
+    console.error('[cctv GET]', err)
+    return NextResponse.json({ plate: '', face: '', rear: '', exit: '' })
+  }
 }
 
 export async function POST(req: NextRequest) {
-  await connectDB()
-  const body = await req.json()
-  const urls = {
-    plate: body.plate ?? '',
-    face:  body.face  ?? '',
-    rear:  body.rear  ?? '',
-    exit:  body.exit  ?? '',
+  try {
+    await connectDB()
+    const body = await req.json()
+    const urls = {
+      plate: body.plate ?? '',
+      face:  body.face  ?? '',
+      rear:  body.rear  ?? '',
+      exit:  body.exit  ?? '',
+    }
+    await SystemSettings.updateOne({}, { $set: { cctvUrls: urls } }, { upsert: true })
+    return NextResponse.json({ ok: true })
+  } catch (err) {
+    console.error('[cctv POST]', err)
+    return NextResponse.json({ ok: false, error: String(err) }, { status: 500 })
   }
-  await SystemSettings.updateOne({}, { $set: { cctvUrls: urls } }, { upsert: true })
-  return NextResponse.json({ ok: true })
 }
