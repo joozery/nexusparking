@@ -599,7 +599,7 @@ export default function OperatorPage() {
       <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
 
         {/* ── Camera strip ── */}
-        <div className="shrink-0 flex flex-col rounded-2xl overflow-hidden" style={{ height: '450px' }}>
+        <div className="shrink-0 flex flex-col rounded-2xl overflow-hidden" style={{ height: '600px' }}>
           <CctvStrip />
         </div>
 
