@@ -171,12 +171,11 @@ export function CctvStrip() {
       })
   }, [])
 
-  // Alt+C or F2 → toggle entry / exit
+  // F12 → toggle entry / exit
   const toggleExit = useCallback(() => setIsExit(v => !v), [])
   useEffect(() => {
     const fn = (e: KeyboardEvent) => {
-      // ใช้ e.code เพื่อแก้ปัญหาเปลี่ยนภาษาไทยเป็น 'ช' หรือบน Mac Option+C ได้ตัว 'ç'
-      if ((e.altKey && e.code === 'KeyC') || e.code === 'F2' || e.code === 'F9') {
+      if (e.code === 'F12') {
         e.preventDefault()
         toggleExit()
       }
@@ -212,7 +211,7 @@ export function CctvStrip() {
           >
             {isExit ? <><LogIn className="size-3" />ขาเข้า</> : <><LogOut className="size-3" />ขาออก</>}
             <kbd className="text-[9px] bg-white px-1.5 py-0.5 rounded font-mono shadow-sm"
-              style={{ border: '1px solid #E2E8F0', color: '#94A3B8' }}>Alt + C</kbd>
+              style={{ border: '1px solid #E2E8F0', color: '#94A3B8' }}>F12</kbd>
           </button>
         </div>
 
