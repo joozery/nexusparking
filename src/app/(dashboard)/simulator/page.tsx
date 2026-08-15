@@ -638,9 +638,19 @@ function normalizeCardType(val: unknown): CardType | null {
 // รวมคอลัมน์ วันที่ (C/E) + เวลา (D/F) ให้เป็น Date เดียว
 function parseDateTimeSplit(dateCol: unknown, timeCol: unknown): Date | null {
   if (!dateCol) return null
-  // ถ้า dateCol เป็นตัวเลข Excel (serial) ให้ดึง y/m/d ออกมาก่อน แล้วใส่เวลาจาก timeCol
+
+  // เมื่อ XLSX.read ใช้ cellDates:true, Date column มาเป็น Date object (UTC-based)
+  // Time-only fraction มาเป็น Date ที่ anchor ที่ 1899-12-30 UTC
   let base: Date | null
-  if (typeof dateCol === 'number') {
+
+  if (dateCol instanceof Date) {
+    const d = dateCol
+    if (isNaN(d.getTime())) return null
+    // Date จาก cellDates=true เป็น UTC → ดึง UTC y/m/d
+    base = new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 0, 0, 0)
+    // ถ้าวันที่เป็น 1899 แสดงว่าเป็น time-only fraction → ไม่ใช่ date column จริง
+    if (d.getUTCFullYear() === 1899) return null
+  } else if (typeof dateCol === 'number') {
     try {
       const p = XLSX.SSF.parse_date_code(dateCol)
       base = new Date(p.y, p.m - 1, p.d, 0, 0, 0)
@@ -648,17 +658,21 @@ function parseDateTimeSplit(dateCol: unknown, timeCol: unknown): Date | null {
   } else {
     base = parseExcelDate(dateCol)
     if (!base) return null
-    // ถ้า parseExcelDate คืน Date ที่มีเวลา (เช่น กรณี datetime-string) ก็ใช้ได้เลย
-    // แต่เราต้องการแค่ date part ก่อน แล้วค่อย override เวลาจาก timeCol
     base = new Date(base.getFullYear(), base.getMonth(), base.getDate(), 0, 0, 0)
   }
 
-  // parse timeCol: รองรับ "09:30", "9:30", "09:30:00", ตัวเลข Excel (fraction of day)
+  // parse timeCol
   if (timeCol != null && timeCol !== '') {
-    if (typeof timeCol === 'number') {
-      // Excel time fraction: 0.5 = 12:00, 0.375 = 09:00
-      const totalMin = Math.round(timeCol * 24 * 60)
-      base.setHours(Math.floor(totalMin / 60), totalMin % 60, 0, 0)
+    if (timeCol instanceof Date) {
+      // cellDates=true: time fraction → Date anchored at 1899-12-30 UTC
+      const t = timeCol as Date
+      if (!isNaN(t.getTime())) {
+        base.setHours(t.getUTCHours(), t.getUTCMinutes(), t.getUTCSeconds(), 0)
+      }
+    } else if (typeof timeCol === 'number') {
+      // Excel time fraction: 0.5 = 12:00
+      const totalSec = Math.round(timeCol * 86400)
+      base.setHours(Math.floor(totalSec / 3600), Math.floor((totalSec % 3600) / 60), totalSec % 60, 0)
     } else {
       const t = String(timeCol).trim()
       const m = t.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/)
