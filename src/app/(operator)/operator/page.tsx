@@ -595,15 +595,15 @@ export default function OperatorPage() {
         </div>
       ) : null}
 
-      {/* ─── Body ─── */}
-      <div className="flex-1 flex flex-col gap-4 p-5 min-h-0">
+      {/* ─── Body (scrollable) ─── */}
+      <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
 
-        {/* ── Camera strip (4 feeds) — takes 3× more flex space than session list ── */}
-        <div className="flex-[3] min-h-0 flex flex-col">
+        {/* ── Camera strip ── */}
+        <div className="shrink-0 flex flex-col rounded-2xl overflow-hidden" style={{ height: '300px' }}>
           <CctvStrip />
         </div>
 
-        {/* ── 3 Action buttons (compact horizontal bar) ── */}
+        {/* ── 3 Action buttons ── */}
         <div className="shrink-0 grid grid-cols-3 gap-3" style={{ height: '46px' }}>
 
           <button
@@ -614,10 +614,10 @@ export default function OperatorPage() {
                 resetCI(); setCheckInOpen(true)
               }
             }}
-            className="flex items-center justify-center gap-2.5 rounded-xl transition-all active:scale-[0.97] hover:brightness-110 relative overflow-hidden"
+            className="flex items-center justify-center gap-2 rounded-xl transition-all active:scale-[0.97] hover:brightness-110 relative overflow-hidden"
             style={stats && stats.availableSlots === 0
-              ? { background: 'linear-gradient(135deg, #7C3AED 0%, #A855F7 100%)', boxShadow: '0 4px 16px rgba(124,58,237,0.4)' }
-              : { background: 'linear-gradient(135deg, #1E3A8A 0%, #2563EB 100%)', boxShadow: '0 4px 16px rgba(29,78,216,0.38)' }}
+              ? { background: 'linear-gradient(135deg,#7C3AED,#A855F7)', boxShadow: '0 4px 16px rgba(124,58,237,0.4)' }
+              : { background: 'linear-gradient(135deg,#1E3A8A,#2563EB)', boxShadow: '0 4px 16px rgba(29,78,216,0.38)' }}
           >
             {stats && stats.availableSlots === 0 && (
               <span className="absolute top-1 right-1.5 text-[8px] font-black px-1 py-px rounded-full"
@@ -628,7 +628,7 @@ export default function OperatorPage() {
                 ? <ListOrdered className="size-3.5 text-white" strokeWidth={2} />
                 : <LogIn className="size-3.5 text-white" strokeWidth={2} />}
             </div>
-            <p className="text-xs font-black text-white leading-none tracking-wide truncate">
+            <p className="text-xs font-black text-white leading-none tracking-wide">
               {stats && stats.availableSlots === 0 ? 'คิวรอ' : 'CHECK IN'}
             </p>
           </button>
@@ -636,7 +636,7 @@ export default function OperatorPage() {
           <button
             onClick={() => { resetCO(); setCheckOutOpen(true) }}
             className="flex items-center justify-center gap-2 rounded-xl transition-all active:scale-[0.97] hover:brightness-110"
-            style={{ background: 'linear-gradient(135deg, #064E3B 0%, #059669 100%)', boxShadow: '0 4px 16px rgba(5,150,105,0.38)' }}
+            style={{ background: 'linear-gradient(135deg,#064E3B,#059669)', boxShadow: '0 4px 16px rgba(5,150,105,0.38)' }}
           >
             <div className="size-6 rounded-md flex items-center justify-center shrink-0" style={{ background: 'rgba(255,255,255,0.18)' }}>
               <LogOut className="size-3.5 text-white" strokeWidth={2} />
@@ -647,7 +647,7 @@ export default function OperatorPage() {
           <button
             onClick={() => setLostOpen(true)}
             className="flex items-center justify-center gap-2 rounded-xl transition-all active:scale-[0.97] hover:brightness-110"
-            style={{ background: 'linear-gradient(135deg, #78350F 0%, #D97706 100%)', boxShadow: '0 4px 16px rgba(217,119,6,0.35)' }}
+            style={{ background: 'linear-gradient(135deg,#78350F,#D97706)', boxShadow: '0 4px 16px rgba(217,119,6,0.35)' }}
           >
             <div className="size-6 rounded-md flex items-center justify-center shrink-0" style={{ background: 'rgba(255,255,255,0.18)' }}>
               <AlertTriangle className="size-3.5 text-white" strokeWidth={2} />
@@ -656,195 +656,185 @@ export default function OperatorPage() {
           </button>
         </div>
 
-        {/* ── Session list ── */}
-        <div className="flex-1 min-h-0 flex flex-col gap-3">
-
-          <div className="shrink-0 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-black text-slate-700">รถในลาน</span>
-              <span className="text-[11px] font-bold px-2 py-0.5 rounded-full"
-                style={{ background: 'rgba(29,78,216,0.1)', color: '#1D4ED8' }}>
-                {sessions.filter(s => s.status === 'active').length} คัน
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="relative">
-                <Search className="size-3 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
-                <input
-                  value={search}
-                  onChange={e => setSearch(e.target.value)}
-                  placeholder="ค้นหาทะเบียน"
-                  className="h-8 pl-7 pr-3 rounded-lg text-xs text-slate-700 outline-none w-36"
-                  style={{ background: 'white', border: '1px solid #E2E8F0' }}
-                />
-              </div>
-              <button
-                onClick={fetchData}
-                className="size-8 rounded-lg flex items-center justify-center"
-                style={{ background: 'white', border: '1px solid #E2E8F0' }}
-                onMouseEnter={e => { e.currentTarget.style.background = '#F1F5F9' }}
-                onMouseLeave={e => { e.currentTarget.style.background = 'white' }}
-              >
-                <RefreshCw className={`size-3.5 text-slate-400 ${loading ? 'animate-spin' : ''}`} />
-              </button>
-            </div>
-          </div>
-
-          <div className="flex-1 overflow-y-auto flex flex-col gap-2.5 pb-1">
-            {loading ? (
-              <div className="flex items-center justify-center h-24">
-                <RefreshCw className="size-5 text-slate-300 animate-spin" />
-              </div>
-            ) : activeSessions.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-24 gap-2">
-                <Car className="size-8 text-slate-200" />
-                <p className="text-sm text-slate-300 font-medium">
-                  {search ? `ไม่พบทะเบียน "${search}"` : 'ไม่มีรถในลาน'}
-                </p>
-              </div>
-            ) : activeSessions.map(s => {
-              const m = TYPE_META[s.cardType]
-              const Icon = m.icon
-              const entryTime = new Date(s.entryTime).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })
-
-              return (
-                <div
-                  key={s._id}
-                  className="bg-white rounded-2xl overflow-hidden flex items-stretch"
-                  style={{ boxShadow: '0 1px 8px rgba(0,0,0,0.06)', border: '1px solid #E8ECF4' }}
-                >
-                  <div className="w-1.5 shrink-0" style={{ background: m.color }} />
-
-                  <div className="flex items-center gap-4 flex-1 px-5 py-3.5">
-                    <div className="size-11 rounded-xl flex items-center justify-center shrink-0" style={{ background: m.bg }}>
-                      <Icon className="size-5" style={{ color: m.color }} strokeWidth={2} />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-[26px] font-black text-slate-900 tracking-widest leading-none">{s.plate}</p>
-                      <div className="flex items-center gap-2 mt-1">
-                        <span className="text-xs font-bold" style={{ color: m.color }}>{m.label}</span>
-                        <span className="text-slate-300 text-xs">|</span>
-                        <span className="text-xs text-slate-500">เข้า {entryTime}</span>
-                        <span className="text-slate-300 text-xs">·</span>
-                        <span className="text-xs font-semibold text-slate-600">{fmtDuration(s.entryTime)}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="w-px my-3 shrink-0" style={{ background: '#E8ECF4' }} />
-
-                  <div className="flex flex-col items-center justify-center px-7 shrink-0 gap-0.5">
-                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest">ค่าบริการ</p>
-                    <p className="text-2xl font-black tabular-nums" style={{ color: m.color }}>฿0</p>
-                  </div>
-
-                  <div className="w-px my-3 shrink-0" style={{ background: '#E8ECF4' }} />
-
-                  <button
-                    onClick={() => openCheckoutFromCard(s)}
-                    className="flex items-center justify-center px-8 shrink-0 font-black text-white text-sm tracking-wide transition-all active:scale-[0.97]"
-                    style={{ background: 'linear-gradient(160deg, #065F46 0%, #059669 100%)', minWidth: '130px' }}
-                    onMouseEnter={e => { e.currentTarget.style.filter = 'brightness(1.1)' }}
-                    onMouseLeave={e => { e.currentTarget.style.filter = 'none' }}
-                  >
-                    CHECK OUT
-                  </button>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-
-        {/* ── Queue section (always visible) ── */}
+        {/* ── Session table ── */}
         <div className="shrink-0 rounded-2xl overflow-hidden"
-          style={{ background: 'white', border: '1px solid rgba(124,58,237,0.22)', boxShadow: '0 2px 16px rgba(124,58,237,0.1)' }}>
+          style={{ background: 'white', border: '1px solid #E8ECF4', boxShadow: '0 1px 8px rgba(0,0,0,0.05)' }}>
 
-          {/* Queue header */}
-          <div className="flex items-center gap-2.5 px-4 py-2.5"
-            style={{ background: 'linear-gradient(90deg,rgba(91,33,182,0.06),rgba(124,58,237,0.02))', borderBottom: '1px solid rgba(124,58,237,0.12)' }}>
-            <ListOrdered className="size-4 shrink-0" style={{ color: '#7C3AED' }} />
-            <span className="text-sm font-black text-slate-700">คิวรอ</span>
-            {queues.length > 0 && (
-              <span className="text-[10px] font-black px-2 py-0.5 rounded-full text-white"
-                style={{ background: '#DC2626' }}>{queues.length} คัน</span>
-            )}
-            {stats && stats.availableSlots === 0 && (
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full"
-                style={{ background: 'rgba(220,38,38,0.08)', color: '#991B1B', border: '1px solid rgba(220,38,38,0.2)' }}>
-                ลานเต็ม {stats.totalCapacity}/{stats.totalCapacity}
+          {/* Table toolbar */}
+          <div className="flex items-center gap-2 px-4 py-2.5"
+            style={{ background: '#F8FAFF', borderBottom: '1px solid #E8ECF4' }}>
+            <Car className="size-3.5 text-slate-400 shrink-0" />
+            <span className="text-xs font-black text-slate-700">รถในลาน</span>
+            <span className="text-[10px] font-bold px-1.5 py-px rounded-full"
+              style={{ background: 'rgba(29,78,216,0.1)', color: '#1D4ED8' }}>
+              {sessions.filter(s => s.status === 'active').length} คัน
+            </span>
+            {stats && (
+              <span className="text-[10px] text-slate-400">
+                / {stats.totalCapacity} ที่
               </span>
             )}
             <div className="flex-1" />
+            <div className="relative">
+              <Search className="size-3 text-slate-400 absolute left-2 top-1/2 -translate-y-1/2" />
+              <input
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="ค้นหาทะเบียน"
+                className="h-7 pl-6 pr-2.5 rounded-lg text-xs text-slate-700 outline-none w-28"
+                style={{ background: 'white', border: '1px solid #E2E8F0' }}
+              />
+            </div>
             <button
-              onClick={() => { resetQ(); setQueueOpen(true) }}
-              className="h-7 px-3 rounded-lg flex items-center gap-1.5 text-xs font-black text-white transition-all hover:brightness-110 active:scale-[0.97]"
-              style={{ background: 'linear-gradient(135deg,#5B21B6,#7C3AED)', boxShadow: '0 2px 8px rgba(124,58,237,0.3)' }}
+              onClick={fetchData}
+              className="size-7 rounded-lg flex items-center justify-center shrink-0"
+              style={{ background: 'white', border: '1px solid #E2E8F0' }}
+              onMouseEnter={e => { e.currentTarget.style.background = '#F1F5F9' }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'white' }}
             >
-              <Plus className="size-3" /> เพิ่มคิว
+              <RefreshCw className={`size-3 text-slate-400 ${loading ? 'animate-spin' : ''}`} />
             </button>
           </div>
 
-          {/* Queue cards — horizontal scroll */}
-          {queues.length === 0 ? (
-            <div className="flex items-center justify-center py-5 gap-2">
-              <ListOrdered className="size-4" style={{ color: 'rgba(124,58,237,0.25)' }} />
-              <p className="text-xs text-slate-400">ยังไม่มีรถในคิว — กด "เพิ่มคิว" เพื่อเพิ่มรถ</p>
+          {/* Table */}
+          {loading ? (
+            <div className="flex items-center justify-center py-10 gap-2">
+              <RefreshCw className="size-4 text-slate-300 animate-spin" />
+              <span className="text-xs text-slate-300">กำลังโหลด…</span>
+            </div>
+          ) : activeSessions.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-10 gap-2">
+              <Car className="size-8 text-slate-200" />
+              <p className="text-xs text-slate-300">
+                {search ? `ไม่พบทะเบียน "${search}"` : 'ยังไม่มีรถในลาน'}
+              </p>
             </div>
           ) : (
-              <div className="flex gap-2.5 overflow-x-auto p-3" style={{ scrollbarWidth: 'none' }}>
-                {queues.map((q, idx) => (
-                  <div key={q._id}
-                    className="shrink-0 rounded-xl overflow-hidden flex items-stretch"
-                    style={{ width: '200px', border: idx === 0 ? '1.5px solid rgba(124,58,237,0.4)' : '1px solid #E8ECF4', boxShadow: idx === 0 ? '0 2px 10px rgba(124,58,237,0.15)' : '0 1px 4px rgba(0,0,0,0.04)' }}>
+            <table className="w-full border-collapse">
+              <thead>
+                <tr style={{ borderBottom: '1px solid #E8ECF4' }}>
+                  <th className="text-left text-[10px] font-black text-slate-400 uppercase tracking-widest px-4 py-2 w-8">#</th>
+                  <th className="text-left text-[10px] font-black text-slate-400 uppercase tracking-widest px-3 py-2">ป้ายทะเบียน</th>
+                  <th className="text-left text-[10px] font-black text-slate-400 uppercase tracking-widest px-3 py-2">ประเภท</th>
+                  <th className="text-left text-[10px] font-black text-slate-400 uppercase tracking-widest px-3 py-2">เวลาเข้า</th>
+                  <th className="text-left text-[10px] font-black text-slate-400 uppercase tracking-widest px-3 py-2">ระยะเวลา</th>
+                  <th className="text-right text-[10px] font-black text-slate-400 uppercase tracking-widest px-4 py-2">ค่าบริการ</th>
+                  <th className="py-2 pr-3 w-20" />
+                </tr>
+              </thead>
+              <tbody>
+                {activeSessions.map((s, idx) => {
+                  const m = TYPE_META[s.cardType]
+                  const Icon = m.icon
+                  const entryTime = new Date(s.entryTime).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })
+                  return (
+                    <tr key={s._id}
+                      style={{ borderBottom: idx < activeSessions.length - 1 ? '1px solid #F1F5F9' : 'none', background: idx % 2 === 1 ? '#FAFBFF' : 'white' }}>
+                      <td className="px-4 py-2.5">
+                        <div className="flex items-center gap-1.5">
+                          <div className="w-0.5 h-4 rounded-full shrink-0" style={{ background: m.color }} />
+                          <span className="text-[10px] text-slate-400 tabular-nums">{idx + 1}</span>
+                        </div>
+                      </td>
+                      <td className="px-3 py-2.5">
+                        <span className="text-[15px] font-black text-slate-900 tracking-widest">{s.plate}</span>
+                      </td>
+                      <td className="px-3 py-2.5">
+                        <div className="flex items-center gap-1.5">
+                          <Icon className="size-3 shrink-0" style={{ color: m.color }} strokeWidth={2} />
+                          <span className="text-[10px] font-bold" style={{ color: m.color }}>{m.label}</span>
+                        </div>
+                      </td>
+                      <td className="px-3 py-2.5">
+                        <span className="text-[11px] text-slate-500 tabular-nums">{entryTime}</span>
+                      </td>
+                      <td className="px-3 py-2.5">
+                        <span className="text-[11px] font-semibold text-slate-600">{fmtDuration(s.entryTime)}</span>
+                      </td>
+                      <td className="px-4 py-2.5 text-right">
+                        <span className="text-sm font-black tabular-nums" style={{ color: m.color }}>฿0</span>
+                      </td>
+                      <td className="pr-3 py-1.5">
+                        <button
+                          onClick={() => openCheckoutFromCard(s)}
+                          className="w-full px-3 py-1.5 rounded-lg font-black text-white text-[10px] tracking-wide transition-all active:scale-[0.97]"
+                          style={{ background: 'linear-gradient(160deg,#065F46,#059669)' }}
+                          onMouseEnter={e => { e.currentTarget.style.filter = 'brightness(1.1)' }}
+                          onMouseLeave={e => { e.currentTarget.style.filter = 'none' }}
+                        >
+                          CHECK OUT
+                        </button>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
 
-                    {/* Q number */}
-                    <div className="w-10 shrink-0 flex flex-col items-center justify-center gap-0.5"
-                      style={{ background: idx === 0 ? 'linear-gradient(160deg,#7C3AED,#A855F7)' : '#F8FAFF' }}>
-                      <span className="text-[8px] font-black" style={{ color: idx === 0 ? 'rgba(255,255,255,0.7)' : '#94A3B8' }}>Q</span>
-                      <span className="text-base font-black leading-none" style={{ color: idx === 0 ? 'white' : '#475569' }}>{idx + 1}</span>
-                    </div>
-
-                    {/* Info */}
-                    <div className="flex-1 px-3 py-2.5 min-w-0">
-                      <p className="text-base font-black text-slate-900 tracking-widest leading-tight truncate">{q.plate}</p>
-                      <div className="flex items-center gap-1 mt-0.5">
-                        {q.cardType === 'car'
-                          ? <Car className="size-3 text-slate-400" />
-                          : <Bike className="size-3 text-slate-400" />}
-                        <span className="text-[10px] text-slate-400">
-                          {Math.floor((Date.now() - new Date(q.joinedAt).getTime()) / 60000)} น.
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Action buttons */}
-                    <div className="flex flex-col shrink-0">
-                      <button
-                        onClick={() => openQEnterDialog(q._id, q.plate)}
-                        disabled={!!qLoading}
-                        className="flex-1 flex items-center justify-center px-3 transition-all hover:brightness-110 disabled:opacity-40"
-                        style={{ background: 'rgba(5,150,105,0.08)', borderBottom: '1px solid #E8ECF4' }}
-                        title="เข้าลาน"
-                      >
-                        {qLoading === q._id
-                          ? <RefreshCw className="size-3.5 text-emerald-600 animate-spin" />
-                          : <CheckCheck className="size-3.5" style={{ color: '#059669' }} />}
-                      </button>
-                      <button
-                        onClick={() => cancelQueue(q._id, q.plate)}
-                        disabled={!!qLoading}
-                        className="flex-1 flex items-center justify-center px-3 transition-all hover:brightness-110 disabled:opacity-40"
-                        style={{ background: 'rgba(239,68,68,0.05)' }}
-                        title="ยกเลิกคิว"
-                      >
-                        <XCircle className="size-3.5" style={{ color: '#DC2626' }} />
-                      </button>
-                    </div>
-                  </div>
-                ))}
+        {/* ── Queue — compact single-line strip ── */}
+        <div className="shrink-0 flex items-center gap-2 px-3 rounded-xl"
+          style={{ height: '42px', background: 'white', border: '1px solid rgba(124,58,237,0.2)', boxShadow: '0 1px 8px rgba(124,58,237,0.08)' }}>
+          <ListOrdered className="size-3.5 shrink-0" style={{ color: '#7C3AED' }} />
+          <span className="text-xs font-black text-slate-700 shrink-0">คิวรอ</span>
+          {queues.length > 0 && (
+            <span className="text-[9px] font-black px-1.5 py-px rounded-full text-white shrink-0"
+              style={{ background: '#DC2626' }}>{queues.length}</span>
+          )}
+          {stats && stats.availableSlots === 0 && (
+            <span className="text-[9px] font-bold px-1.5 py-px rounded-full shrink-0"
+              style={{ background: 'rgba(220,38,38,0.08)', color: '#991B1B', border: '1px solid rgba(220,38,38,0.18)' }}>
+              ลานเต็ม
+            </span>
+          )}
+          <div className="flex-1 flex items-center gap-1.5 overflow-x-auto min-w-0" style={{ scrollbarWidth: 'none' }}>
+            {queues.length === 0 ? (
+              <span className="text-[10px] text-slate-400">ไม่มีรถในคิว</span>
+            ) : queues.map((q, idx) => (
+              <div key={q._id}
+                className="shrink-0 flex items-center gap-1 px-2 h-7 rounded-lg"
+                style={{
+                  background: idx === 0 ? 'rgba(124,58,237,0.08)' : '#F8FAFF',
+                  border: idx === 0 ? '1px solid rgba(124,58,237,0.3)' : '1px solid #E8ECF4',
+                }}>
+                <span className="text-[9px] font-black" style={{ color: '#7C3AED' }}>Q{idx + 1}</span>
+                <span className="text-xs font-black text-slate-800 tracking-wider">{q.plate}</span>
+                {q.cardType === 'car'
+                  ? <Car className="size-3 text-slate-400" />
+                  : <Bike className="size-3 text-slate-400" />}
+                <span className="text-[9px] text-slate-400">{Math.floor((Date.now() - new Date(q.joinedAt).getTime()) / 60000)}น.</span>
+                <button
+                  onClick={() => openQEnterDialog(q._id, q.plate)}
+                  disabled={!!qLoading}
+                  className="flex items-center justify-center size-4 rounded transition-all disabled:opacity-40"
+                  style={{ background: 'rgba(5,150,105,0.12)' }}
+                  title="เข้าลาน"
+                >
+                  {qLoading === q._id
+                    ? <RefreshCw className="size-2.5 text-emerald-600 animate-spin" />
+                    : <CheckCheck className="size-2.5" style={{ color: '#059669' }} />}
+                </button>
+                <button
+                  onClick={() => cancelQueue(q._id, q.plate)}
+                  disabled={!!qLoading}
+                  className="flex items-center justify-center size-4 rounded transition-all disabled:opacity-40"
+                  style={{ background: 'rgba(239,68,68,0.08)' }}
+                  title="ยกเลิก"
+                >
+                  <X className="size-2.5" style={{ color: '#DC2626' }} />
+                </button>
               </div>
-            )}
+            ))}
           </div>
+          <button
+            onClick={() => { resetQ(); setQueueOpen(true) }}
+            className="shrink-0 h-7 px-2.5 rounded-lg flex items-center gap-1 text-[10px] font-black text-white transition-all hover:brightness-110 active:scale-[0.97]"
+            style={{ background: 'linear-gradient(135deg,#5B21B6,#7C3AED)', boxShadow: '0 2px 6px rgba(124,58,237,0.3)' }}
+          >
+            <Plus className="size-3" /> เพิ่มคิว
+          </button>
+        </div>
 
       </div> {/* end body */}
 
