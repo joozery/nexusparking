@@ -10,6 +10,7 @@ import {
 import { useToast } from '@/components/ui/Toast'
 
 interface HWDevice { ip: string; port: number; endpoint: string; enabled: boolean }
+interface CaptureCamDevice { ip: string; port: number; user: string; pass: string; enabled: boolean }
 interface AppSettings {
   businessHours: { open: string; close: string }
   capacity: { car: number; motorcycle: number }
@@ -18,7 +19,10 @@ interface AppSettings {
     motorcycle: { firstHour: number; extraHour: number }
     overnight:  { windowStart: string; windowEnd: string; flatRate: number; extraHour: number }
   }
-  hardware: { camera: HWDevice; barrier: HWDevice; reader: HWDevice; printer: HWDevice; drawer: HWDevice }
+  hardware: {
+    camera: HWDevice; barrier: HWDevice; reader: HWDevice; printer: HWDevice; drawer: HWDevice
+    cameraEntry: CaptureCamDevice; cameraExit: CaptureCamDevice
+  }
   lostCardFine:   number
   monthlyDeposit: number
   monthlyFee:     number
@@ -35,6 +39,11 @@ const HW_META = {
   reader:  { label: 'เครื่องอ่านบัตร',        icon: CreditCard, desc: 'Passive — อ่าน UID'      },
   printer: { label: 'เครื่องพิมพ์ใบเสร็จ',   icon: Printer,    desc: 'พิมพ์ใบเสร็จ'             },
   drawer:  { label: 'ลิ้นชักเก็บเงิน',        icon: Banknote,   desc: 'เด้งหลังขาออก'           },
+}
+
+const CAPTURE_CAM_META = {
+  cameraEntry: { label: 'กล้องหน้าคนขับ — ขาเข้า', icon: Camera, desc: 'แคป Snapshot ตอน checkin (ISAPI + Digest Auth) แล้วเก็บลง disk' },
+  cameraExit:  { label: 'กล้องหน้าคนขับ — ขาออก', icon: Camera, desc: 'แคป Snapshot ตอน checkout (ISAPI + Digest Auth) แล้วเก็บลง disk' },
 }
 
 type TabKey = typeof TABS[number]['key']
@@ -92,6 +101,10 @@ export default function SettingsPage() {
   }
 
   function updateHW(device: keyof AppSettings['hardware'], field: keyof HWDevice, value: string | number | boolean) {
+    setSettings(s => s ? ({ ...s, hardware: { ...s.hardware, [device]: { ...s.hardware[device], [field]: value } } }) : s)
+  }
+
+  function updateCaptureCam(device: 'cameraEntry' | 'cameraExit', field: keyof CaptureCamDevice, value: string | number | boolean) {
     setSettings(s => s ? ({ ...s, hardware: { ...s.hardware, [device]: { ...s.hardware[device], [field]: value } } }) : s)
   }
 
@@ -460,6 +473,88 @@ export default function SettingsPage() {
                           className="w-full h-8 px-2.5 rounded-lg text-xs font-mono text-slate-700 outline-none"
                           style={{ border: '1.5px solid #E8ECF4', background: '#FAFBFF' }}
                           onFocus={e => e.currentTarget.style.borderColor = '#6366F1'}
+                          onBlur={e => e.currentTarget.style.borderColor = '#E8ECF4'} />
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* ══ CAPTURE CAMERAS (snapshot ตอน checkin/checkout) ══ */}
+        {tab === 'hardware' && (
+          <div className="bg-white rounded-xl overflow-hidden" style={{ border: '1px solid #E8ECF4' }}>
+            <div className="px-5 py-4 flex items-center gap-3" style={{ borderBottom: '1px solid #E8ECF4', background: '#FAFBFF' }}>
+              <div className="size-8 rounded-lg flex items-center justify-center"
+                style={{ background: 'rgba(220,38,38,0.08)' }}>
+                <Camera className="size-4" style={{ color: '#DC2626' }} />
+              </div>
+              <div>
+                <p className="text-sm font-black text-slate-900">กล้องแคป Snapshot (Checkin/Checkout)</p>
+                <p className="text-[10px] text-slate-400">กล้อง Hikvision ISAPI — ต้องมี username/password ของกล้องจริง</p>
+              </div>
+            </div>
+            <div className="divide-y" style={{ borderColor: '#F1F5F9' }}>
+              {(Object.entries(CAPTURE_CAM_META) as [keyof typeof CAPTURE_CAM_META, typeof CAPTURE_CAM_META[keyof typeof CAPTURE_CAM_META]][]).map(([key, meta]) => {
+                const device = settings.hardware[key]
+                const Icon = meta.icon
+                return (
+                  <div key={key} className="px-5 py-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-3">
+                        <div className="size-8 rounded-lg flex items-center justify-center"
+                          style={{ background: device.enabled ? 'rgba(220,38,38,0.08)' : '#F1F5F9' }}>
+                          <Icon className="size-4" style={{ color: device.enabled ? '#DC2626' : '#94A3B8' }} strokeWidth={1.75} />
+                        </div>
+                        <div>
+                          <p className="text-xs font-black text-slate-800">{meta.label}</p>
+                          <p className="text-[10px] text-slate-400">{meta.desc}</p>
+                        </div>
+                      </div>
+                      <button onClick={() => updateCaptureCam(key, 'enabled', !device.enabled)}
+                        className="w-9 h-5 rounded-full relative transition-colors"
+                        style={{ background: device.enabled ? '#DC2626' : '#E2E8F0' }}>
+                        <span className="absolute top-0.5 size-4 rounded-full bg-white shadow transition-transform"
+                          style={{ transform: device.enabled ? 'translateX(20px)' : 'translateX(2px)' }} />
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-4 gap-2 ml-11">
+                      <div>
+                        <label className="text-[9px] font-black text-slate-400 uppercase block mb-1">IP Address</label>
+                        <input value={device.ip} onChange={e => updateCaptureCam(key, 'ip', e.target.value)}
+                          placeholder="192.168.1.3"
+                          className="w-full h-8 px-2.5 rounded-lg text-xs font-mono text-slate-700 outline-none"
+                          style={{ border: '1.5px solid #E8ECF4', background: '#FAFBFF' }}
+                          onFocus={e => e.currentTarget.style.borderColor = '#DC2626'}
+                          onBlur={e => e.currentTarget.style.borderColor = '#E8ECF4'} />
+                      </div>
+                      <div>
+                        <label className="text-[9px] font-black text-slate-400 uppercase block mb-1">Port</label>
+                        <input type="number" value={device.port} onChange={e => updateCaptureCam(key, 'port', +e.target.value)}
+                          placeholder="80"
+                          className="w-full h-8 px-2.5 rounded-lg text-xs font-mono text-slate-700 outline-none"
+                          style={{ border: '1.5px solid #E8ECF4', background: '#FAFBFF' }}
+                          onFocus={e => e.currentTarget.style.borderColor = '#DC2626'}
+                          onBlur={e => e.currentTarget.style.borderColor = '#E8ECF4'} />
+                      </div>
+                      <div>
+                        <label className="text-[9px] font-black text-slate-400 uppercase block mb-1">Username</label>
+                        <input value={device.user} onChange={e => updateCaptureCam(key, 'user', e.target.value)}
+                          placeholder="admin"
+                          className="w-full h-8 px-2.5 rounded-lg text-xs font-mono text-slate-700 outline-none"
+                          style={{ border: '1.5px solid #E8ECF4', background: '#FAFBFF' }}
+                          onFocus={e => e.currentTarget.style.borderColor = '#DC2626'}
+                          onBlur={e => e.currentTarget.style.borderColor = '#E8ECF4'} />
+                      </div>
+                      <div>
+                        <label className="text-[9px] font-black text-slate-400 uppercase block mb-1">Password</label>
+                        <input type="password" value={device.pass} onChange={e => updateCaptureCam(key, 'pass', e.target.value)}
+                          placeholder="••••••••"
+                          className="w-full h-8 px-2.5 rounded-lg text-xs font-mono text-slate-700 outline-none"
+                          style={{ border: '1.5px solid #E8ECF4', background: '#FAFBFF' }}
+                          onFocus={e => e.currentTarget.style.borderColor = '#DC2626'}
                           onBlur={e => e.currentTarget.style.borderColor = '#E8ECF4'} />
                       </div>
                     </div>

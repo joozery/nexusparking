@@ -124,8 +124,9 @@ export async function POST(req: NextRequest) {
   await session.save()
 
   void runCheckoutSequence(settings.hardware, {
-    cardUid: session.cardUid,
-    plate:   session.plate,
+    sessionId: String(session._id),
+    cardUid:   session.cardUid,
+    plate:     session.plate,
     receipt: {
       plate:     session.plate,
       cardType:  session.cardType,

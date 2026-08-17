@@ -8,7 +8,7 @@ import {
 const STORAGE_KEY = 'np_cctv_urls'
 
 interface CameraSlot {
-  id:       'plate' | 'face' | 'rear' | 'exit'
+  id:       'plate' | 'face' | 'rear' | 'exit' | 'plateOut' | 'faceOut'
   label:    string
   subLabel: string
   camNum:   string
@@ -16,14 +16,16 @@ interface CameraSlot {
 }
 
 const CAMERAS: CameraSlot[] = [
-  { id: 'plate', label: 'กล้องป้ายทะเบียน', subLabel: 'License Plate', camNum: 'CAM-01', accent: '#1D4ED8' },
-  { id: 'face',  label: 'กล้องหน้าคนขับ',  subLabel: 'Driver Face',   camNum: 'CAM-02', accent: '#059669' },
-  { id: 'rear',  label: 'กล้อง Rear',       subLabel: 'Rear View',     camNum: 'CAM-03', accent: '#7C3AED' },
-  { id: 'exit',  label: 'กล้องขาออก',       subLabel: 'Exit View',     camNum: 'CAM-04', accent: '#EA580C' },
+  { id: 'plate',    label: 'กล้องป้ายทะเบียน (ขาเข้า)', subLabel: 'Plate In',  camNum: 'CAM-01', accent: '#1D4ED8' },
+  { id: 'face',     label: 'กล้องหน้าคนขับ (ขาเข้า)',  subLabel: 'Face In',   camNum: 'CAM-02', accent: '#059669' },
+  { id: 'rear',     label: 'กล้อง Rear',                 subLabel: 'Rear View', camNum: 'CAM-03', accent: '#7C3AED' },
+  { id: 'exit',     label: 'กล้องขาออก',                 subLabel: 'Exit View', camNum: 'CAM-04', accent: '#EA580C' },
+  { id: 'plateOut', label: 'กล้องป้ายทะเบียน (ขาออก)',  subLabel: 'Plate Out', camNum: 'CAM-05', accent: '#DC2626' },
+  { id: 'faceOut',  label: 'กล้องหน้าคนขับ (ขาออก)',   subLabel: 'Face Out',  camNum: 'CAM-06', accent: '#0891B2' },
 ]
 
 type Status    = 'idle' | 'loading' | 'online' | 'offline'
-type CameraUrls = Record<'plate' | 'face' | 'rear' | 'exit', string>
+type CameraUrls = Record<'plate' | 'face' | 'rear' | 'exit' | 'plateOut' | 'faceOut', string>
 
 function LiveClock() {
   const [ts, setTs] = useState('')
@@ -60,7 +62,7 @@ function CameraCard({ slot, url, onExpand }: { slot: CameraSlot; url: string; on
     if (timer.current) clearInterval(timer.current)
     if (!safeUrl || isRtsp || isMjpeg) { setStatus(safeUrl && !isRtsp ? 'loading' : 'idle'); return }
     setStatus('loading')
-    timer.current = setInterval(() => setTicker(Date.now()), 500)
+    timer.current = setInterval(() => setTicker(Date.now()), 2000)
     return () => { if (timer.current) clearInterval(timer.current) }
   }, [safeUrl, isRtsp, isMjpeg])
 
@@ -225,10 +227,10 @@ function FullscreenView({ slot, url, onClose }: { slot: CameraSlot; url: string;
 /* ── page ── */
 export default function MonitorPage() {
   const containerRef = useRef<HTMLDivElement>(null)
-  const [urls, setUrls]             = useState<CameraUrls>({ plate: '', face: '', rear: '', exit: '' })
+  const [urls, setUrls]             = useState<CameraUrls>({ plate: '', face: '', rear: '', exit: '', plateOut: '', faceOut: '' })
   const [showSettings, setShowSettings] = useState(false)
-  const [draft, setDraft]           = useState<CameraUrls>({ plate: '', face: '', rear: '', exit: '' })
-  const [showUrl, setShowUrl]       = useState<Record<string, boolean>>({ plate: false, face: false, rear: false, exit: false })
+  const [draft, setDraft]           = useState<CameraUrls>({ plate: '', face: '', rear: '', exit: '', plateOut: '', faceOut: '' })
+  const [showUrl, setShowUrl]       = useState<Record<string, boolean>>({ plate: false, face: false, rear: false, exit: false, plateOut: false, faceOut: false })
   const [expanded, setExpanded]     = useState<CameraSlot | null>(null)
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'ok' | 'error'>('idle')
 
@@ -351,10 +353,10 @@ export default function MonitorPage() {
         </div>
       </header>
 
-      {/* ─── Camera grid 2×2 ─── */}
+      {/* ─── Camera grid 3×2 ─── */}
       <div className="flex-1 p-5 overflow-hidden">
         <div className="h-full grid gap-4"
-          style={{ gridTemplateColumns: '1fr 1fr', gridTemplateRows: '1fr 1fr' }}>
+          style={{ gridTemplateColumns: '1fr 1fr 1fr', gridTemplateRows: '1fr 1fr' }}>
           {CAMERAS.map(c => (
             <CameraCard key={c.id} slot={c} url={urls[c.id]} onExpand={() => doExpand(c)} />
           ))}

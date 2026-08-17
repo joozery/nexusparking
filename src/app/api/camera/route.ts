@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server'
+import { fetchWithDigestAuth } from '@/lib/digestAuth'
 
 export const dynamic = 'force-dynamic'
 
@@ -10,12 +11,9 @@ export async function GET(request: NextRequest) {
 
   if (!camUrl) return new Response('Missing url param', { status: 400 })
 
-  const headers: Record<string, string> = { 'Cache-Control': 'no-cache' }
-  if (user || pass) {
-    headers['Authorization'] = 'Basic ' + Buffer.from(`${user}:${pass}`).toString('base64')
-  }
-
-  const upstream = await fetch(camUrl, { headers, cache: 'no-store' })
+  const upstream = (user || pass)
+    ? await fetchWithDigestAuth(camUrl, user, pass)
+    : await fetch(camUrl, { cache: 'no-store' })
 
   return new Response(upstream.body, {
     status: upstream.status,

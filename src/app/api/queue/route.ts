@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
 
   // เปิดกล้อง + ไม้กั้นให้รถเข้าพื้นที่รอคิว
   const settings = await getSettings()
-  void runCheckinSequence(settings.hardware, { cardUid: resolvedUid, plate: plate.trim().toUpperCase() })
+  void runCheckinSequence(settings.hardware, { sessionId: String(q._id), cardUid: resolvedUid, plate: plate.trim().toUpperCase() })
 
   return NextResponse.json(q, { status: 201 })
 }

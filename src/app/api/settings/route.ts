@@ -30,7 +30,7 @@ export async function PUT(req: NextRequest) {
       if (body.rates.overnight)  Object.assign(settings.rates.overnight,  body.rates.overnight)
     }
     if (body.hardware) {
-      for (const key of ['camera', 'barrier', 'reader', 'printer', 'drawer'] as const) {
+      for (const key of ['camera', 'barrier', 'reader', 'printer', 'drawer', 'cameraEntry', 'cameraExit'] as const) {
         if (body.hardware[key]) Object.assign(settings.hardware[key], body.hardware[key])
       }
     }

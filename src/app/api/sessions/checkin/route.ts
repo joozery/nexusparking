@@ -83,7 +83,7 @@ export async function POST(req: NextRequest) {
     shiftId,
   })
 
-  void runCheckinSequence(settings.hardware, { cardUid: resolvedUid, plate: plate.trim() })
+  void runCheckinSequence(settings.hardware, { sessionId: String(session._id), cardUid: resolvedUid, plate: plate.trim() })
 
   return NextResponse.json({
     ...session.toObject(),

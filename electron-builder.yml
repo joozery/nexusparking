@@ -26,6 +26,8 @@ files:
   - package.json
   - barrier_server.js
   - .env.local
+  - go2rtc/**/*
+  - '!go2rtc/go2rtc.log'
   - node_modules/**/*
   - '!node_modules/.cache/**'
 

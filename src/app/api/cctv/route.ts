@@ -8,10 +8,12 @@ export async function GET() {
     const s = await SystemSettings.findOne().select('cctvUrls').lean()
     const c = s?.cctvUrls as Record<string, string> | undefined
     return NextResponse.json({
-      plate: c?.plate ?? '',
-      face:  c?.face  ?? '',
-      rear:  c?.rear  ?? '',
-      exit:  c?.exit  ?? '',
+      plate:    c?.plate    ?? '',
+      face:     c?.face     ?? '',
+      rear:     c?.rear     ?? '',
+      exit:     c?.exit     ?? '',
+      plateOut: c?.plateOut ?? '',
+      faceOut:  c?.faceOut  ?? '',
     })
   } catch (err) {
     console.error('[cctv GET]', err)
@@ -24,10 +26,12 @@ export async function POST(req: NextRequest) {
     await connectDB()
     const body = await req.json()
     const urls = {
-      plate: body.plate ?? '',
-      face:  body.face  ?? '',
-      rear:  body.rear  ?? '',
-      exit:  body.exit  ?? '',
+      plate:    body.plate    ?? '',
+      face:     body.face     ?? '',
+      rear:     body.rear     ?? '',
+      exit:     body.exit     ?? '',
+      plateOut: body.plateOut ?? '',
+      faceOut:  body.faceOut  ?? '',
     }
     await SystemSettings.updateOne({}, { $set: { cctvUrls: urls } }, { upsert: true })
     return NextResponse.json({ ok: true })

@@ -1,5 +1,7 @@
 const { app, Tray, Menu, shell, nativeImage, Notification } = require('electron')
 const { createServer } = require('http')
+const { spawn } = require('child_process')
+const fs = require('fs')
 const next = require('next')
 
 let SerialPort
@@ -31,6 +33,32 @@ const BAUD_RATE    = 9600
 
 let tray = null
 let serialPort = null
+let go2rtcProcess = null
+
+// ── go2rtc (RTSP → MJPEG สำหรับกล้อง CCTV) ───────────────────────────
+function startGo2rtc() {
+  if (process.platform !== 'win32') return // ฝั่ง Mac ใช้ launchd service แยกต่างหาก (ดู CLAUDE.md)
+
+  const go2rtcDir = path.join(appRoot, 'go2rtc')
+  const exePath   = path.join(go2rtcDir, 'go2rtc.exe')
+  const cfgPath   = path.join(go2rtcDir, 'go2rtc.yaml')
+
+  if (!fs.existsSync(exePath) || !fs.existsSync(cfgPath)) {
+    console.warn('[go2rtc] go2rtc.exe หรือ go2rtc.yaml ไม่พบใน', go2rtcDir, '— ข้ามการเริ่มต้น')
+    return
+  }
+
+  go2rtcProcess = spawn(exePath, ['-config', cfgPath], { cwd: go2rtcDir })
+  go2rtcProcess.stdout.on('data', d => console.log(`[go2rtc] ${d}`.trim()))
+  go2rtcProcess.stderr.on('data', d => console.error(`[go2rtc] ${d}`.trim()))
+  go2rtcProcess.on('error', e => console.error('[go2rtc] Failed to start:', e.message))
+  go2rtcProcess.on('exit', code => {
+    console.warn(`[go2rtc] Process exited (code ${code})`)
+    go2rtcProcess = null
+  })
+
+  console.log('[go2rtc] Started —', exePath)
+}
 
 // ── Barrier HTTP + Serial ─────────────────────────────────────────
 function startBarrierServer() {
@@ -130,6 +158,7 @@ app.whenReady().then(async () => {
 
   createTray()
   startBarrierServer()
+  startGo2rtc()
 
   try {
     await startNextServer()
@@ -144,4 +173,5 @@ app.whenReady().then(async () => {
 app.on('window-all-closed', e => e.preventDefault())
 app.on('before-quit', () => {
   serialPort?.close()
+  go2rtcProcess?.kill()
 })

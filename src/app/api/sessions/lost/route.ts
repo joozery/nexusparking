@@ -6,12 +6,12 @@ import { calcFeeFromMinutes } from '@/lib/calcFee'
 
 const LOST_FINE = 300
 
-async function triggerHardware(plate: string) {
+async function triggerHardware(sessionId: string, plate: string) {
   try {
     const settings = await getSettings()
     const { triggerDrawer, triggerCamera } = await import('@/lib/hardware')
     void triggerDrawer(settings.hardware)
-    void triggerCamera(settings.hardware, { cardUid: 'LOST', plate, event: 'lost' })
+    void triggerCamera(settings.hardware, { sessionId, cardUid: 'LOST', plate, event: 'lost' })
   } catch { /* hardware optional */ }
 }
 
@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
     existing.status      = 'lost'
     existing.note        = note ?? 'บัตรหาย'
     await existing.save()
-    void triggerHardware(plate.trim())
+    void triggerHardware(String(existing._id), plate.trim())
     return NextResponse.json(existing)
   }
 
@@ -61,6 +61,6 @@ export async function POST(req: NextRequest) {
     note:        note ?? 'บัตรหาย',
   })
 
-  void triggerHardware(plate.trim())
+  void triggerHardware(String(session._id), plate.trim())
   return NextResponse.json(session, { status: 201 })
 }

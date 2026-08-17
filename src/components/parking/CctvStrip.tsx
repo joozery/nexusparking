@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { Camera, X, LogIn, LogOut } from 'lucide-react'
 
-type CamId = 'plate' | 'face' | 'rear' | 'exit'
+type CamId = 'plate' | 'face' | 'rear' | 'exit' | 'plateOut' | 'faceOut'
 type CameraUrls = Record<CamId, string>
 type Status = 'idle' | 'loading' | 'online' | 'offline'
 
@@ -14,8 +14,8 @@ const ENTRY_CAMS = [
   { id: 'exit'  as CamId, label: 'ขาออก',        num: 'CAM-04', accent: '#EA580C' },
 ]
 const EXIT_CAMS = [
-  { id: 'rear' as CamId, label: 'Rear',   num: 'CAM-03', accent: '#7C3AED' },
-  { id: 'exit' as CamId, label: 'ขาออก', num: 'CAM-04', accent: '#EA580C' },
+  { id: 'plateOut' as CamId, label: 'ป้ายทะเบียน ขาออก', num: 'CAM-05', accent: '#DC2626' },
+  { id: 'faceOut'  as CamId, label: 'หน้าคนขับ ขาออก',   num: 'CAM-06', accent: '#0891B2' },
 ]
 
 type CamDef = typeof ENTRY_CAMS[0]
@@ -36,7 +36,7 @@ function MiniCam({ cam, url, onExpand }: { cam: CamDef; url: string; onExpand: (
       return
     }
     setStatus('loading')
-    timerRef.current = setInterval(() => setTicker(Date.now()), 500)
+    timerRef.current = setInterval(() => setTicker(Date.now()), 2000)
     return () => { if (timerRef.current) clearInterval(timerRef.current) }
   }, [url, isRtsp, isMjpeg])
 
@@ -155,7 +155,7 @@ function FullscreenCam({ cam, url, onClose }: { cam: CamDef; url: string; onClos
 
 /* ── exported strip ── */
 export function CctvStrip() {
-  const [urls, setUrls]         = useState<CameraUrls>({ plate: '', face: '', rear: '', exit: '' })
+  const [urls, setUrls]         = useState<CameraUrls>({ plate: '', face: '', rear: '', exit: '', plateOut: '', faceOut: '' })
   const [isExit, setIsExit]     = useState(false)   // false = ขาเข้า, true = ขาออก
   const [expanded, setExpanded] = useState<CamDef | null>(null)
 

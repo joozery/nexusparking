@@ -43,3 +43,12 @@ next-env.d.ts
 # go2rtc
 /go2rtc
 go2rtc.log
+
+# captured snapshots (driver photos — personal data, never commit)
+/captures
+
+# electron-builder output (packaged installer — bundles .env.local secrets)
+/dist
+
+# local runtime logs
+*.log

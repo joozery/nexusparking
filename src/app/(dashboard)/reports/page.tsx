@@ -15,8 +15,9 @@ import {
 } from '@/components/ui/chart'
 import {
   BarChart2, TrendingUp, Car, Bike, Moon, AlertTriangle,
-  RefreshCw, ArrowUpRight, Calendar, SlidersHorizontal,
+  RefreshCw, ArrowUpRight, Calendar, SlidersHorizontal, History,
 } from 'lucide-react'
+import { SessionHistory } from '@/components/reports/SessionHistory'
 
 interface MonthlyRow { _id: string; total: number; count: number; car: number; motorcycle: number; overnight: number; lostFines: number }
 interface DailyRow   { _id: string; total: number; count: number; car: number; motorcycle: number; overnight: number; lostFines: number }
@@ -81,6 +82,7 @@ export default function ReportsPage() {
   const today   = toInputDate(new Date())
   const weekAgo = toInputDate(new Date(Date.now() - 6 * 86400000))
 
+  const [tab,         setTab]         = useState<'revenue' | 'history'>('revenue')
   const [period,      setPeriod]      = useState<PeriodKey>('week')
   const [dateFrom,    setDateFrom]    = useState(weekAgo)
   const [dateTo,      setDateTo]      = useState(today)
@@ -127,8 +129,8 @@ export default function ReportsPage() {
               <BarChart2 className="size-3.5" style={{ color: '#1D4ED8' }} />
             </div>
             <div>
-              <h1 className="text-sm font-bold text-slate-900 leading-none">รายงานรายได้</h1>
-              {data && (
+              <h1 className="text-sm font-bold text-slate-900 leading-none">{tab === 'history' ? 'ประวัติรายการ' : 'รายงานรายได้'}</h1>
+              {tab === 'revenue' && data && (
                 <p className="text-[10px] text-slate-400 mt-0.5 flex items-center gap-1">
                   <Calendar className="size-2.5" />
                   {formatDateThai(data.startDate)} — {formatDateThai(data.endDate)}
@@ -139,29 +141,52 @@ export default function ReportsPage() {
 
           <div className="flex items-center gap-2">
             <div className="flex items-center rounded-lg p-0.5 gap-0.5" style={{ background: '#F1F5F9' }}>
-              {PERIODS.map(p => (
-                <button key={p.key}
-                  onClick={() => {
-                    setPeriod(p.key)
-                    if (p.key !== 'custom') fetchReport(p.key, dateFrom, dateTo)
-                  }}
-                  className="h-7 px-3 rounded-md text-[11px] font-semibold transition-all flex items-center gap-1"
-                  style={period === p.key
-                    ? { background: 'white', color: '#1D4ED8', boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }
-                    : { color: '#94A3B8' }}>
-                  {p.key === 'custom' && <SlidersHorizontal className="size-3" />}
-                  {p.label}
-                </button>
-              ))}
+              {[
+                { key: 'revenue' as const, label: 'รายได้',       icon: BarChart2 },
+                { key: 'history' as const, label: 'ประวัติรายการ', icon: History   },
+              ].map(t => {
+                const TIcon = t.icon
+                return (
+                  <button key={t.key} onClick={() => setTab(t.key)}
+                    className="h-7 px-3 rounded-md text-[11px] font-semibold transition-all flex items-center gap-1"
+                    style={tab === t.key
+                      ? { background: 'white', color: '#1D4ED8', boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }
+                      : { color: '#94A3B8' }}>
+                    <TIcon className="size-3" />
+                    {t.label}
+                  </button>
+                )
+              })}
             </div>
-            <button onClick={() => fetchReport(period, dateFrom, dateTo)} disabled={loading}
-              className="size-8 rounded-lg flex items-center justify-center hover:bg-slate-100 transition-colors disabled:opacity-50">
-              <RefreshCw className={`size-3.5 text-slate-400 ${loading ? 'animate-spin' : ''}`} />
-            </button>
+
+            {tab === 'revenue' && (
+              <>
+                <div className="flex items-center rounded-lg p-0.5 gap-0.5" style={{ background: '#F1F5F9' }}>
+                  {PERIODS.map(p => (
+                    <button key={p.key}
+                      onClick={() => {
+                        setPeriod(p.key)
+                        if (p.key !== 'custom') fetchReport(p.key, dateFrom, dateTo)
+                      }}
+                      className="h-7 px-3 rounded-md text-[11px] font-semibold transition-all flex items-center gap-1"
+                      style={period === p.key
+                        ? { background: 'white', color: '#1D4ED8', boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }
+                        : { color: '#94A3B8' }}>
+                      {p.key === 'custom' && <SlidersHorizontal className="size-3" />}
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+                <button onClick={() => fetchReport(period, dateFrom, dateTo)} disabled={loading}
+                  className="size-8 rounded-lg flex items-center justify-center hover:bg-slate-100 transition-colors disabled:opacity-50">
+                  <RefreshCw className={`size-3.5 text-slate-400 ${loading ? 'animate-spin' : ''}`} />
+                </button>
+              </>
+            )}
           </div>
         </div>
 
-        {period === 'custom' && (
+        {tab === 'revenue' && period === 'custom' && (
           <div className="flex items-center gap-3 px-6 pb-3">
             <div className="flex items-center gap-2">
               <label className="text-[10px] font-semibold text-slate-400 whitespace-nowrap">ตั้งแต่</label>
@@ -194,13 +219,19 @@ export default function ReportsPage() {
 
       {/* ── BODY ── */}
       <div className="flex-1 overflow-auto bg-slate-50/60">
-        {loading && !data && (
+        {tab === 'history' && (
+          <div className="p-5">
+            <SessionHistory />
+          </div>
+        )}
+
+        {tab === 'revenue' && loading && !data && (
           <div className="flex items-center justify-center h-40">
             <RefreshCw className="size-5 text-slate-300 animate-spin" />
           </div>
         )}
 
-        {data && (
+        {tab === 'revenue' && data && (
           <div className="p-5 space-y-4">
 
             {/* KPI strip */}

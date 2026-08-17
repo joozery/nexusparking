@@ -1,3 +1,7 @@
+import path from 'path'
+import fs from 'fs/promises'
+import { fetchWithDigestAuth } from '@/lib/digestAuth'
+
 interface HardwareDevice {
   ip:       string
   port:     number
@@ -5,12 +9,22 @@ interface HardwareDevice {
   enabled:  boolean
 }
 
+interface CaptureCameraDevice {
+  ip:      string
+  port:    number
+  user:    string
+  pass:    string
+  enabled: boolean
+}
+
 interface HardwareConfig {
-  camera:  HardwareDevice
-  barrier: HardwareDevice
-  reader:  HardwareDevice
-  printer: HardwareDevice
-  drawer:  HardwareDevice
+  camera:      HardwareDevice
+  barrier:     HardwareDevice
+  reader:      HardwareDevice
+  printer:     HardwareDevice
+  drawer:      HardwareDevice
+  cameraEntry: CaptureCameraDevice
+  cameraExit:  CaptureCameraDevice
 }
 
 export interface TriggerResult { success: boolean; latencyMs: number }
@@ -45,15 +59,59 @@ async function httpTrigger(device: HardwareDevice, params?: Record<string, strin
   }
 }
 
-// ── กล้องวงจรปิด ──────────────────────────────────────────────
+// ── กล้องวงจรปิด — capture snapshot (ISAPI + Digest Auth) แล้วเซฟลง disk ────
+// จัดเก็บเป็น captures/YYYY-MM-DD/HH-mm-ss_{event}_{plate}_{sessionId}.jpg (เวลาท้องถิ่นของเครื่อง — ตรงกับเวลาที่ checkin/checkout จริง)
+const CAPTURE_DIR = process.env.CAPTURE_DIR ?? path.join(process.cwd(), 'captures')
+
+const pad2 = (n: number) => String(n).padStart(2, '0')
+const dateFolder = (d: Date) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`
+const timeStamp  = (d: Date) => `${pad2(d.getHours())}-${pad2(d.getMinutes())}-${pad2(d.getSeconds())}`
+
+async function captureSnapshot(cam: CaptureCameraDevice, subDir: string, filename: string): Promise<string | null> {
+  if (!cam.enabled || !cam.ip) return null
+  try {
+    const camUrl = `http://${cam.ip}:${cam.port}/ISAPI/Streaming/channels/101/picture`
+    const res = await fetchWithDigestAuth(camUrl, cam.user, cam.pass)
+    if (!res.ok) return null
+    const buf = Buffer.from(await res.arrayBuffer())
+    const dir = path.join(CAPTURE_DIR, subDir)
+    await fs.mkdir(dir, { recursive: true })
+    const filePath = path.join(dir, filename)
+    await fs.writeFile(filePath, buf)
+    return filePath
+  } catch (e) {
+    console.warn('[Hardware] Camera capture failed:', (e as Error).message)
+    return null
+  }
+}
+
+async function linkPhotoToSession(sessionId: string, event: 'checkin' | 'checkout' | 'lost', filePath: string) {
+  try {
+    const [{ connectDB }, { ParkingSession }] = await Promise.all([
+      import('@/lib/mongodb'),
+      import('@/models/ParkingSession'),
+    ])
+    await connectDB()
+    const field = event === 'checkin' ? 'entryPhotoPath' : 'exitPhotoPath'
+    await ParkingSession.updateOne({ _id: sessionId }, { [field]: filePath })
+  } catch (e) {
+    console.warn('[Hardware] Failed to link photo to session:', (e as Error).message)
+  }
+}
+
 export async function triggerCamera(
   hw: HardwareConfig,
-  data: { cardUid: string; plate: string; event: 'checkin' | 'checkout' | 'lost' }
+  data: { sessionId: string; cardUid: string; plate: string; event: 'checkin' | 'checkout' | 'lost' }
 ): Promise<TriggerResult> {
-  const result = await httpTrigger(hw.camera, {
-    uid: data.cardUid, plate: data.plate, event: data.event, ts: Date.now().toString(),
-  })
-  void saveLog('camera', data.event, hw.camera.ip, result)
+  const cam = data.event === 'checkin' ? hw.cameraEntry : hw.cameraExit
+  const t0  = Date.now()
+  const now = new Date(t0)
+  const safePlate = data.plate.replace(/[^a-zA-Z0-9ก-๙]/g, '') || 'unknown'
+  const filename  = `${timeStamp(now)}_${data.event}_${safePlate}_${data.sessionId}.jpg`
+  const filePath  = await captureSnapshot(cam, dateFolder(now), filename)
+  const result: TriggerResult = { success: !!filePath, latencyMs: Date.now() - t0 }
+  void saveLog('camera', data.event, cam.ip, result)
+  if (filePath) void linkPhotoToSession(data.sessionId, data.event, filePath)
   return result
 }
 
@@ -112,7 +170,7 @@ export async function triggerPrinter(
 // ── Check-in sequence: กล้อง (barrier ย้ายไปฝั่ง client) ────────
 export function runCheckinSequence(
   hw: HardwareConfig,
-  data: { cardUid: string; plate: string }
+  data: { sessionId: string; cardUid: string; plate: string }
 ) {
   void triggerCamera(hw, { ...data, event: 'checkin' })
 }
@@ -120,10 +178,10 @@ export function runCheckinSequence(
 // ── Check-out sequence: กล้อง + ลิ้นชัก + พิมพ์ (barrier ย้ายไปฝั่ง client) ──
 export function runCheckoutSequence(
   hw: HardwareConfig,
-  data: { cardUid: string; plate: string; receipt: Parameters<typeof triggerPrinter>[1] }
+  data: { sessionId: string; cardUid: string; plate: string; receipt: Parameters<typeof triggerPrinter>[1] }
 ) {
   void Promise.all([
-    triggerCamera(hw, { cardUid: data.cardUid, plate: data.plate, event: 'checkout' }),
+    triggerCamera(hw, { sessionId: data.sessionId, cardUid: data.cardUid, plate: data.plate, event: 'checkout' }),
     triggerDrawer(hw),
     triggerPrinter(hw, data.receipt),
   ])

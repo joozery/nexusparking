@@ -6,6 +6,7 @@ import {
   ArrowDownLeft, ArrowUpRight, AlertTriangle,
   ChevronLeft, ChevronRight, Trash2, X, Check,
   Clock, BadgeDollarSign, CircleParking, Filter,
+  Camera, ImageOff,
 } from 'lucide-react'
 
 type CardType = 'car' | 'motorcycle' | 'overnight'
@@ -23,6 +24,8 @@ interface Session {
   lostFine: number
   totalFee: number
   status: SessionStatus
+  entryPhotoPath?: string
+  exitPhotoPath?:  string
 }
 
 const TYPE_META: Record<CardType, { label: string; icon: typeof Car; color: string; bg: string }> = {
@@ -68,6 +71,7 @@ export default function HistoryPage() {
   const [confirmId, setConfirmId] = useState<string | null>(null)
   const [deleting,  setDeleting]  = useState<string | null>(null)
   const [showDate,  setShowDate]  = useState(false)
+  const [zoomPhoto, setZoomPhoto] = useState<{ sessionId: string; type: 'entry' | 'exit'; label: string } | null>(null)
 
   const LIMIT = 20
 
@@ -309,6 +313,24 @@ export default function HistoryPage() {
                         </div>
                       </div>
 
+                      {/* Photos */}
+                      <div className="flex items-center gap-1 w-14 shrink-0 justify-center">
+                        {(['entry', 'exit'] as const).map(type => {
+                          const has = type === 'entry' ? s.entryPhotoPath : s.exitPhotoPath
+                          return has ? (
+                            <button key={type}
+                              onClick={() => setZoomPhoto({ sessionId: s._id, type, label: type === 'entry' ? 'ภาพขาเข้า' : 'ภาพขาออก' })}
+                              title={type === 'entry' ? 'ดูภาพขาเข้า' : 'ดูภาพขาออก'}
+                              className="size-6 rounded-md flex items-center justify-center transition-colors hover:opacity-80"
+                              style={{ background: type === 'entry' ? 'rgba(5,150,105,0.1)' : 'rgba(234,88,12,0.1)' }}>
+                              <Camera className="size-3" style={{ color: type === 'entry' ? '#059669' : '#EA580C' }} />
+                            </button>
+                          ) : (
+                            <ImageOff key={type} className="size-3 text-slate-200" />
+                          )
+                        })}
+                      </div>
+
                       {/* Fee */}
                       <div className="text-right w-20 shrink-0">
                         <p className="text-sm font-bold text-slate-900">฿{s.totalFee.toLocaleString('th-TH')}</p>
@@ -387,6 +409,24 @@ export default function HistoryPage() {
           )}
         </div>
       </div>
+
+      {/* ── fullscreen photo zoom ── */}
+      {zoomPhoto && (
+        <div className="fixed inset-0 z-[300] flex flex-col bg-black" onClick={() => setZoomPhoto(null)}>
+          <div className="shrink-0 flex items-center justify-between px-4 py-2.5" style={{ background: 'rgba(0,0,0,0.9)' }}>
+            <span className="text-white text-sm font-bold">{zoomPhoto.label}</span>
+            <button onClick={() => setZoomPhoto(null)} className="text-white/60 hover:text-white transition-colors">
+              <X className="size-5" />
+            </button>
+          </div>
+          <div className="flex-1 flex items-center justify-center overflow-hidden">
+            <img src={`/api/sessions/${zoomPhoto.sessionId}/photo?type=${zoomPhoto.type}`}
+              alt={zoomPhoto.label}
+              className="max-w-full max-h-full object-contain"
+              onClick={e => e.stopPropagation()} />
+          </div>
+        </div>
+      )}
     </>
   )
 }

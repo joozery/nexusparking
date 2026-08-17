@@ -21,9 +21,10 @@ export async function POST(req: NextRequest) {
     }
     case 'camera': {
       const r = await triggerCamera(hw, {
-        cardUid: params.cardUid ?? '',
-        plate:   params.plate   ?? '',
-        event:   params.event   ?? 'checkin',
+        sessionId: params.sessionId ?? 'TEST',
+        cardUid:   params.cardUid   ?? '',
+        plate:     params.plate     ?? '',
+        event:     params.event     ?? 'checkin',
       })
       return NextResponse.json({ success: r.success, latencyMs: r.latencyMs, device })
     }
@@ -54,7 +55,7 @@ export async function GET(req: NextRequest) {
 
   if (device === 'barrier') return NextResponse.json({ error: 'barrier must be triggered from browser' }, { status: 400 })
   if (device === 'drawer')  { const r = await triggerDrawer(hw);  success = r.success; latencyMs = r.latencyMs }
-  if (device === 'camera')  { const r = await triggerCamera(hw, { cardUid: 'TEST', plate: 'TEST', event: 'checkin' }); success = r.success; latencyMs = r.latencyMs }
+  if (device === 'camera')  { const r = await triggerCamera(hw, { sessionId: 'TEST', cardUid: 'TEST', plate: 'TEST', event: 'checkin' }); success = r.success; latencyMs = r.latencyMs }
   if (device === 'printer') { const r = await triggerPrinter(hw, { plate: 'TEST', cardType: 'car', entryTime: new Date().toISOString(), exitTime: new Date().toISOString(), duration: '0h', fee: 0, total: 0 }); success = r.success; latencyMs = r.latencyMs }
 
   return NextResponse.json({ success, latencyMs, device, timestamp: new Date().toISOString() })
