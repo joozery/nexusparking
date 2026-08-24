@@ -16,6 +16,8 @@ export default function LineSettingsPage() {
   const [newTarget,   setNewTarget]   = useState('')
   const [sendingTest,   setSendingTest]   = useState(false)
   const [discovered,    setDiscovered]    = useState<string[]>([])
+  const [lastWebhook,   setLastWebhook]   = useState<string | null>(null)
+  const [eventCount,    setEventCount]    = useState(0)
   const [scanning,      setScanning]      = useState(false)
   const [copiedId,      setCopiedId]      = useState<string | null>(null)
 
@@ -55,6 +57,8 @@ export default function LineSettingsPage() {
       const res = await fetch('/api/line/webhook')
       const data = await res.json()
       setDiscovered(data.ids ?? [])
+      setLastWebhook(data.lastWebhook ?? null)
+      setEventCount(data.eventCount ?? 0)
     } finally { setScanning(false) }
   }
 
@@ -243,9 +247,17 @@ export default function LineSettingsPage() {
           </div>
         </div>
         <div className="p-5">
+          {/* Debug info */}
+          {lastWebhook && (
+            <div className="mb-3 px-3 py-2 rounded-lg text-[10px]"
+              style={{ background: 'rgba(5,150,105,0.06)', border: '1px solid rgba(5,150,105,0.15)', color: '#059669' }}>
+              ✅ LINE ส่ง webhook มาแล้ว — {new Date(lastWebhook).toLocaleString('th-TH')} ({eventCount} events)
+            </div>
+          )}
+
           {discovered.length === 0 ? (
             <div className="text-center py-4 space-y-2">
-              <p className="text-[11px] text-slate-400">ยังไม่พบ ID</p>
+              <p className="text-[11px] text-slate-400">{lastWebhook ? 'LINE ส่ง event มาแล้ว แต่ยังไม่พบ Group/User ID — ลองพิมพ์ในกลุ่มอีกครั้ง' : 'ยังไม่พบ ID'}</p>
               <div className="text-[10px] text-slate-400 space-y-0.5">
                 <p>1. ตั้งค่า Webhook URL ใน LINE Developers Console เป็น</p>
                 <code className="px-2 py-0.5 rounded text-[10px] font-mono"
