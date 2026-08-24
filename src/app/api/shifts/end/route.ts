@@ -4,6 +4,8 @@ import { verifyToken, COOKIE_NAME } from '@/lib/auth'
 import { connectDB } from '@/lib/mongodb'
 import { Shift } from '@/models/Shift'
 import { ParkingSession } from '@/models/ParkingSession'
+import { getSettings } from '@/models/SystemSettings'
+import { sendLineMessage, buildShiftEndMessage } from '@/lib/lineNotify'
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}))
@@ -22,11 +24,33 @@ export async function POST(req: NextRequest) {
   // นับรถที่ยังค้างอยู่ตอนปิดกะ
   const closingCarCount = await ParkingSession.countDocuments({ status: 'active' })
 
-  shift.status         = 'closed'
-  shift.endTime        = new Date()
-  shift.closingFloat   = closingFloat
+  shift.status          = 'closed'
+  shift.endTime         = new Date()
+  shift.closingFloat    = closingFloat
   shift.closingCarCount = closingCarCount
   await shift.save()
+
+  // LINE notification — fire and forget
+  const cfg = await getSettings()
+  if (cfg.line?.enabled && cfg.line.channelToken && cfg.line.targets?.length) {
+    sendLineMessage(
+      cfg.line.channelToken,
+      cfg.line.targets,
+      buildShiftEndMessage({
+        operatorName:   shift.operatorName,
+        startTime:      shift.startTime,
+        endTime:        shift.endTime!,
+        checkinsCount:  shift.checkinsCount,
+        checkoutsCount: shift.checkoutsCount,
+        cashAmount:     shift.cashAmount,
+        qrAmount:       shift.qrAmount,
+        totalAmount:    shift.totalAmount,
+        openingFloat:   shift.openingFloat,
+        closingFloat,
+        closingCarCount,
+      }),
+    ).catch(() => {})
+  }
 
   return NextResponse.json(shift)
 }

@@ -22,6 +22,7 @@ export interface ISystemSettings extends Document {
   monthlyDeposit:  number
   monthlyFee:      number
   cctvUrls: { plate: string; face: string; rear: string; exit: string; plateOut: string; faceOut: string }
+  line: { enabled: boolean; channelToken: string; targets: string[] }
 }
 
 const hwDevice = {
@@ -74,6 +75,11 @@ const SystemSettingsSchema = new Schema<ISystemSettings>({
     exit:     { type: String, default: '' },
     plateOut: { type: String, default: '' },
     faceOut:  { type: String, default: '' },
+  },
+  line: {
+    enabled:      { type: Boolean, default: false },
+    channelToken: { type: String,  default: '' },
+    targets:      { type: [String], default: [] },
   },
 }, { timestamps: true })
 

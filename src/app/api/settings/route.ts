@@ -14,35 +14,69 @@ export async function PUT(req: NextRequest) {
   const body = await req.json()
   await connectDB()
 
-  let settings = await SystemSettings.findOne()
-  if (!settings) {
-    settings = await SystemSettings.create(body)
-  } else {
-    // deep merge
-    if (body.businessHours) Object.assign(settings.businessHours, body.businessHours)
-    if (body.capacity) {
-      Object.assign(settings.capacity, body.capacity)
-      settings.markModified('capacity')
+  const $set: Record<string, unknown> = {}
+
+  if (body.businessHours) {
+    if (body.businessHours.open  !== undefined) $set['businessHours.open']  = body.businessHours.open
+    if (body.businessHours.close !== undefined) $set['businessHours.close'] = body.businessHours.close
+  }
+  if (body.capacity) {
+    if (body.capacity.car        !== undefined) $set['capacity.car']        = body.capacity.car
+    if (body.capacity.motorcycle !== undefined) $set['capacity.motorcycle'] = body.capacity.motorcycle
+  }
+  if (body.rates?.car) {
+    if (body.rates.car.firstHour !== undefined) $set['rates.car.firstHour'] = body.rates.car.firstHour
+    if (body.rates.car.extraHour !== undefined) $set['rates.car.extraHour'] = body.rates.car.extraHour
+  }
+  if (body.rates?.motorcycle) {
+    if (body.rates.motorcycle.firstHour !== undefined) $set['rates.motorcycle.firstHour'] = body.rates.motorcycle.firstHour
+    if (body.rates.motorcycle.extraHour !== undefined) $set['rates.motorcycle.extraHour'] = body.rates.motorcycle.extraHour
+  }
+  if (body.rates?.overnight) {
+    for (const k of ['windowStart', 'windowEnd', 'flatRateStart', 'flatRate', 'extraHour'] as const) {
+      if (body.rates.overnight[k] !== undefined) $set[`rates.overnight.${k}`] = body.rates.overnight[k]
     }
-    if (body.rates) {
-      if (body.rates.car)        Object.assign(settings.rates.car,        body.rates.car)
-      if (body.rates.motorcycle) Object.assign(settings.rates.motorcycle, body.rates.motorcycle)
-      if (body.rates.overnight)  Object.assign(settings.rates.overnight,  body.rates.overnight)
-    }
-    if (body.hardware) {
-      for (const key of ['camera', 'barrier', 'reader', 'printer', 'drawer', 'cameraEntry', 'cameraExit'] as const) {
-        if (body.hardware[key]) Object.assign(settings.hardware[key], body.hardware[key])
+  }
+  if (body.hardware) {
+    for (const dev of ['camera', 'barrier', 'reader', 'printer', 'drawer'] as const) {
+      if (body.hardware[dev]) {
+        for (const f of ['ip', 'port', 'endpoint', 'enabled'] as const) {
+          if (body.hardware[dev][f] !== undefined) $set[`hardware.${dev}.${f}`] = body.hardware[dev][f]
+        }
       }
     }
-    if (body.lostCardFine   !== undefined) settings.lostCardFine   = body.lostCardFine
-    if (body.afterHoursFine !== undefined) settings.afterHoursFine = body.afterHoursFine
-    if (body.monthlyDeposit !== undefined) settings.monthlyDeposit = body.monthlyDeposit
-    if (body.monthlyFee     !== undefined) settings.monthlyFee     = body.monthlyFee
-    settings.markModified('rates')
-    settings.markModified('hardware')
-    settings.markModified('businessHours')
-    await settings.save()
+    for (const dev of ['cameraEntry', 'cameraExit'] as const) {
+      if (body.hardware[dev]) {
+        for (const f of ['ip', 'port', 'user', 'pass', 'enabled'] as const) {
+          if (body.hardware[dev][f] !== undefined) $set[`hardware.${dev}.${f}`] = body.hardware[dev][f]
+        }
+      }
+    }
+  }
+  if (body.lostCardFine   !== undefined) $set['lostCardFine']   = body.lostCardFine
+  if (body.afterHoursFine !== undefined) $set['afterHoursFine'] = body.afterHoursFine
+  if (body.monthlyDeposit !== undefined) $set['monthlyDeposit'] = body.monthlyDeposit
+  if (body.monthlyFee     !== undefined) $set['monthlyFee']     = body.monthlyFee
+  const updated = await SystemSettings.findOneAndUpdate(
+    {},
+    { $set },
+    { new: true, upsert: true, strict: false },
+  )
+
+  // line — ใช้ native collection เพื่อ bypass Mongoose schema cache ระหว่าง hot reload
+  if (body.line) {
+    await SystemSettings.collection.updateOne(
+      {},
+      {
+        $set: {
+          'line.enabled':      body.line.enabled      ?? false,
+          'line.channelToken': body.line.channelToken ?? '',
+          'line.targets':      body.line.targets      ?? [],
+        },
+      },
+    )
   }
 
-  return NextResponse.json(settings)
+  const fresh = await SystemSettings.findOne().lean()
+  return NextResponse.json(fresh)
 }
