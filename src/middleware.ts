@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 const SECRET = process.env.JWT_SECRET ?? 'dev-secret-change-me'
 const COOKIE  = 'np_session'
 
-const PUBLIC = ['/login', '/api/auth']
+const PUBLIC = ['/login', '/api/auth', '/api/line/webhook']
 
 async function verifyJWT(token: string): Promise<boolean> {
   try {
