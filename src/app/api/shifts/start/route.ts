@@ -5,6 +5,8 @@ import { connectDB } from '@/lib/mongodb'
 import { Shift } from '@/models/Shift'
 import { Admin } from '@/models/Admin'
 import { ParkingSession } from '@/models/ParkingSession'
+import { getSettings } from '@/models/SystemSettings'
+import { sendLineMessage, buildShiftStartMessage } from '@/lib/lineNotify'
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}))
@@ -39,6 +41,16 @@ export async function POST(req: NextRequest) {
     openingFloat,
     carryoverCars,
   })
+
+  // LINE notification — fire and forget
+  const cfg = await getSettings()
+  if (cfg.line?.enabled && cfg.line.channelToken && cfg.line.targets?.length) {
+    sendLineMessage(
+      cfg.line.channelToken,
+      cfg.line.targets,
+      buildShiftStartMessage(operatorName, shift.startTime, carryoverCars),
+    ).catch(() => {})
+  }
 
   return NextResponse.json(shift, { status: 201 })
 }
