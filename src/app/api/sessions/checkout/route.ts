@@ -127,15 +127,6 @@ export async function POST(req: NextRequest) {
     sessionId: String(session._id),
     cardUid:   session.cardUid,
     plate:     session.plate,
-    receipt: {
-      plate:     session.plate,
-      cardType:  session.cardType,
-      entryTime: session.entryTime.toISOString(),
-      exitTime:  now.toISOString(),
-      duration:  `${Math.ceil(durationMin / 60)}h`,
-      fee,
-      total: fee,
-    },
   })
 
   return NextResponse.json(session)

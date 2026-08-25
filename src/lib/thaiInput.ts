@@ -37,3 +37,8 @@ export function toAsciiPlate(s: string): string {
 export function toAsciiNumber(s: string): string {
   return convertThaiToEn(s).replace(/[^0-9.]/g, '')
 }
+
+/** Strip control chars and trim — shared by keyboard-wedge and serial card-reader input paths */
+export function sanitizeUid(s: string): string {
+  return s.replace(/[\x00-\x1F\x7F]/g, '').trim()
+}

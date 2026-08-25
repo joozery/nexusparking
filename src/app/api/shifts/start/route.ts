@@ -7,6 +7,8 @@ import { Admin } from '@/models/Admin'
 import { ParkingSession } from '@/models/ParkingSession'
 import { getSettings } from '@/models/SystemSettings'
 import { sendLineMessage, buildShiftStartMessage } from '@/lib/lineNotify'
+import { triggerDrawer, printRaw } from '@/lib/hardware'
+import { buildShiftStartSlip } from '@/lib/escpos'
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}))
@@ -42,8 +44,13 @@ export async function POST(req: NextRequest) {
     carryoverCars,
   })
 
-  // LINE notification — fire and forget
   const cfg = await getSettings()
+
+  // เปิดลิ้นชัก — operator ต้องใส่เงินทอนตั้งต้น (opening float) ลงลิ้นชักตอนเข้ากะ
+  void triggerDrawer(cfg.hardware)
+  void printRaw(cfg.hardware, buildShiftStartSlip({ operatorName, startTime: shift.startTime, openingFloat, carryoverCars }))
+
+  // LINE notification — fire and forget
   if (cfg.line?.enabled && cfg.line.channelToken && cfg.line.targets?.length) {
     sendLineMessage(
       cfg.line.channelToken,

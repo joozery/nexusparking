@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { CreditCard, LogOut, Clock, Banknote, Smartphone, Tag, ChevronDown, Timer, Moon } from 'lucide-react'
+import { CreditCard, LogOut, Clock, Banknote, Smartphone, Tag, ChevronDown, Timer, Moon, CheckCircle2, Printer } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
@@ -26,18 +26,22 @@ interface DiscountOption {
 interface Props {
   open: boolean
   onOpenChange: (open: boolean) => void
-  step: 'scan' | 'payment'
+  step: 'scan' | 'payment' | 'done'
   cardType: CardType
   hours: number
   fee: number
+  paidAmount?: number
   entryTime?: Date | null
   customExitTime?: string
   overnightCfg?: OvernightConfig
   afterHoursCfg?: AfterHoursConfig
+  printing?: boolean
   onCustomExitTimeChange?: (v: string) => void
   onSimulateScan: () => void
   onBack: () => void
   onConfirm: (paymentMethod: PaymentMethod, discountId?: string, dailyDiscountId?: string) => void
+  onPrintReceipt?: () => void
+  onDone?: () => void
 }
 
 function calcDiscountAmount(discount: DiscountOption | null, fee: number): number {
@@ -59,9 +63,9 @@ function fmtDuration(entryTime: Date | null | undefined, exitTime: Date | null |
 }
 
 export function CheckOutDialog({
-  open, onOpenChange, step, cardType, hours, fee,
+  open, onOpenChange, step, cardType, hours, fee, paidAmount, printing,
   entryTime, customExitTime, overnightCfg, afterHoursCfg, onCustomExitTimeChange,
-  onSimulateScan, onBack, onConfirm,
+  onSimulateScan, onBack, onConfirm, onPrintReceipt, onDone,
 }: Props) {
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash')
   const [discounts, setDiscounts] = useState<DiscountOption[]>([])
@@ -126,7 +130,19 @@ export function CheckOutDialog({
         </DialogHeader>
 
         <DialogBody className="py-3">
-          {step === 'scan' ? (
+          {step === 'done' ? (
+            /* ── Done step — payment confirmed, offer optional receipt print ── */
+            <div className="flex flex-col items-center gap-3 py-6">
+              <div className="flex size-14 items-center justify-center rounded-full bg-emerald-100">
+                <CheckCircle2 className="size-8 text-emerald-600" />
+              </div>
+              <div className="text-center">
+                <p className="text-sm font-bold text-emerald-800">รับชำระเงินเรียบร้อย</p>
+                <p className="text-2xl font-black text-slate-800 tabular-nums mt-1">฿{paidAmount ?? fee}</p>
+                <p className="text-xs text-slate-400 mt-1">ลิ้นชักเปิดแล้ว — พิมพ์ใบเสร็จเฉพาะถ้าลูกค้าต้องการ</p>
+              </div>
+            </div>
+          ) : step === 'scan' ? (
             /* ── Scan step ── */
             <div
               onClick={onSimulateScan}
@@ -383,7 +399,16 @@ export function CheckOutDialog({
         </DialogBody>
 
         <DialogFooter>
-          {step === 'scan' ? (
+          {step === 'done' ? (
+            <>
+              <Button variant="outline" size="sm" className="flex-1" disabled={printing} onClick={onPrintReceipt}>
+                <Printer className="size-3.5" /> {printing ? 'กำลังพิมพ์...' : 'พิมพ์ใบเสร็จ'}
+              </Button>
+              <Button size="sm" className="flex-1 text-white font-bold" style={{ background: '#059669' }} onClick={onDone}>
+                เสร็จสิ้น
+              </Button>
+            </>
+          ) : step === 'scan' ? (
             <DialogClose asChild><Button variant="outline" size="sm">ยกเลิก</Button></DialogClose>
           ) : (
             <>

@@ -1,6 +1,8 @@
 import path from 'path'
 import fs from 'fs/promises'
 import { fetchWithDigestAuth } from '@/lib/digestAuth'
+import { sendRawToPrinter } from '@/lib/windowsRawPrint'
+import { buildReceipt, drawerKickCommand, type ReceiptData } from '@/lib/escpos'
 
 interface HardwareDevice {
   ip:       string
@@ -125,46 +127,58 @@ export async function triggerBarrier(
   return result
 }
 
+// ── เครื่องพิมพ์/ลิ้นชัก ที่ต่อ USB โดยตรง (ไม่มี IP) ────────────
+// EPSON TM-T82II ต่อ USB เข้าเครื่องนี้ (parking-app ก็รันอยู่บนเครื่องเดียวกันผ่าน PM2)
+// ลิ้นชักไม่มีสายของตัวเอง — สั่งเปิดผ่านคำสั่ง drawer-kick ที่ยิงเข้าคิวเครื่องพิมพ์เดียวกัน
+// `enabled` แต่ไม่มี `ip` = ตีความว่า `endpoint` คือชื่อคิวเครื่องพิมพ์ Windows (ไม่ใช่ URL path)
+async function windowsPrinterTrigger(device: HardwareDevice, bytes: Buffer): Promise<TriggerResult> {
+  if (!device.enabled || !device.endpoint) return { success: false, latencyMs: 0 }
+  const t0 = Date.now()
+  const success = await sendRawToPrinter(device.endpoint, bytes)
+  return { success, latencyMs: Date.now() - t0 }
+}
+
+// ── พิมพ์ raw bytes ตรงๆ (ใช้กับสลิปที่ไม่ใช่ ReceiptData เช่น สลิปเข้ากะ/ปิดกะ) ──
+export async function printRaw(hw: HardwareConfig, bytes: Buffer): Promise<TriggerResult> {
+  const result = await windowsPrinterTrigger(hw.printer, bytes)
+  void saveLog('printer', 'raw', hw.printer.endpoint, result)
+  return result
+}
+
 // ── ลิ้นชักเก็บเงิน ──────────────────────────────────────────
 export async function triggerDrawer(hw: HardwareConfig): Promise<TriggerResult> {
-  const result = await httpTrigger(hw.drawer, { cmd: 'open' })
-  void saveLog('drawer', 'trigger', hw.drawer.ip, result)
+  const result = hw.drawer.ip
+    ? await httpTrigger(hw.drawer, { cmd: 'open' })
+    : await windowsPrinterTrigger(hw.drawer, drawerKickCommand())
+  void saveLog('drawer', 'trigger', hw.drawer.ip || hw.drawer.endpoint, result)
   return result
 }
 
 // ── เครื่องพิมพ์ใบเสร็จ ────────────────────────────────────────
-export async function triggerPrinter(
-  hw: HardwareConfig,
-  receipt: {
-    plate:     string
-    cardType:  string
-    entryTime: string
-    exitTime:  string
-    duration:  string
-    fee:       number
-    lostFine?: number
-    total:     number
+export async function triggerPrinter(hw: HardwareConfig, receipt: ReceiptData): Promise<TriggerResult> {
+  if (hw.printer.ip) {
+    const t0 = Date.now()
+    try {
+      const url = `http://${hw.printer.ip}:${hw.printer.port}${hw.printer.endpoint}`
+      const res = await fetch(url, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify(receipt),
+        signal:  AbortSignal.timeout(5000),
+      })
+      const result: TriggerResult = { success: res.ok, latencyMs: Date.now() - t0 }
+      void saveLog('printer', 'receipt', hw.printer.ip, result)
+      return result
+    } catch {
+      console.warn('[Hardware] Printer trigger failed')
+      const result: TriggerResult = { success: false, latencyMs: Date.now() - t0 }
+      void saveLog('printer', 'receipt', hw.printer.ip, result)
+      return result
+    }
   }
-): Promise<TriggerResult> {
-  if (!hw.printer.enabled || !hw.printer.ip) return { success: false, latencyMs: 0 }
-  const t0 = Date.now()
-  try {
-    const url = `http://${hw.printer.ip}:${hw.printer.port}${hw.printer.endpoint}`
-    const res = await fetch(url, {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify(receipt),
-      signal:  AbortSignal.timeout(5000),
-    })
-    const result: TriggerResult = { success: res.ok, latencyMs: Date.now() - t0 }
-    void saveLog('printer', 'receipt', hw.printer.ip, result)
-    return result
-  } catch {
-    console.warn('[Hardware] Printer trigger failed')
-    const result: TriggerResult = { success: false, latencyMs: Date.now() - t0 }
-    void saveLog('printer', 'receipt', hw.printer.ip, result)
-    return result
-  }
+  const result = await windowsPrinterTrigger(hw.printer, buildReceipt(receipt))
+  void saveLog('printer', 'receipt', hw.printer.endpoint, result)
+  return result
 }
 
 // ── Check-in sequence: กล้อง (barrier ย้ายไปฝั่ง client) ────────
@@ -175,14 +189,15 @@ export function runCheckinSequence(
   void triggerCamera(hw, { ...data, event: 'checkin' })
 }
 
-// ── Check-out sequence: กล้อง + ลิ้นชัก + พิมพ์ (barrier ย้ายไปฝั่ง client) ──
+// ── Check-out sequence: กล้อง + ลิ้นชัก (barrier ย้ายไปฝั่ง client) ──
+// ไม่พิมพ์ใบเสร็จอัตโนมัติ — ลูกค้าส่วนใหญ่ไม่เอาสลิป เปิดแค่ลิ้นชัก
+// ถ้าลูกค้าต้องการใบเสร็จ operator กดพิมพ์เองผ่าน POST /api/sessions/[id]/print (เรียก triggerPrinter ตรงๆ)
 export function runCheckoutSequence(
   hw: HardwareConfig,
-  data: { sessionId: string; cardUid: string; plate: string; receipt: Parameters<typeof triggerPrinter>[1] }
+  data: { sessionId: string; cardUid: string; plate: string }
 ) {
   void Promise.all([
     triggerCamera(hw, { sessionId: data.sessionId, cardUid: data.cardUid, plate: data.plate, event: 'checkout' }),
     triggerDrawer(hw),
-    triggerPrinter(hw, data.receipt),
   ])
 }

@@ -6,6 +6,8 @@ import { Shift } from '@/models/Shift'
 import { ParkingSession } from '@/models/ParkingSession'
 import { getSettings } from '@/models/SystemSettings'
 import { sendLineMessage, buildShiftEndMessage } from '@/lib/lineNotify'
+import { triggerDrawer, printRaw } from '@/lib/hardware'
+import { buildShiftEndSlip } from '@/lib/escpos'
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}))
@@ -30,8 +32,25 @@ export async function POST(req: NextRequest) {
   shift.closingCarCount = closingCarCount
   await shift.save()
 
-  // LINE notification — fire and forget
   const cfg = await getSettings()
+
+  // เปิดลิ้นชัก — operator ต้องนับเงินปิดกะ (closing float) ออกจากลิ้นชัก
+  void triggerDrawer(cfg.hardware)
+  void printRaw(cfg.hardware, buildShiftEndSlip({
+    operatorName:   shift.operatorName,
+    startTime:      shift.startTime,
+    endTime:        shift.endTime!,
+    checkinsCount:  shift.checkinsCount,
+    checkoutsCount: shift.checkoutsCount,
+    cashAmount:     shift.cashAmount,
+    qrAmount:       shift.qrAmount,
+    totalAmount:    shift.totalAmount,
+    openingFloat:   shift.openingFloat,
+    closingFloat,
+    closingCarCount,
+  }))
+
+  // LINE notification — fire and forget
   if (cfg.line?.enabled && cfg.line.channelToken && cfg.line.targets?.length) {
     sendLineMessage(
       cfg.line.channelToken,

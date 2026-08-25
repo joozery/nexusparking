@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 
 import {
   LogIn, LogOut, AlertTriangle,
-  Car, Bike, Moon, RefreshCw, Clock, Search,
+  Car, Bike, RefreshCw, Clock,
   Play, Square, X, CreditCard,
   ListOrdered, Plus, CheckCheck, XCircle, Nfc, Scan,
 } from 'lucide-react'
@@ -13,13 +13,16 @@ import { CheckOutDialog, type PaymentMethod } from '@/components/parking/CheckOu
 import { LostCardDialog } from '@/components/parking/LostCardDialog'
 import { CardRegisterDialog } from '@/components/parking/CardRegisterDialog'
 import { CctvStrip } from '@/components/parking/CctvStrip'
+import { CarsInLotDialog } from '@/components/parking/CarsInLotDialog'
 import { type CardType } from '@/components/parking/types'
 import { calcFeeFromMinutes, type OvernightConfig, type AfterHoursConfig } from '@/lib/calcFee'
 import { useToast } from '@/components/ui/Toast'
 import { triggerBarrierClient } from '@/lib/barrierClient'
-import { convertThaiToEn, toAsciiNumber } from '@/lib/thaiInput'
-
-function sanitizeUid(s: string) { return s.replace(/[\x00-\x1F\x7F]/g, '').trim() }
+import { convertThaiToEn, toAsciiNumber, sanitizeUid } from '@/lib/thaiInput'
+import {
+  isSerialSupported, connectSerialReader, getReaderBaud, setReaderBaud,
+  COMMON_BAUD_RATES, type SerialReaderHandle,
+} from '@/lib/serialReader'
 
 interface Session {
   _id: string
@@ -60,12 +63,6 @@ interface Shift {
   totalAmount: number
 }
 
-const TYPE_META: Record<CardType, { label: string; icon: typeof Car; color: string; bg: string }> = {
-  car:        { label: 'รถยนต์',       icon: Car,  color: '#1D4ED8', bg: 'rgba(29,78,216,0.1)'  },
-  motorcycle: { label: 'มอเตอร์ไซค์', icon: Bike, color: '#6D28D9', bg: 'rgba(109,40,217,0.1)' },
-  overnight:  { label: 'ค้างคืน',     icon: Moon, color: '#B45309', bg: 'rgba(180,83,9,0.1)'   },
-}
-
 function LiveClock() {
   const [time, setTime] = useState('')
   useEffect(() => {
@@ -76,13 +73,6 @@ function LiveClock() {
     return () => clearInterval(t)
   }, [])
   return <>{time}</>
-}
-
-function fmtDuration(entryTime: string) {
-  const diff = Date.now() - new Date(entryTime).getTime()
-  const h = Math.floor(diff / 3600000)
-  const m = Math.floor((diff % 3600000) / 60000)
-  return h > 0 ? `${h} ชม. ${m} น.` : `${m} น.`
 }
 
 function fmtTime(iso: string) {
@@ -128,7 +118,9 @@ export default function OperatorPage() {
 
   // Check Out
   const [checkOutOpen,  setCheckOutOpen]  = useState(false)
-  const [coStep,        setCoStep]        = useState<'scan' | 'payment'>('scan')
+  const [coStep,        setCoStep]        = useState<'scan' | 'payment' | 'done'>('scan')
+  const [coPaidAmount,  setCoPaidAmount]  = useState(0)
+  const [coPrinting,    setCoPrinting]    = useState(false)
   const [coType,        setCoType]        = useState<CardType>('car')
   const [coHours,       setCoHours]       = useState(1)
   const [coFee,         setCoFee]         = useState(0)
@@ -139,6 +131,8 @@ export default function OperatorPage() {
   // Lost card
   const [lostOpen, setLostOpen] = useState(false)
 
+  const [carsListOpen, setCarsListOpen] = useState(false)
+
   const [regOpen, setRegOpen] = useState(false)
   const [regUid,  setRegUid]  = useState('')
   const onCardScanRef = useRef<(uid: string) => void>(() => {})
@@ -146,8 +140,15 @@ export default function OperatorPage() {
   const scanTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [scanBuf, setScanBuf] = useState('')
 
+  // Serial (COM port) reader — fallback path for readers that aren't HID keyboard-wedge
+  const serialHandleRef = useRef<SerialReaderHandle | null>(null)
+  const [serialSupported, setSerialSupported] = useState(false) // starts false to match SSR; set after mount
+  const [serialConnected, setSerialConnected] = useState(false)
+  const [serialConnecting, setSerialConnecting] = useState(false)
+  const [serialBaud, setSerialBaudState] = useState(9600)
+
   function resetCI() { setCiStep('scan'); setCiPlate(''); setCiType('car'); setCiUid(''); setCiCustomTime('') }
-  function resetCO() { setCoStep('scan'); setCoSessionId(''); setCoCustomTime(''); setCoEntryTime(null) }
+  function resetCO() { setCoStep('scan'); setCoSessionId(''); setCoCustomTime(''); setCoEntryTime(null); setCoPaidAmount(0) }
   function resetQ()  { setQStep('scan'); setQPlate(''); setQType('car'); setQUid('') }
 
   const fetchShift = useCallback(async () => {
@@ -218,6 +219,47 @@ export default function OperatorPage() {
     }
   }, [noDialogOpen])
 
+  // ── Serial card reader — silently reuse a previously-granted COM port on load ──
+  useEffect(() => {
+    if (!isSerialSupported()) return
+    setSerialSupported(true)
+    setSerialBaudState(getReaderBaud())
+    let cancelled = false
+    connectSerialReader(uid => onCardScanRef.current(uid), () => setSerialConnected(false), false)
+      .then(handle => {
+        if (cancelled) { handle?.disconnect(); return }
+        if (handle) { serialHandleRef.current = handle; setSerialConnected(true) }
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+      serialHandleRef.current?.disconnect()
+      serialHandleRef.current = null
+    }
+  }, [])
+
+  async function handleConnectSerialReader() {
+    setSerialConnecting(true)
+    try {
+      setReaderBaud(serialBaud)
+      const handle = await connectSerialReader(uid => onCardScanRef.current(uid), () => setSerialConnected(false), true)
+      if (handle) {
+        serialHandleRef.current = handle
+        setSerialConnected(true)
+        success('เชื่อมต่อเครื่องอ่านบัตร (Serial) สำเร็จ')
+      }
+    } catch (e) {
+      toastError('เชื่อมต่อเครื่องอ่านไม่สำเร็จ', e instanceof Error ? e.message : 'กรุณาลองใหม่อีกครั้ง')
+    } finally {
+      setSerialConnecting(false)
+    }
+  }
+
+  async function handleDisconnectSerialReader() {
+    await serialHandleRef.current?.disconnect()
+    serialHandleRef.current = null
+    setSerialConnected(false)
+  }
 
   // Queue actions
   async function simulateQScan() {
@@ -418,7 +460,9 @@ export default function OperatorPage() {
       body: JSON.stringify(body),
     })
     if (res.ok) {
-      setCheckOutOpen(false); resetCO()
+      const data = await res.json()
+      setCoPaidAmount(data.totalFee ?? coFee)
+      setCoStep('done')
       void triggerBarrierClient('checkout')
       await Promise.all([fetchData(), fetchShift()])
       const label = paymentMethod === 'qr' ? 'โอนเงิน' : 'เงินสด'
@@ -427,6 +471,22 @@ export default function OperatorPage() {
       const err = await res.json()
       toastError('ขาออกไม่สำเร็จ', err.error ?? 'เกิดข้อผิดพลาด')
     }
+  }
+
+  async function handlePrintReceipt() {
+    if (!coSessionId) return
+    setCoPrinting(true)
+    try {
+      const res = await fetch(`/api/sessions/${coSessionId}/print`, { method: 'POST' })
+      const data = await res.json()
+      data.success ? success('พิมพ์ใบเสร็จแล้ว') : toastError('พิมพ์ไม่สำเร็จ', 'เช็คเครื่องพิมพ์')
+    } finally {
+      setCoPrinting(false)
+    }
+  }
+
+  function finishCheckout() {
+    setCheckOutOpen(false); resetCO()
   }
 
   // ── Card-reader auto-route: checkin or checkout based on active sessions ──
@@ -495,10 +555,13 @@ export default function OperatorPage() {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // ป้องกันการทำงานซ้อนถ้ามี modal เปิดอยู่แล้ว
+      // ป้องกันการทำงานซ้อนถ้ามี modal เปิดอยู่แล้ว (ยกเว้น carsListOpen เอง — F2 ต้องสลับปิดได้)
       if (checkInOpen || checkOutOpen || lostOpen || queueOpen || shiftEnding || regOpen) return
 
-      // เผื่อมีปุ่มลัดอื่นๆ ในอนาคต
+      if (e.key === 'F2') {
+        e.preventDefault()
+        setCarsListOpen(o => !o)
+      }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
@@ -568,6 +631,31 @@ export default function OperatorPage() {
             <Clock className="size-3.5 text-slate-400" />
             <span className="text-sm font-black text-slate-800 tabular-nums"><LiveClock /></span>
           </div>
+          {serialSupported && (
+            <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg"
+              style={{ background: serialConnected ? 'rgba(16,185,129,0.08)' : '#F8FAFF', border: `1px solid ${serialConnected ? 'rgba(16,185,129,0.2)' : '#E8ECF4'}` }}>
+              <Nfc className="size-3.5" style={{ color: serialConnected ? '#059669' : '#94A3B8' }} />
+              {!serialConnected && (
+                <select
+                  value={serialBaud}
+                  onChange={e => setSerialBaudState(Number(e.target.value))}
+                  className="text-[10px] font-bold text-slate-500 bg-transparent outline-none"
+                  title="Baud rate ของเครื่องอ่านบัตร (Serial)"
+                >
+                  {COMMON_BAUD_RATES.map(b => <option key={b} value={b}>{b}</option>)}
+                </select>
+              )}
+              <button
+                onClick={serialConnected ? handleDisconnectSerialReader : handleConnectSerialReader}
+                disabled={serialConnecting}
+                className="text-[10px] font-bold disabled:opacity-50"
+                style={{ color: serialConnected ? '#059669' : '#6366F1' }}
+                title="เครื่องอ่านบัตรแบบ Serial (COM port) — ใช้เมื่อเครื่องอ่านไม่ใช่ USB-HID keyboard-wedge"
+              >
+                {serialConnecting ? '...' : serialConnected ? 'Reader: OK' : 'เชื่อมต่อ Reader'}
+              </button>
+            </div>
+          )}
           <button
             onClick={handleLogout}
             className="h-8 px-3 rounded-lg text-xs font-bold"
@@ -609,8 +697,8 @@ export default function OperatorPage() {
       {/* ─── Body (scrollable) ─── */}
       <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
 
-        {/* ── Camera strip ── */}
-        <div className="shrink-0 flex flex-col rounded-2xl overflow-hidden" style={{ height: '600px' }}>
+        {/* ── Camera strip — fills remaining height now that the car list lives in the F2 popup ── */}
+        <div className="flex-1 min-h-0 flex flex-col rounded-2xl overflow-hidden">
           <CctvStrip />
         </div>
 
@@ -667,122 +755,36 @@ export default function OperatorPage() {
           </button>
         </div>
 
-        {/* ── Session table ── */}
-        <div className="shrink-0 rounded-2xl overflow-hidden"
-          style={{ background: 'white', border: '1px solid #E8ECF4', boxShadow: '0 1px 8px rgba(0,0,0,0.05)' }}>
+        {/* ── Cars-in-lot trigger — full table now lives in the F2 popup (CarsInLotDialog) ── */}
+        <button
+          onClick={() => setCarsListOpen(true)}
+          className="shrink-0 flex items-center gap-2 px-4 rounded-xl transition-colors"
+          style={{ height: '42px', background: 'white', border: '1px solid #E8ECF4', boxShadow: '0 1px 8px rgba(0,0,0,0.05)' }}
+          onMouseEnter={e => { e.currentTarget.style.background = '#F8FAFF' }}
+          onMouseLeave={e => { e.currentTarget.style.background = 'white' }}
+        >
+          <Car className="size-3.5 text-slate-400 shrink-0" />
+          <span className="text-xs font-black text-slate-700">รถในลาน</span>
+          <span className="text-[10px] font-bold px-1.5 py-px rounded-full"
+            style={{ background: 'rgba(29,78,216,0.1)', color: '#1D4ED8' }}>
+            {activeSessions.length} คัน
+          </span>
+          {stats && <span className="text-[10px] text-slate-400">/ {stats.totalCapacity} ที่</span>}
+          <div className="flex-1" />
+          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full text-slate-400" style={{ border: '1px solid #E2E8F0' }}>F2</span>
+        </button>
 
-          {/* Table toolbar */}
-          <div className="flex items-center gap-2 px-4 py-2.5"
-            style={{ background: '#F8FAFF', borderBottom: '1px solid #E8ECF4' }}>
-            <Car className="size-3.5 text-slate-400 shrink-0" />
-            <span className="text-xs font-black text-slate-700">รถในลาน</span>
-            <span className="text-[10px] font-bold px-1.5 py-px rounded-full"
-              style={{ background: 'rgba(29,78,216,0.1)', color: '#1D4ED8' }}>
-              {sessions.filter(s => s.status === 'active').length} คัน
-            </span>
-            {stats && (
-              <span className="text-[10px] text-slate-400">
-                / {stats.totalCapacity} ที่
-              </span>
-            )}
-            <div className="flex-1" />
-            <div className="relative">
-              <Search className="size-3 text-slate-400 absolute left-2 top-1/2 -translate-y-1/2" />
-              <input
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                placeholder="ค้นหาทะเบียน"
-                className="h-7 pl-6 pr-2.5 rounded-lg text-xs text-slate-700 outline-none w-28"
-                style={{ background: 'white', border: '1px solid #E2E8F0' }}
-              />
-            </div>
-            <button
-              onClick={fetchData}
-              className="size-7 rounded-lg flex items-center justify-center shrink-0"
-              style={{ background: 'white', border: '1px solid #E2E8F0' }}
-              onMouseEnter={e => { e.currentTarget.style.background = '#F1F5F9' }}
-              onMouseLeave={e => { e.currentTarget.style.background = 'white' }}
-            >
-              <RefreshCw className={`size-3 text-slate-400 ${loading ? 'animate-spin' : ''}`} />
-            </button>
-          </div>
-
-          {/* Table */}
-          {loading ? (
-            <div className="flex items-center justify-center py-10 gap-2">
-              <RefreshCw className="size-4 text-slate-300 animate-spin" />
-              <span className="text-xs text-slate-300">กำลังโหลด…</span>
-            </div>
-          ) : activeSessions.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-10 gap-2">
-              <Car className="size-8 text-slate-200" />
-              <p className="text-xs text-slate-300">
-                {search ? `ไม่พบทะเบียน "${search}"` : 'ยังไม่มีรถในลาน'}
-              </p>
-            </div>
-          ) : (
-            <table className="w-full border-collapse">
-              <thead>
-                <tr style={{ borderBottom: '1px solid #E8ECF4' }}>
-                  <th className="text-left text-[10px] font-black text-slate-400 uppercase tracking-widest px-4 py-2 w-8">#</th>
-                  <th className="text-left text-[10px] font-black text-slate-400 uppercase tracking-widest px-3 py-2">ป้ายทะเบียน</th>
-                  <th className="text-left text-[10px] font-black text-slate-400 uppercase tracking-widest px-3 py-2">ประเภท</th>
-                  <th className="text-left text-[10px] font-black text-slate-400 uppercase tracking-widest px-3 py-2">เวลาเข้า</th>
-                  <th className="text-left text-[10px] font-black text-slate-400 uppercase tracking-widest px-3 py-2">ระยะเวลา</th>
-                  <th className="text-right text-[10px] font-black text-slate-400 uppercase tracking-widest px-4 py-2">ค่าบริการ</th>
-                  <th className="py-2 pr-3 w-20" />
-                </tr>
-              </thead>
-              <tbody>
-                {activeSessions.map((s, idx) => {
-                  const m = TYPE_META[s.cardType]
-                  const Icon = m.icon
-                  const entryTime = new Date(s.entryTime).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })
-                  return (
-                    <tr key={s._id}
-                      style={{ borderBottom: idx < activeSessions.length - 1 ? '1px solid #F1F5F9' : 'none', background: idx % 2 === 1 ? '#FAFBFF' : 'white' }}>
-                      <td className="px-4 py-2.5">
-                        <div className="flex items-center gap-1.5">
-                          <div className="w-0.5 h-4 rounded-full shrink-0" style={{ background: m.color }} />
-                          <span className="text-[10px] text-slate-400 tabular-nums">{idx + 1}</span>
-                        </div>
-                      </td>
-                      <td className="px-3 py-2.5">
-                        <span className="text-[15px] font-black text-slate-900 tracking-widest">{s.plate}</span>
-                      </td>
-                      <td className="px-3 py-2.5">
-                        <div className="flex items-center gap-1.5">
-                          <Icon className="size-3 shrink-0" style={{ color: m.color }} strokeWidth={2} />
-                          <span className="text-[10px] font-bold" style={{ color: m.color }}>{m.label}</span>
-                        </div>
-                      </td>
-                      <td className="px-3 py-2.5">
-                        <span className="text-[11px] text-slate-500 tabular-nums">{entryTime}</span>
-                      </td>
-                      <td className="px-3 py-2.5">
-                        <span className="text-[11px] font-semibold text-slate-600">{fmtDuration(s.entryTime)}</span>
-                      </td>
-                      <td className="px-4 py-2.5 text-right">
-                        <span className="text-sm font-black tabular-nums" style={{ color: m.color }}>฿0</span>
-                      </td>
-                      <td className="pr-3 py-1.5">
-                        <button
-                          onClick={() => openCheckoutFromCard(s)}
-                          className="w-full px-3 py-1.5 rounded-lg font-black text-white text-[10px] tracking-wide transition-all active:scale-[0.97]"
-                          style={{ background: 'linear-gradient(160deg,#065F46,#059669)' }}
-                          onMouseEnter={e => { e.currentTarget.style.filter = 'brightness(1.1)' }}
-                          onMouseLeave={e => { e.currentTarget.style.filter = 'none' }}
-                        >
-                          CHECK OUT
-                        </button>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          )}
-        </div>
+        <CarsInLotDialog
+          open={carsListOpen}
+          onOpenChange={setCarsListOpen}
+          sessions={activeSessions}
+          stats={stats}
+          loading={loading}
+          search={search}
+          onSearchChange={setSearch}
+          onRefresh={fetchData}
+          onCheckout={s => { setCarsListOpen(false); openCheckoutFromCard(s) }}
+        />
 
         {/* ── Queue — compact single-line strip ── */}
         <div className="shrink-0 flex items-center gap-2 px-3 rounded-xl"
@@ -1191,12 +1193,16 @@ export default function OperatorPage() {
         open={checkOutOpen}
         onOpenChange={o => { setCheckOutOpen(o); if (!o) resetCO() }}
         step={coStep} cardType={coType} hours={coHours} fee={coFee}
+        paidAmount={coPaidAmount}
+        printing={coPrinting}
         entryTime={coEntryTime}
         overnightCfg={overnightCfg}
         afterHoursCfg={afterHoursCfg}
         onSimulateScan={simulateCOScan}
         onBack={() => setCoStep('scan')}
         onConfirm={handleCheckout}
+        onPrintReceipt={handlePrintReceipt}
+        onDone={finishCheckout}
       />
       <LostCardDialog
         open={lostOpen}
