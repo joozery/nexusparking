@@ -81,13 +81,19 @@ function MiniCam({ cam, url, onExpand }: { cam: CamDef; url: string; onExpand: (
       </div>
 
       {/* bottom label */}
-      <div className="absolute bottom-0 left-0 right-0 px-2.5 py-2 flex items-center gap-1.5"
-        style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.8) 0%, transparent 100%)' }}>
-        <span className="text-[9px] font-black px-1.5 py-0.5 rounded tabular-nums"
-          style={{ background: cam.accent + '30', color: cam.accent, border: `1px solid ${cam.accent}50` }}>
-          {cam.num}
+      <div className="absolute bottom-0 left-0 right-0 px-2.5 py-2 flex flex-col gap-0.5"
+        style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.85) 0%, transparent 100%)' }}>
+        <div className="flex items-center gap-1.5">
+          <span className="text-[9px] font-black px-1.5 py-0.5 rounded tabular-nums"
+            style={{ background: cam.accent + '30', color: cam.accent, border: `1px solid ${cam.accent}50` }}>
+            {cam.num}
+          </span>
+          <span className="text-[10px] font-semibold" style={{ color: 'rgba(255,255,255,0.8)' }}>{cam.label}</span>
+        </div>
+        <span className="text-[8px] font-mono truncate" title={url || 'ยังไม่ได้ตั้งค่า path'}
+          style={{ color: 'rgba(255,255,255,0.4)' }}>
+          {url || 'ยังไม่ได้ตั้งค่า path'}
         </span>
-        <span className="text-[10px] font-semibold" style={{ color: 'rgba(255,255,255,0.8)' }}>{cam.label}</span>
       </div>
     </div>
   )
@@ -120,6 +126,9 @@ function FullscreenCam({ cam, url, onClose }: { cam: CamDef; url: string; onClos
           <span className="size-2 rounded-full shrink-0" style={{ background: cam.accent }} />
           <span className="text-white text-sm font-bold">{cam.label}</span>
           <span className="text-xs" style={{ color: 'rgba(255,255,255,0.35)' }}>{cam.num}</span>
+          <span className="text-xs font-mono truncate max-w-[420px]" style={{ color: 'rgba(255,255,255,0.3)' }}>
+            {url || 'ยังไม่ได้ตั้งค่า path'}
+          </span>
           {status === 'online' && (
             <div className="flex items-center gap-1 px-2 py-0.5 rounded-full ml-1"
               style={{ background: 'rgba(220,38,38,0.8)' }}>

@@ -18,7 +18,7 @@ import { type CardType } from '@/components/parking/types'
 import { calcFeeFromMinutes, type OvernightConfig, type AfterHoursConfig } from '@/lib/calcFee'
 import { useToast } from '@/components/ui/Toast'
 import { triggerBarrierClient } from '@/lib/barrierClient'
-import { convertThaiToEn, toAsciiNumber, sanitizeUid } from '@/lib/thaiInput'
+import { convertThaiToEn, toAsciiNumber, toAsciiPlate, sanitizeUid } from '@/lib/thaiInput'
 import {
   isSerialSupported, connectSerialReader, getReaderBaud, setReaderBaud,
   COMMON_BAUD_RATES, type SerialReaderHandle,
@@ -94,6 +94,12 @@ export default function OperatorPage() {
   const [shiftEnding, setShiftEnding] = useState(false)
   const [openingFloat, setOpeningFloat] = useState('')
   const [closingFloat, setClosingFloat] = useState('')
+  const [nowTick, setNowTick] = useState(() => Date.now())
+
+  useEffect(() => {
+    const t = setInterval(() => setNowTick(Date.now()), 30000)
+    return () => clearInterval(t)
+  }, [])
 
   // Queue
   const [queues,      setQueues]      = useState<QueueEntry[]>([])
@@ -127,6 +133,9 @@ export default function OperatorPage() {
   const [coSessionId,   setCoSessionId]   = useState('')
   const [coCustomTime,  setCoCustomTime]  = useState('')
   const [coEntryTime,   setCoEntryTime]   = useState<Date | null>(null)
+
+  // Sidebar quick plate lookup (checkin/checkout auto-route by typed plate)
+  const [plateQuick, setPlateQuick] = useState('')
 
   // Lost card
   const [lostOpen, setLostOpen] = useState(false)
@@ -451,6 +460,27 @@ export default function OperatorPage() {
     setCoSessionId(s._id); setCoEntryTime(entry); setCoStep('payment'); setCheckOutOpen(true)
   }
 
+  // Sidebar plate input → auto-route: active session with this plate = checkout,
+  // else = checkin (or queue, if the lot is full — same rule as the old CHECK IN button)
+  function handlePlateQuickSubmit() {
+    const plate = toAsciiPlate(convertThaiToEn(plateQuick))
+    if (plate.length !== 4) return
+    const activeSession = sessions.find(s => s.status === 'active' && s.plate === plate)
+    if (activeSession) {
+      openCheckoutFromCard(activeSession)
+    } else if (stats && stats.availableSlots === 0) {
+      resetQ()
+      setQPlate(plate)
+      setQueueOpen(true)
+    } else {
+      resetCI()
+      setCiPlate(plate)
+      setCiStep('confirm') // skip the card-tap screen — plate is already known, show it right away
+      setCheckInOpen(true)
+    }
+    setPlateQuick('')
+  }
+
   async function handleCheckout(paymentMethod: PaymentMethod, discountId?: string, dailyDiscountId?: string) {
     const body: Record<string, unknown> = { sessionId: coSessionId || undefined, paymentMethod, discountId, dailyDiscountId }
     if (coCustomTime) body.exitTime = new Date(coCustomTime).toISOString()
@@ -694,159 +724,162 @@ export default function OperatorPage() {
         </div>
       ) : null}
 
-      {/* ─── Body (scrollable) ─── */}
-      <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
+      {/* ─── Body ─── */}
+      <div className="flex-1 min-h-0 p-3 flex gap-3">
 
-        {/* ── Camera strip — fills remaining height now that the car list lives in the F2 popup ── */}
-        <div className="flex-1 min-h-0 flex flex-col rounded-2xl overflow-hidden">
+        {/* ── Camera strip — main area, fills all available space ── */}
+        <div className="flex-1 min-w-0 min-h-0 flex flex-col rounded-2xl overflow-hidden">
           <CctvStrip />
         </div>
 
-        {/* ── 3 Action buttons ── */}
-        <div className="shrink-0 grid grid-cols-3 gap-3" style={{ height: '46px' }}>
+        {/* ── Right sidebar: check-in / check-out / queue ── */}
+        <div className="w-75 shrink-0 flex flex-col gap-2 min-h-0">
 
-          <button
-            onClick={() => {
-              if (stats && stats.availableSlots === 0) {
-                resetQ(); setQueueOpen(true)
-              } else {
-                resetCI(); setCheckInOpen(true)
-              }
-            }}
-            className="flex items-center justify-center gap-2 rounded-xl transition-all active:scale-[0.97] hover:brightness-110 relative overflow-hidden"
-            style={stats && stats.availableSlots === 0
-              ? { background: 'linear-gradient(135deg,#7C3AED,#A855F7)', boxShadow: '0 4px 16px rgba(124,58,237,0.4)' }
-              : { background: 'linear-gradient(135deg,#1E3A8A,#2563EB)', boxShadow: '0 4px 16px rgba(29,78,216,0.38)' }}
-          >
+          {/* Quick plate lookup — auto-route: active session found = checkout, else = checkin (or queue if full) */}
+          <div className="shrink-0 flex flex-col gap-1.5 p-3 rounded-xl"
+            style={{ background: 'white', border: '1px solid #E8ECF4', boxShadow: '0 1px 8px rgba(0,0,0,0.05)' }}>
+            <label className="text-[10px] font-bold text-slate-400 px-0.5">เลขทะเบียน (4 หลัก) — Enter เพื่อยืนยัน</label>
+            <form
+              onSubmit={e => { e.preventDefault(); handlePlateQuickSubmit() }}
+              className="flex items-center gap-2"
+            >
+              <input
+                value={plateQuick}
+                onChange={e => setPlateQuick(toAsciiPlate(convertThaiToEn(e.target.value)).slice(0, 4))}
+                inputMode="numeric"
+                enterKeyHint="done"
+                placeholder="0000"
+                className="flex-1 min-w-0 h-11 rounded-lg text-center text-xl font-black tracking-[0.2em] text-slate-800 outline-none"
+                style={{ background: '#F8FAFF', border: '1px solid #E2E8F0' }}
+              />
+              <button
+                type="submit"
+                disabled={plateQuick.length !== 4}
+                className="shrink-0 h-11 px-4 rounded-lg text-sm font-black text-white transition-all active:scale-[0.97] hover:brightness-110 disabled:opacity-40"
+                style={{ background: 'linear-gradient(135deg,#1E3A8A,#2563EB)', boxShadow: '0 4px 16px rgba(29,78,216,0.38)' }}
+              >
+                ยืนยัน
+              </button>
+            </form>
             {stats && stats.availableSlots === 0 && (
-              <span className="absolute top-1 right-1.5 text-[8px] font-black px-1 py-px rounded-full"
-                style={{ background: 'rgba(255,255,255,0.2)', color: 'white' }}>ลานเต็ม</span>
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full self-start"
+                style={{ background: 'rgba(124,58,237,0.08)', color: '#7C3AED' }}>
+                ลานเต็ม — ทะเบียนใหม่จะเข้าคิวรอแทน
+              </span>
             )}
-            <div className="size-6 rounded-md flex items-center justify-center shrink-0" style={{ background: 'rgba(255,255,255,0.18)' }}>
-              {stats && stats.availableSlots === 0
-                ? <ListOrdered className="size-3.5 text-white" strokeWidth={2} />
-                : <LogIn className="size-3.5 text-white" strokeWidth={2} />}
-            </div>
-            <p className="text-xs font-black text-white leading-none tracking-wide">
-              {stats && stats.availableSlots === 0 ? 'คิวรอ' : 'CHECK IN'}
-            </p>
-          </button>
 
-          <button
-            onClick={() => { resetCO(); setCheckOutOpen(true) }}
-            className="flex items-center justify-center gap-2 rounded-xl transition-all active:scale-[0.97] hover:brightness-110"
-            style={{ background: 'linear-gradient(135deg,#064E3B,#059669)', boxShadow: '0 4px 16px rgba(5,150,105,0.38)' }}
-          >
-            <div className="size-6 rounded-md flex items-center justify-center shrink-0" style={{ background: 'rgba(255,255,255,0.18)' }}>
-              <LogOut className="size-3.5 text-white" strokeWidth={2} />
-            </div>
-            <p className="text-xs font-black text-white leading-none tracking-wide">CHECK OUT</p>
-          </button>
-
-          <button
-            onClick={() => setLostOpen(true)}
-            className="flex items-center justify-center gap-2 rounded-xl transition-all active:scale-[0.97] hover:brightness-110"
-            style={{ background: 'linear-gradient(135deg,#78350F,#D97706)', boxShadow: '0 4px 16px rgba(217,119,6,0.35)' }}
-          >
-            <div className="size-6 rounded-md flex items-center justify-center shrink-0" style={{ background: 'rgba(255,255,255,0.18)' }}>
-              <AlertTriangle className="size-3.5 text-white" strokeWidth={2} />
-            </div>
-            <p className="text-xs font-black text-white leading-none tracking-wide">บัตรหาย</p>
-          </button>
-        </div>
-
-        {/* ── Cars-in-lot trigger — full table now lives in the F2 popup (CarsInLotDialog) ── */}
-        <button
-          onClick={() => setCarsListOpen(true)}
-          className="shrink-0 flex items-center gap-2 px-4 rounded-xl transition-colors"
-          style={{ height: '42px', background: 'white', border: '1px solid #E8ECF4', boxShadow: '0 1px 8px rgba(0,0,0,0.05)' }}
-          onMouseEnter={e => { e.currentTarget.style.background = '#F8FAFF' }}
-          onMouseLeave={e => { e.currentTarget.style.background = 'white' }}
-        >
-          <Car className="size-3.5 text-slate-400 shrink-0" />
-          <span className="text-xs font-black text-slate-700">รถในลาน</span>
-          <span className="text-[10px] font-bold px-1.5 py-px rounded-full"
-            style={{ background: 'rgba(29,78,216,0.1)', color: '#1D4ED8' }}>
-            {activeSessions.length} คัน
-          </span>
-          {stats && <span className="text-[10px] text-slate-400">/ {stats.totalCapacity} ที่</span>}
-          <div className="flex-1" />
-          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full text-slate-400" style={{ border: '1px solid #E2E8F0' }}>F2</span>
-        </button>
-
-        <CarsInLotDialog
-          open={carsListOpen}
-          onOpenChange={setCarsListOpen}
-          sessions={activeSessions}
-          stats={stats}
-          loading={loading}
-          search={search}
-          onSearchChange={setSearch}
-          onRefresh={fetchData}
-          onCheckout={s => { setCarsListOpen(false); openCheckoutFromCard(s) }}
-        />
-
-        {/* ── Queue — compact single-line strip ── */}
-        <div className="shrink-0 flex items-center gap-2 px-3 rounded-xl"
-          style={{ height: '42px', background: 'white', border: '1px solid rgba(124,58,237,0.2)', boxShadow: '0 1px 8px rgba(124,58,237,0.08)' }}>
-          <ListOrdered className="size-3.5 shrink-0" style={{ color: '#7C3AED' }} />
-          <span className="text-xs font-black text-slate-700 shrink-0">คิวรอ</span>
-          {queues.length > 0 && (
-            <span className="text-[9px] font-black px-1.5 py-px rounded-full text-white shrink-0"
-              style={{ background: '#DC2626' }}>{queues.length}</span>
-          )}
-          {stats && stats.availableSlots === 0 && (
-            <span className="text-[9px] font-bold px-1.5 py-px rounded-full shrink-0"
-              style={{ background: 'rgba(220,38,38,0.08)', color: '#991B1B', border: '1px solid rgba(220,38,38,0.18)' }}>
-              ลานเต็ม
-            </span>
-          )}
-          <div className="flex-1 flex items-center gap-1.5 overflow-x-auto min-w-0" style={{ scrollbarWidth: 'none' }}>
-            {queues.length === 0 ? (
-              <span className="text-[10px] text-slate-400">ไม่มีรถในคิว</span>
-            ) : queues.map((q, idx) => (
-              <div key={q._id}
-                className="shrink-0 flex items-center gap-1 px-2 h-7 rounded-lg"
-                style={{
-                  background: idx === 0 ? 'rgba(124,58,237,0.08)' : '#F8FAFF',
-                  border: idx === 0 ? '1px solid rgba(124,58,237,0.3)' : '1px solid #E8ECF4',
-                }}>
-                <span className="text-[9px] font-black" style={{ color: '#7C3AED' }}>Q{idx + 1}</span>
-                <span className="text-xs font-black text-slate-800 tracking-wider">{q.plate}</span>
-                {q.cardType === 'car'
-                  ? <Car className="size-3 text-slate-400" />
-                  : <Bike className="size-3 text-slate-400" />}
-                <span className="text-[9px] text-slate-400">{Math.floor((Date.now() - new Date(q.joinedAt).getTime()) / 60000)}น.</span>
-                <button
-                  onClick={() => openQEnterDialog(q._id, q.plate)}
-                  disabled={!!qLoading}
-                  className="flex items-center justify-center size-4 rounded transition-all disabled:opacity-40"
-                  style={{ background: 'rgba(5,150,105,0.12)' }}
-                  title="เข้าลาน"
-                >
-                  {qLoading === q._id
-                    ? <RefreshCw className="size-2.5 text-emerald-600 animate-spin" />
-                    : <CheckCheck className="size-2.5" style={{ color: '#059669' }} />}
-                </button>
-                <button
-                  onClick={() => cancelQueue(q._id, q.plate)}
-                  disabled={!!qLoading}
-                  className="flex items-center justify-center size-4 rounded transition-all disabled:opacity-40"
-                  style={{ background: 'rgba(239,68,68,0.08)' }}
-                  title="ยกเลิก"
-                >
-                  <X className="size-2.5" style={{ color: '#DC2626' }} />
-                </button>
-              </div>
-            ))}
+            <button
+              onClick={() => setLostOpen(true)}
+              className="mt-1 shrink-0 flex items-center justify-center gap-1.5 h-8 rounded-lg text-xs font-bold transition-all active:scale-[0.97]"
+              style={{ background: 'rgba(217,119,6,0.08)', color: '#92400E', border: '1px solid rgba(217,119,6,0.2)' }}
+            >
+              <AlertTriangle className="size-3.5" /> บัตรหาย
+            </button>
           </div>
+
+          {/* ── Cars-in-lot trigger — full table lives in the F2 popup (CarsInLotDialog) ── */}
           <button
-            onClick={() => { resetQ(); setQueueOpen(true) }}
-            className="shrink-0 h-7 px-2.5 rounded-lg flex items-center gap-1 text-[10px] font-black text-white transition-all hover:brightness-110 active:scale-[0.97]"
-            style={{ background: 'linear-gradient(135deg,#5B21B6,#7C3AED)', boxShadow: '0 2px 6px rgba(124,58,237,0.3)' }}
+            onClick={() => setCarsListOpen(true)}
+            className="shrink-0 flex items-center gap-2 px-4 rounded-xl transition-colors"
+            style={{ height: '38px', background: 'white', border: '1px solid #E8ECF4', boxShadow: '0 1px 8px rgba(0,0,0,0.05)' }}
+            onMouseEnter={e => { e.currentTarget.style.background = '#F8FAFF' }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'white' }}
           >
-            <Plus className="size-3" /> เพิ่มคิว
+            <Car className="size-3.5 text-slate-400 shrink-0" />
+            <span className="text-xs font-black text-slate-700">รถในลาน</span>
+            <span className="text-[10px] font-bold px-1.5 py-px rounded-full"
+              style={{ background: 'rgba(29,78,216,0.1)', color: '#1D4ED8' }}>
+              {activeSessions.length} คัน
+            </span>
+            {stats && <span className="text-[10px] text-slate-400">/ {stats.totalCapacity} ที่</span>}
+            <div className="flex-1" />
+            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full text-slate-400" style={{ border: '1px solid #E2E8F0' }}>F2</span>
           </button>
+
+          <CarsInLotDialog
+            open={carsListOpen}
+            onOpenChange={setCarsListOpen}
+            sessions={activeSessions}
+            stats={stats}
+            loading={loading}
+            search={search}
+            onSearchChange={setSearch}
+            onRefresh={fetchData}
+            onCheckout={s => { setCarsListOpen(false); openCheckoutFromCard(s) }}
+          />
+
+          {/* ── Queue panel — vertical list, fills remaining sidebar height ── */}
+          <div className="flex-1 min-h-0 flex flex-col rounded-xl overflow-hidden"
+            style={{ background: 'white', border: '1px solid rgba(124,58,237,0.2)', boxShadow: '0 1px 8px rgba(124,58,237,0.08)' }}>
+
+            <div className="shrink-0 flex items-center gap-2 px-3 py-2"
+              style={{ borderBottom: '1px solid #F1F5F9' }}>
+              <ListOrdered className="size-3.5 shrink-0" style={{ color: '#7C3AED' }} />
+              <span className="text-xs font-black text-slate-700 shrink-0">คิวรอ</span>
+              {queues.length > 0 && (
+                <span className="text-[9px] font-black px-1.5 py-px rounded-full text-white shrink-0"
+                  style={{ background: '#DC2626' }}>{queues.length}</span>
+              )}
+              {stats && stats.availableSlots === 0 && (
+                <span className="text-[9px] font-bold px-1.5 py-px rounded-full shrink-0"
+                  style={{ background: 'rgba(220,38,38,0.08)', color: '#991B1B', border: '1px solid rgba(220,38,38,0.18)' }}>
+                  ลานเต็ม
+                </span>
+              )}
+              <div className="flex-1" />
+              <button
+                onClick={() => { resetQ(); setQueueOpen(true) }}
+                className="shrink-0 h-6 px-2 rounded-lg flex items-center gap-1 text-[10px] font-black text-white transition-all hover:brightness-110 active:scale-[0.97]"
+                style={{ background: 'linear-gradient(135deg,#5B21B6,#7C3AED)', boxShadow: '0 2px 6px rgba(124,58,237,0.3)' }}
+              >
+                <Plus className="size-3" /> เพิ่มคิว
+              </button>
+            </div>
+
+            <div className="flex-1 min-h-0 overflow-y-auto p-2 flex flex-col gap-1.5">
+              {queues.length === 0 ? (
+                <div className="flex-1 flex items-center justify-center">
+                  <span className="text-[11px] text-slate-400">ไม่มีรถในคิว</span>
+                </div>
+              ) : queues.map((q, idx) => (
+                <div key={q._id}
+                  className="shrink-0 flex items-center gap-1.5 px-2.5 h-9 rounded-lg"
+                  style={{
+                    background: idx === 0 ? 'rgba(124,58,237,0.08)' : '#F8FAFF',
+                    border: idx === 0 ? '1px solid rgba(124,58,237,0.3)' : '1px solid #E8ECF4',
+                  }}>
+                  <span className="text-[9px] font-black shrink-0" style={{ color: '#7C3AED' }}>Q{idx + 1}</span>
+                  <span className="text-xs font-black text-slate-800 tracking-wider truncate">{q.plate}</span>
+                  {q.cardType === 'car'
+                    ? <Car className="size-3 text-slate-400 shrink-0" />
+                    : <Bike className="size-3 text-slate-400 shrink-0" />}
+                  <span className="text-[9px] text-slate-400 shrink-0">{Math.floor((nowTick - new Date(q.joinedAt).getTime()) / 60000)}น.</span>
+                  <div className="flex-1" />
+                  <button
+                    onClick={() => openQEnterDialog(q._id, q.plate)}
+                    disabled={!!qLoading}
+                    className="flex items-center justify-center size-5 rounded transition-all disabled:opacity-40 shrink-0"
+                    style={{ background: 'rgba(5,150,105,0.12)' }}
+                    title="เข้าลาน"
+                  >
+                    {qLoading === q._id
+                      ? <RefreshCw className="size-3 text-emerald-600 animate-spin" />
+                      : <CheckCheck className="size-3" style={{ color: '#059669' }} />}
+                  </button>
+                  <button
+                    onClick={() => cancelQueue(q._id, q.plate)}
+                    disabled={!!qLoading}
+                    className="flex items-center justify-center size-5 rounded transition-all disabled:opacity-40 shrink-0"
+                    style={{ background: 'rgba(239,68,68,0.08)' }}
+                    title="ยกเลิก"
+                  >
+                    <X className="size-3" style={{ color: '#DC2626' }} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+
         </div>
 
       </div> {/* end body */}

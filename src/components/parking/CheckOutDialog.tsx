@@ -193,7 +193,7 @@ export function CheckOutDialog({
                       <Clock className="size-3 text-emerald-500" />
                       <span className="text-[11px] font-semibold text-emerald-700">{durationStr}</span>
                     </div>
-                    <div className="px-2.5 py-2 space-y-1 border-t border-emerald-100">
+                    <div className="px-2.5 py-2 space-y-1 border-t border-emerald-100 max-h-[160px] overflow-y-auto">
                       {(isOvernightSession || hasAfterHours) && breakdown ? (
                         breakdown.segments.map((seg, i) => (
                           <div key={i} className="flex justify-between text-xs">

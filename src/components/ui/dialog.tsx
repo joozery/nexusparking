@@ -35,7 +35,7 @@ function DialogContent({
       <DialogOverlay />
       <DialogPrimitive.Content
         className={cn(
-          "fixed left-1/2 top-1/2 z-50 w-full max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-xl bg-white shadow-2xl border border-slate-200 p-0 overflow-hidden",
+          "fixed left-1/2 top-1/2 z-50 flex w-full max-w-lg max-h-[88vh] -translate-x-1/2 -translate-y-1/2 flex-col rounded-xl bg-white shadow-2xl border border-slate-200 p-0 overflow-hidden",
           "data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95",
           "data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95",
           className
@@ -55,18 +55,18 @@ function DialogContent({
 }
 
 function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
-  return <div className={cn("p-0", className)} {...props} />
+  return <div className={cn("shrink-0 p-0", className)} {...props} />
 }
 
 function DialogBody({ className, ...props }: React.ComponentProps<"div">) {
-  return <div className={cn("px-4 pb-3", className)} {...props} />
+  return <div className={cn("min-h-0 flex-1 overflow-y-auto px-4 pb-3", className)} {...props} />
 }
 
 function DialogFooter({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       className={cn(
-        "flex flex-col-reverse gap-2 border-t border-slate-100 bg-slate-50 px-4 py-3 sm:flex-row sm:justify-end",
+        "flex shrink-0 flex-col-reverse gap-2 border-t border-slate-100 bg-slate-50 px-4 py-3 sm:flex-row sm:justify-end",
         className
       )}
       {...props}
