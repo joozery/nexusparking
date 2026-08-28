@@ -2,12 +2,12 @@ import { NextResponse } from 'next/server'
 import { connectDB } from '@/lib/mongodb'
 import { ParkingSession } from '@/models/ParkingSession'
 import { getSettings } from '@/models/SystemSettings'
+import { getTodayStartTH } from '@/lib/dateTh'
 
 export async function GET() {
   await connectDB()
 
-  const todayStart = new Date()
-  todayStart.setHours(0, 0, 0, 0)
+  const todayStart = getTodayStartTH()
 
   const [activeSessions, todaySessions, todayRevenue, settings] = await Promise.all([
     ParkingSession.countDocuments({ status: 'active' }),

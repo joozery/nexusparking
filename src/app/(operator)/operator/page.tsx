@@ -6,14 +6,14 @@ import {
   LogIn, LogOut,
   Car, Bike, RefreshCw, Clock,
   Play, Square, X,
-  ListOrdered, XCircle, Nfc, Scan,
+  XCircle, Nfc, Scan,
 } from 'lucide-react'
 import { CheckInDialog } from '@/components/parking/CheckInDialog'
 import { CheckOutDialog, type PaymentMethod } from '@/components/parking/CheckOutDialog'
 import { LostCardDialog } from '@/components/parking/LostCardDialog'
 import { CardRegisterDialog } from '@/components/parking/CardRegisterDialog'
 import { CctvStrip } from '@/components/parking/CctvStrip'
-import { FleetStatusBar } from '@/components/parking/FleetStatusBar'
+import { FleetStatusBar, type FleetStats } from '@/components/parking/FleetStatusBar'
 import { CarsInLotDialog } from '@/components/parking/CarsInLotDialog'
 import { type CardType } from '@/components/parking/types'
 import { calcFeeFromMinutes, type OvernightConfig, type AfterHoursConfig } from '@/lib/calcFee'
@@ -90,6 +90,7 @@ export default function OperatorPage() {
   const [lostCardFine,   setLostCardFine]   = useState(300)
   const [sessions, setSessions] = useState<Session[]>([])
   const [stats, setStats] = useState<Stats | null>(null)
+  const [fleetStats, setFleetStats] = useState<FleetStats | null>(null)
   const [shift, setShift] = useState<Shift | null | undefined>(undefined) // undefined = loading
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -162,23 +163,26 @@ export default function OperatorPage() {
 
   const fetchData = useCallback(async () => {
     try {
-      const [sRes, stRes, qRes] = await Promise.all([
+      const [sRes, stRes, qRes, fRes] = await Promise.all([
         fetch('/api/sessions?status=active&limit=50'),
         fetch('/api/stats'),
         fetch('/api/queue'),
+        fetch('/api/stats/fleet'),
       ])
       const safeJson = async (r: Response, fallback: unknown) => {
         if (!r.ok) return fallback
         try { return await r.json() } catch { return fallback }
       }
-      const [sData, stData, qData] = await Promise.all([
+      const [sData, stData, qData, fData] = await Promise.all([
         safeJson(sRes, {}),
         safeJson(stRes, null),
         safeJson(qRes, []),
+        safeJson(fRes, null),
       ])
       setSessions((sData as { sessions?: Session[] }).sessions ?? [])
       setStats(stData as Stats | null)
       setQueues(Array.isArray(qData) ? qData as QueueEntry[] : [])
+      setFleetStats(fData as FleetStats | null)
     } catch (e) {
       console.error('[fetchData]', e)
     } finally {
@@ -723,7 +727,7 @@ export default function OperatorPage() {
           <div className="flex-1 min-h-0 flex flex-col rounded-2xl overflow-hidden">
             <CctvStrip isExit={isExitView} onToggleExit={() => setIsExitView(v => !v)} />
           </div>
-          <FleetStatusBar />
+          <FleetStatusBar stats={fleetStats} />
         </div>
 
         {/* ── Right sidebar: check-in / check-out / queue ── */}
@@ -803,22 +807,6 @@ export default function OperatorPage() {
           {/* ── Queue panel — vertical list, fills remaining sidebar height ── */}
           <div className="flex-1 min-h-0 flex flex-col rounded-xl overflow-hidden"
             style={{ background: 'white', border: '1px solid rgba(124,58,237,0.2)', boxShadow: '0 1px 8px rgba(124,58,237,0.08)' }}>
-
-            <div className="shrink-0 flex items-center gap-2 px-3 py-2"
-              style={{ borderBottom: '1px solid #F1F5F9' }}>
-              <ListOrdered className="size-3.5 shrink-0" style={{ color: '#7C3AED' }} />
-              <span className="text-xs font-black text-slate-700 shrink-0">คิวรอ</span>
-              {queues.length > 0 && (
-                <span className="text-[9px] font-black px-1.5 py-px rounded-full text-white shrink-0"
-                  style={{ background: '#DC2626' }}>{queues.length}</span>
-              )}
-              {stats && stats.availableSlots === 0 && (
-                <span className="text-[9px] font-bold px-1.5 py-px rounded-full shrink-0"
-                  style={{ background: 'rgba(220,38,38,0.08)', color: '#991B1B', border: '1px solid rgba(220,38,38,0.18)' }}>
-                  ลานเต็ม
-                </span>
-              )}
-            </div>
 
             <div className="flex-1 min-h-0 flex">
               {([

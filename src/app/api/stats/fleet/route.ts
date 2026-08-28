@@ -5,6 +5,7 @@ import { ParkingCard } from '@/models/ParkingCard'
 import { ParkingQueue } from '@/models/ParkingQueue'
 import { getSettings } from '@/models/SystemSettings'
 import { calcFeeBreakdown } from '@/lib/calcFee'
+import { getTodayStartTH } from '@/lib/dateTh'
 
 // 'overnight' card-type sessions are physically cars, so they're folded into the "car" bucket
 // everywhere in this route — the queue model doesn't have an 'overnight' type at all.
@@ -14,8 +15,7 @@ export async function GET() {
   await connectDB()
 
   const now = new Date()
-  const todayStart = new Date()
-  todayStart.setHours(0, 0, 0, 0)
+  const todayStart = getTodayStartTH()
 
   const settings = await getSettings()
   const afterHoursCfg = {
@@ -24,7 +24,7 @@ export async function GET() {
     fine:  settings.afterHoursFine,
   }
 
-  const [carActive, motoActive, carLost, motoLost, carCards, motoCards, carQueueWaiting] = await Promise.all([
+  const [carActive, motoActive, carLost, motoLost, carCards, motoCards, carQueueWaiting, motoQueueWaiting] = await Promise.all([
     ParkingSession.find({ cardType: { $in: CAR_TYPES }, status: 'active' }).lean(),
     ParkingSession.find({ cardType: 'motorcycle', status: 'active' }).lean(),
     ParkingSession.find({ cardType: { $in: CAR_TYPES }, lostFine: { $gt: 0 } }).lean(),
@@ -32,14 +32,22 @@ export async function GET() {
     ParkingCard.countDocuments({ type: { $in: CAR_TYPES }, isActive: true }),
     ParkingCard.countDocuments({ type: 'motorcycle', isActive: true }),
     ParkingQueue.countDocuments({ cardType: 'car', status: 'waiting' }),
+    ParkingQueue.countDocuments({ cardType: 'motorcycle', status: 'waiting' }),
   ])
 
-  const [carInToday, carOutToday, motoInToday, motoOutToday] = await Promise.all([
+  // "เข้าวันนี้" นับรวมรถที่ยังรอ/ยกเลิกอยู่ในคิวด้วย เพราะไม้กั้นเปิด+ถ่ายรูปไปแล้วตอนเข้าคิว
+  // ถือว่าเข้าพื้นที่จริงแล้ว แม้ยังไม่ได้เป็น session — รถที่ถูกโปรโมทจากคิวเข้า session แล้ว
+  // (status:'entered') จะถูกนับผ่าน ParkingSession ด้านล่างแทน ไม่นับซ้ำตรงนี้
+  const [carSessionsToday, carOutToday, motoSessionsToday, motoOutToday, carQueueToday, motoQueueToday] = await Promise.all([
     ParkingSession.countDocuments({ cardType: { $in: CAR_TYPES }, entryTime: { $gte: todayStart } }),
     ParkingSession.countDocuments({ cardType: { $in: CAR_TYPES }, status: 'completed', exitTime: { $gte: todayStart } }),
     ParkingSession.countDocuments({ cardType: 'motorcycle', entryTime: { $gte: todayStart } }),
     ParkingSession.countDocuments({ cardType: 'motorcycle', status: 'completed', exitTime: { $gte: todayStart } }),
+    ParkingQueue.countDocuments({ cardType: 'car', status: { $in: ['waiting', 'cancelled'] }, joinedAt: { $gte: todayStart } }),
+    ParkingQueue.countDocuments({ cardType: 'motorcycle', status: { $in: ['waiting', 'cancelled'] }, joinedAt: { $gte: todayStart } }),
   ])
+  const carInToday  = carSessionsToday + carQueueToday
+  const motoInToday = motoSessionsToday + motoQueueToday
 
   // "ค้างคืน" = active session ที่ตอนนี้กำลังโดนคิดอัตราค้างคืนอยู่ (ไม่ใช่ประเภทบัตร) — เช็คจาก breakdown จริง
   function splitByBillingMode(sessions: IParkingSession[]) {
@@ -72,14 +80,17 @@ export async function GET() {
       lostToday:         lostToday(carLost),
     },
     motorcycle: {
-      inToday:         motoInToday,
-      outToday:        motoOutToday,
-      activeTotal:     motoActive.length,
-      activeNormal:    motoSplit.normal,
-      activeOvernight: motoSplit.overnight,
-      cardsRegistered: motoCards,
-      cardsRemaining:  Math.max(0, motoCards - motoActive.length),
-      lostToday:       lostToday(motoLost),
+      inToday:           motoInToday,
+      outToday:          motoOutToday,
+      activeTotal:       motoActive.length,
+      activeNormal:      motoSplit.normal,
+      activeOvernight:   motoSplit.overnight,
+      capacityTotal:     settings.capacity.motorcycle,
+      capacityAvailable: Math.max(0, settings.capacity.motorcycle - motoActive.length),
+      queueWaiting:      motoQueueWaiting,
+      cardsRegistered:   motoCards,
+      cardsRemaining:    Math.max(0, motoCards - motoActive.length),
+      lostToday:         lostToday(motoLost),
     },
   })
 }
