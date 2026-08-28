@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { CreditCard, Car, Bike, Moon, UserRound, Hash, CalendarDays, Banknote } from 'lucide-react'
+import { CreditCard, Car, Bike, UserRound, Hash, CalendarDays, Banknote } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -21,10 +21,10 @@ interface Props {
   onRegistered: (card: { uid: string; type: CardType; plate: string }) => void
 }
 
+// ไม่มี "ค้างคืน" ในตัวเลือก — อัตราค้างคืนคำนวณอัตโนมัติตามเวลา ไม่ใช่ประเภทบัตรแยกต่างหากแล้ว
 const TYPE_OPTIONS: { value: CardType; label: string; icon: typeof Car; color: string; bg: string }[] = [
   { value: 'car',        label: 'รถยนต์',       icon: Car,  color: '#1D4ED8', bg: 'rgba(29,78,216,0.08)'  },
   { value: 'motorcycle', label: 'รถจักรยานยนต์', icon: Bike, color: '#0891B2', bg: 'rgba(8,145,178,0.08)'  },
-  { value: 'overnight',  label: 'ค้างคืน',     icon: Moon, color: '#7C3AED', bg: 'rgba(124,58,237,0.08)' },
 ]
 
 export function CardRegisterDialog({ open, onOpenChange, uid, monthlyDeposit = 500, monthlyFee = 300, onRegistered }: Props) {

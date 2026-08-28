@@ -97,11 +97,14 @@ const CATEGORY_META: Record<CardCategory, { label: string; color: string; bg: st
   monthly:   { label: 'บัตรรายเดือน', color: '#059669', bg: 'rgba(5,150,105,0.1)',   icon: Clock8 },
 }
 
+// key เป็น "type" เฉยๆ หรือ "type:category" เพื่อกรองสองมิติพร้อมกัน (เช่น รถยนต์ + รายเดือน)
 const TYPE_TABS = [
-  { key: '',            label: 'ทั้งหมด' },
-  { key: 'car',        label: 'รถยนต์' },
-  { key: 'motorcycle', label: 'รถจักรยานยนต์' },
-  { key: 'overnight',  label: 'ค้างคืน' },
+  { key: '',                    label: 'ทั้งหมด' },
+  { key: 'car',                 label: 'รถยนต์' },
+  { key: 'car:monthly',         label: 'รถยนต์รายเดือน' },
+  { key: 'motorcycle',          label: 'รถจักรยานยนต์' },
+  { key: 'motorcycle:monthly',  label: 'รถจักรยานยนต์รายเดือน' },
+  { key: 'overnight',           label: 'ค้างคืน' },
 ] as const
 
 function fmtDate(iso: string) {
@@ -128,7 +131,8 @@ export default function CardsPage() {
   const [type,          setType]         = useState<CardType>('car')
   const [cardCategory,  setCardCategory] = useState<CardCategory>('temporary')
   const [label,        setLabel]        = useState('')
-  const [ownerName,    setOwnerName]    = useState('')
+  const [firstName,    setFirstName]    = useState('')
+  const [lastName,     setLastName]     = useState('')
   const [plate,        setPlate]        = useState('')
   const [phone,        setPhone]        = useState('')
   const [address,      setAddress]      = useState('')
@@ -142,7 +146,8 @@ export default function CardsPage() {
   const [eType,             setEType]             = useState<CardType>('car')
   const [eCardCategory,     setECardCategory]     = useState<CardCategory>('temporary')
   const [eLabel,            setELabel]            = useState('')
-  const [eOwnerName,        setEOwnerName]        = useState('')
+  const [eFirstName,        setEFirstName]        = useState('')
+  const [eLastName,         setELastName]         = useState('')
   const [ePlate,            setEPlate]            = useState('')
   const [ePhone,            setEPhone]            = useState('')
   const [eAddress,          setEAddress]          = useState('')
@@ -171,7 +176,7 @@ export default function CardsPage() {
 
   function resetAddForm() {
     setUid(''); setLabel(''); setType('car'); setCardCategory('temporary')
-    setOwnerName(''); setPlate(''); setPhone(''); setAddress(''); setExpiryDate('')
+    setFirstName(''); setLastName(''); setPlate(''); setPhone(''); setAddress(''); setExpiryDate('')
   }
 
   async function handleAdd(e: React.FormEvent) {
@@ -183,7 +188,9 @@ export default function CardsPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          uid: uid.trim(), type, cardCategory, label, ownerName, plate,
+          uid: uid.trim(), type, cardCategory, plate,
+          ownerName: [firstName, lastName].filter(Boolean).join(' '),
+          label: cardCategory === 'monthly' ? label : '',
           phone: cardCategory === 'monthly' ? phone : '',
           address: cardCategory === 'monthly' ? address : '',
           expiryDate: cardCategory === 'monthly' ? (expiryDate || null) : null,
@@ -252,7 +259,9 @@ export default function CardsPage() {
     setEType(card.type)
     setECardCategory(card.cardCategory ?? 'temporary')
     setELabel(card.label)
-    setEOwnerName(card.ownerName)
+    const [first, ...rest] = (card.ownerName ?? '').trim().split(/\s+/)
+    setEFirstName(card.ownerName ? first : '')
+    setELastName(rest.join(' '))
     setEPlate(card.plate)
     setEPhone(card.phone ?? '')
     setEAddress(card.address ?? '')
@@ -278,7 +287,9 @@ export default function CardsPage() {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          type: eType, cardCategory: eCardCategory, label: eLabel, ownerName: eOwnerName, plate: ePlate,
+          type: eType, cardCategory: eCardCategory, plate: ePlate,
+          ownerName: [eFirstName, eLastName].filter(Boolean).join(' '),
+          label: eCardCategory === 'monthly' ? eLabel : '',
           phone: eCardCategory === 'monthly' ? ePhone : '',
           address: eCardCategory === 'monthly' ? eAddress : '',
           expiryDate: eCardCategory === 'monthly' ? (eExpiryDate || null) : null,
@@ -310,10 +321,12 @@ export default function CardsPage() {
     }
   }
 
+  const [tabType, tabCategory] = typeTab.split(':')
   const filtered = cards.filter(c => {
-    const matchType   = !typeTab || c.type === typeTab
+    const matchType     = !tabType || c.type === tabType
+    const matchCategory = !tabCategory || (c.cardCategory ?? 'temporary') === tabCategory
     const matchSearch = !search || c.uid.toLowerCase().includes(search.toLowerCase()) || c.label.toLowerCase().includes(search.toLowerCase())
-    return matchType && matchSearch
+    return matchType && matchCategory && matchSearch
   })
 
   const activeCount   = cards.filter(c => c.isActive).length
@@ -399,11 +412,11 @@ export default function CardsPage() {
                 </p>
               </div>
 
-              {/* Card type visual selector */}
+              {/* Card type visual selector — no "overnight" here: those are billed automatically by time, not a separate card product anymore */}
               <div>
                 <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide block mb-2">ประเภทบัตร</label>
-                <div className="grid grid-cols-3 gap-2">
-                  {(['car', 'motorcycle', 'overnight'] as CardType[]).map(t => {
+                <div className="grid grid-cols-2 gap-2">
+                  {(['car', 'motorcycle'] as CardType[]).map(t => {
                     const m = TYPE_META[t]
                     const Icon = m.icon
                     const active = type === t
@@ -445,16 +458,16 @@ export default function CardsPage() {
                 <div className="space-y-3 p-3 rounded-lg" style={{ background: 'rgba(5,150,105,0.04)', border: '1px solid rgba(5,150,105,0.15)' }}>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide block mb-1.5">ชื่อเจ้าของ</label>
-                      <input value={ownerName} onChange={e => setOwnerName(e.target.value)}
-                        placeholder="เช่น สมชาย ใจดี"
+                      <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide block mb-1.5">ชื่อ</label>
+                      <input value={firstName} onChange={e => setFirstName(e.target.value)}
+                        placeholder="เช่น สมชาย"
                         className="w-full h-9 px-3 rounded-lg text-sm text-slate-800 outline-none"
                         style={inputStyle} onFocus={focusIn} onBlur={focusOut} />
                     </div>
                     <div>
-                      <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide block mb-1.5">ชื่อ / หมายเหตุ</label>
-                      <input value={label} onChange={e => setLabel(e.target.value)}
-                        placeholder="เช่น บัตรรายเดือน #001"
+                      <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide block mb-1.5">นามสกุล</label>
+                      <input value={lastName} onChange={e => setLastName(e.target.value)}
+                        placeholder="เช่น ใจดี"
                         className="w-full h-9 px-3 rounded-lg text-sm text-slate-800 outline-none"
                         style={inputStyle} onFocus={focusIn} onBlur={focusOut} />
                     </div>
@@ -481,6 +494,13 @@ export default function CardsPage() {
                         placeholder="ที่อยู่สำหรับติดต่อ"
                         rows={2}
                         className="w-full px-3 py-2 rounded-lg text-sm text-slate-800 outline-none resize-none"
+                        style={inputStyle} onFocus={focusIn} onBlur={focusOut} />
+                    </div>
+                    <div className="col-span-2">
+                      <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide block mb-1.5">หมายเหตุ</label>
+                      <input value={label} onChange={e => setLabel(e.target.value)}
+                        placeholder="เช่น บัตรรายเดือน #001"
+                        className="w-full h-9 px-3 rounded-lg text-sm text-slate-800 outline-none"
                         style={inputStyle} onFocus={focusIn} onBlur={focusOut} />
                     </div>
                   </div>
@@ -542,8 +562,8 @@ export default function CardsPage() {
                 {/* Card type */}
                 <div>
                   <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide block mb-2">ประเภทบัตร</label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {(['car', 'motorcycle', 'overnight'] as CardType[]).map(t => {
+                  <div className="grid grid-cols-2 gap-2">
+                    {(['car', 'motorcycle'] as CardType[]).map(t => {
                       const m = TYPE_META[t]
                       const Icon = m.icon
                       const active = eType === t
@@ -561,29 +581,28 @@ export default function CardsPage() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide block mb-1.5">ทะเบียนรถ</label>
-                    <input value={ePlate} onChange={e => setEPlate(e.target.value)}
-                      placeholder="เช่น กข 1234"
-                      className="w-full h-9 px-3 rounded-lg text-sm text-slate-800 outline-none"
-                      style={inputStyle} onFocus={focusIn} onBlur={focusOut} />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide block mb-1.5">ชื่อ / หมายเหตุ</label>
-                    <input value={eLabel} onChange={e => setELabel(e.target.value)}
-                      className="w-full h-9 px-3 rounded-lg text-sm text-slate-800 outline-none"
-                      style={inputStyle} onFocus={focusIn} onBlur={focusOut} />
-                  </div>
+                <div>
+                  <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide block mb-1.5">ทะเบียนรถ</label>
+                  <input value={ePlate} onChange={e => setEPlate(e.target.value)}
+                    placeholder="เช่น กข 1234"
+                    className="w-full h-9 px-3 rounded-lg text-sm text-slate-800 outline-none"
+                    style={inputStyle} onFocus={focusIn} onBlur={focusOut} />
                 </div>
 
                 {eCardCategory === 'monthly' && (
                   <div className="space-y-3 p-3 rounded-lg" style={{ background: 'rgba(5,150,105,0.04)', border: '1px solid rgba(5,150,105,0.15)' }}>
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide block mb-1.5">ชื่อเจ้าของ</label>
-                        <input value={eOwnerName} onChange={e => setEOwnerName(e.target.value)}
-                          placeholder="เช่น สมชาย ใจดี"
+                        <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide block mb-1.5">ชื่อ</label>
+                        <input value={eFirstName} onChange={e => setEFirstName(e.target.value)}
+                          placeholder="เช่น สมชาย"
+                          className="w-full h-9 px-3 rounded-lg text-sm text-slate-800 outline-none"
+                          style={inputStyle} onFocus={focusIn} onBlur={focusOut} />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide block mb-1.5">นามสกุล</label>
+                        <input value={eLastName} onChange={e => setELastName(e.target.value)}
+                          placeholder="เช่น ใจดี"
                           className="w-full h-9 px-3 rounded-lg text-sm text-slate-800 outline-none"
                           style={inputStyle} onFocus={focusIn} onBlur={focusOut} />
                       </div>
@@ -609,6 +628,12 @@ export default function CardsPage() {
                         <textarea value={eAddress} onChange={e => setEAddress(e.target.value)}
                           rows={2}
                           className="w-full px-3 py-2 rounded-lg text-sm text-slate-800 outline-none resize-none"
+                          style={inputStyle} onFocus={focusIn} onBlur={focusOut} />
+                      </div>
+                      <div className="col-span-2">
+                        <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide block mb-1.5">หมายเหตุ</label>
+                        <input value={eLabel} onChange={e => setELabel(e.target.value)}
+                          className="w-full h-9 px-3 rounded-lg text-sm text-slate-800 outline-none"
                           style={inputStyle} onFocus={focusIn} onBlur={focusOut} />
                       </div>
                     </div>
@@ -705,7 +730,7 @@ export default function CardsPage() {
           </div>
 
           {/* Search + filter */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <div className="relative">
               <Search className="size-3 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input value={search} onChange={e => setSearch(e.target.value)}
@@ -715,11 +740,11 @@ export default function CardsPage() {
                 onFocus={e => e.currentTarget.style.borderColor = '#1D4ED8'}
                 onBlur={e => e.currentTarget.style.borderColor = '#E8ECF4'} />
             </div>
-            <div className="flex items-center rounded-lg p-0.5 gap-0.5" style={{ background: '#F1F5F9' }}>
+            <div className="flex items-center flex-wrap rounded-lg p-0.5 gap-0.5" style={{ background: '#F1F5F9' }}>
               {TYPE_TABS.map(t => (
                 <button key={t.key}
                   onClick={() => setTypeTab(t.key)}
-                  className="h-7 px-3 rounded-md text-[11px] font-semibold transition-all"
+                  className="h-7 px-3 rounded-md text-[11px] font-semibold transition-all whitespace-nowrap"
                   style={typeTab === t.key
                     ? { background: 'white', color: '#1D4ED8', boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }
                     : { color: '#94A3B8' }}>

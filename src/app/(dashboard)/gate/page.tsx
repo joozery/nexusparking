@@ -122,7 +122,7 @@ export default function GatePage() {
       setCiType(card.type)
     } else {
       // No registered cards — fallback to demo mode
-      const t: CardType[] = ['car', 'motorcycle', 'overnight']
+      const t: CardType[] = ['car', 'motorcycle']
       setCiType(t[Math.floor(Math.random() * t.length)])
       setCiUid('DEMO-' + Math.random().toString(36).slice(2, 8).toUpperCase())
     }
@@ -167,7 +167,7 @@ export default function GatePage() {
       setCoSessionId(active._id)
       setCoStep('payment')
     } else {
-      const t: CardType[] = ['car', 'motorcycle', 'overnight']
+      const t: CardType[] = ['car', 'motorcycle']
       const type = t[Math.floor(Math.random() * t.length)]
       const h = Math.ceil(Math.random() * 5) + 1
       setCoType(type); setCoHours(h); setCoFee(calcFee(type, h))

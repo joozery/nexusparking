@@ -86,8 +86,8 @@ export function CheckInDialog({
                 </div>
               </div>
 
-              <div className="w-full grid grid-cols-3 gap-2">
-                {(['car', 'motorcycle', 'overnight'] as CardType[]).map((t) => {
+              <div className="w-full grid grid-cols-2 gap-2">
+                {(['car', 'motorcycle'] as CardType[]).map((t) => {
                   const m = cardMeta[t]
                   const Icon = icons[t]
                   return (

@@ -356,7 +356,7 @@ export default function OperatorPage() {
       const card = cards[Math.floor(Math.random() * cards.length)]
       setCiUid(card.uid); setCiType(card.type)
     } else {
-      const types: CardType[] = ['car', 'motorcycle', 'overnight']
+      const types: CardType[] = ['car', 'motorcycle']
       setCiType(types[Math.floor(Math.random() * types.length)])
       setCiUid('DEMO-' + Math.random().toString(36).slice(2, 8).toUpperCase())
     }
