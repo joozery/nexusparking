@@ -13,6 +13,7 @@ import { CheckOutDialog, type PaymentMethod } from '@/components/parking/CheckOu
 import { LostCardDialog } from '@/components/parking/LostCardDialog'
 import { CardRegisterDialog } from '@/components/parking/CardRegisterDialog'
 import { CctvStrip } from '@/components/parking/CctvStrip'
+import { FleetStatusBar } from '@/components/parking/FleetStatusBar'
 import { CarsInLotDialog } from '@/components/parking/CarsInLotDialog'
 import { type CardType } from '@/components/parking/types'
 import { calcFeeFromMinutes, type OvernightConfig, type AfterHoursConfig } from '@/lib/calcFee'
@@ -717,9 +718,12 @@ export default function OperatorPage() {
       {/* ─── Body ─── */}
       <div className="flex-1 min-h-0 p-3 flex gap-3">
 
-        {/* ── Camera strip — main area, fills all available space ── */}
-        <div className="flex-1 min-w-0 min-h-0 flex flex-col rounded-2xl overflow-hidden">
-          <CctvStrip isExit={isExitView} onToggleExit={() => setIsExitView(v => !v)} />
+        {/* ── Camera strip + fleet status bar — main area, fills all available space ── */}
+        <div className="flex-1 min-w-0 min-h-0 flex flex-col gap-2">
+          <div className="flex-1 min-h-0 flex flex-col rounded-2xl overflow-hidden">
+            <CctvStrip isExit={isExitView} onToggleExit={() => setIsExitView(v => !v)} />
+          </div>
+          <FleetStatusBar />
         </div>
 
         {/* ── Right sidebar: check-in / check-out / queue ── */}
@@ -816,36 +820,51 @@ export default function OperatorPage() {
               )}
             </div>
 
-            <div className="flex-1 min-h-0 overflow-y-auto p-2 flex flex-col gap-1.5">
-              {queues.length === 0 ? (
-                <div className="flex-1 flex items-center justify-center">
-                  <span className="text-[11px] text-slate-400">ไม่มีรถในคิว</span>
-                </div>
-              ) : queues.map((q, idx) => (
-                <div key={q._id}
-                  className="shrink-0 flex items-center gap-1.5 px-2.5 h-9 rounded-lg"
-                  style={{
-                    background: idx === 0 ? 'rgba(124,58,237,0.08)' : '#F8FAFF',
-                    border: idx === 0 ? '1px solid rgba(124,58,237,0.3)' : '1px solid #E8ECF4',
-                  }}>
-                  <span className="text-[9px] font-black shrink-0" style={{ color: '#7C3AED' }}>Q{idx + 1}</span>
-                  <span className="text-xs font-black text-slate-800 tracking-wider truncate">{q.plate}</span>
-                  {q.cardType === 'car'
-                    ? <Car className="size-3 text-slate-400 shrink-0" />
-                    : <Bike className="size-3 text-slate-400 shrink-0" />}
-                  <span className="text-[9px] text-slate-400 shrink-0">{Math.floor((nowTick - new Date(q.joinedAt).getTime()) / 60000)}น.</span>
-                  <div className="flex-1" />
-                  <button
-                    onClick={() => checkoutFromQueue(q)}
-                    disabled={!!qLoading}
-                    className="flex items-center justify-center size-5 rounded transition-all disabled:opacity-40 shrink-0"
-                    style={{ background: 'rgba(29,78,216,0.1)' }}
-                    title="ไม่รอแล้ว — เช็คเอาต์เลย"
-                  >
-                    {qLoading === q._id
-                      ? <RefreshCw className="size-3 text-blue-600 animate-spin" />
-                      : <LogOut className="size-3" style={{ color: '#1D4ED8' }} />}
-                  </button>
+            <div className="flex-1 min-h-0 flex">
+              {([
+                { type: 'car' as const, label: 'รถยนต์', icon: Car, list: queues.filter(q => q.cardType === 'car') },
+                { type: 'motorcycle' as const, label: 'มอไซค์', icon: Bike, list: queues.filter(q => q.cardType === 'motorcycle') },
+              ]).map((col, colIdx) => (
+                <div key={col.type}
+                  className="flex-1 min-w-0 flex flex-col"
+                  style={colIdx === 0 ? { borderRight: '1px solid #F1F5F9' } : undefined}>
+                  <div className="shrink-0 flex items-center gap-1 px-2 py-1" style={{ background: '#FAFBFF', borderBottom: '1px solid #F1F5F9' }}>
+                    <col.icon className="size-3 shrink-0" style={{ color: '#7C3AED' }} />
+                    <span className="text-[9px] font-black text-slate-500 truncate">{col.label}</span>
+                    <span className="text-[9px] font-bold text-slate-400 shrink-0">{col.list.length}</span>
+                  </div>
+                  <div className="flex-1 min-h-0 overflow-y-auto p-1.5 flex flex-col gap-1">
+                    {col.list.length === 0 ? (
+                      <div className="flex-1 flex items-center justify-center">
+                        <span className="text-[10px] text-slate-400">ไม่มี</span>
+                      </div>
+                    ) : col.list.map((q, idx) => (
+                      <div key={q._id}
+                        className="shrink-0 flex flex-col gap-0.5 px-1.5 py-1 rounded-lg"
+                        style={{
+                          background: idx === 0 ? 'rgba(124,58,237,0.08)' : '#F8FAFF',
+                          border: idx === 0 ? '1px solid rgba(124,58,237,0.3)' : '1px solid #E8ECF4',
+                        }}>
+                        <div className="flex items-center gap-1">
+                          <span className="text-[8px] font-black shrink-0" style={{ color: '#7C3AED' }}>{idx + 1}</span>
+                          <span className="text-[11px] font-black text-slate-800 tracking-wider truncate">{q.plate}</span>
+                          <div className="flex-1" />
+                          <button
+                            onClick={() => checkoutFromQueue(q)}
+                            disabled={!!qLoading}
+                            className="flex items-center justify-center size-4 rounded transition-all disabled:opacity-40 shrink-0"
+                            style={{ background: 'rgba(29,78,216,0.1)' }}
+                            title="ไม่รอแล้ว — เช็คเอาต์เลย"
+                          >
+                            {qLoading === q._id
+                              ? <RefreshCw className="size-2.5 text-blue-600 animate-spin" />
+                              : <LogOut className="size-2.5" style={{ color: '#1D4ED8' }} />}
+                          </button>
+                        </div>
+                        <span className="text-[8px] text-slate-400">{Math.floor((nowTick - new Date(q.joinedAt).getTime()) / 60000)}น.</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               ))}
             </div>
