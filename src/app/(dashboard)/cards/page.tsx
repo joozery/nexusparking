@@ -104,7 +104,6 @@ const TYPE_TABS = [
   { key: 'car:monthly',         label: 'รถยนต์รายเดือน' },
   { key: 'motorcycle',          label: 'รถจักรยานยนต์' },
   { key: 'motorcycle:monthly',  label: 'รถจักรยานยนต์รายเดือน' },
-  { key: 'overnight',           label: 'ค้างคืน' },
 ] as const
 
 function fmtDate(iso: string) {
@@ -689,7 +688,7 @@ export default function CardsPage() {
         {/* ── SUMMARY + FILTER ── */}
         <div className="shrink-0 px-5 pt-4 pb-3 space-y-3">
           {/* Stat row */}
-          <div className="grid grid-cols-5 gap-3">
+          <div className="grid grid-cols-4 gap-3">
             <div className="col-span-2 bg-white rounded-xl px-4 py-3 flex items-center gap-3"
               style={{ border: '1px solid #E8ECF4' }}>
               <div className="size-9 rounded-lg flex items-center justify-center shrink-0"
@@ -709,7 +708,7 @@ export default function CardsPage() {
                 </span>
               </div>
             </div>
-            {(['car', 'motorcycle', 'overnight'] as CardType[]).map(t => {
+            {(['car', 'motorcycle'] as CardType[]).map(t => {
               const m = TYPE_META[t]
               const Icon = m.icon
               const count = cards.filter(c => c.type === t).length
