@@ -12,7 +12,6 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  const body = await req.json().catch(() => ({}))
   const jar     = await cookies()
   const token   = jar.get(COOKIE_NAME)?.value
   const payload = token ? verifyToken(token) : null
@@ -22,7 +21,8 @@ export async function POST(
   const q = await ParkingQueue.findOne({ _id: id, status: 'waiting' })
   if (!q) return NextResponse.json({ error: 'ไม่พบคิว' }, { status: 404 })
 
-  const now = body.entryTime ? new Date(body.entryTime) : new Date()
+  // เวลาเข้าลานใช้เวลาที่เข้าคิวจริง (joinedAt) เสมอ — ห้ามแก้ไขเอง ป้องกันการโกงเวลา
+  const now = q.joinedAt
 
   // สร้าง session ใหม่
   let shiftId: string | undefined

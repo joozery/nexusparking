@@ -6,7 +6,7 @@ import {
   LogIn, LogOut,
   Car, Bike, RefreshCw, Clock,
   Play, Square, X,
-  ListOrdered, CheckCheck, XCircle, Nfc, Scan,
+  ListOrdered, XCircle, Nfc, Scan,
 } from 'lucide-react'
 import { CheckInDialog } from '@/components/parking/CheckInDialog'
 import { CheckOutDialog, type PaymentMethod } from '@/components/parking/CheckOutDialog'
@@ -105,10 +105,6 @@ export default function OperatorPage() {
   // Queue
   const [queues,      setQueues]      = useState<QueueEntry[]>([])
   const [qLoading,    setQLoading]    = useState<string | null>(null)
-  // queue enter dialog (custom time)
-  const [qEnterOpen,   setQEnterOpen]   = useState(false)
-  const [qEnterTarget, setQEnterTarget] = useState<{ id: string; plate: string } | null>(null)
-  const [qEnterTime,   setQEnterTime]   = useState('')
 
   // Check In
   const [checkInOpen,   setCheckInOpen]   = useState(false)
@@ -269,36 +265,24 @@ export default function OperatorPage() {
     setSerialConnected(false)
   }
 
-  function openQEnterDialog(id: string, plate: string) {
-    const now = new Date()
-    now.setSeconds(0, 0)
-    setQEnterTarget({ id, plate })
-    setQEnterTime(now.toISOString().slice(0, 19))
-    setQEnterOpen(true)
-  }
-
-  async function confirmQEnter() {
-    if (!qEnterTarget) return
-    const { id, plate } = qEnterTarget
-    setQLoading(id)
-    setQEnterOpen(false)
-    const body: Record<string, string> = {}
-    const chosen = new Date(qEnterTime)
-    if (!isNaN(chosen.getTime())) body.entryTime = chosen.toISOString()
-    const res = await fetch(`/api/queue/${id}/enter`, {
+  // ยกเลิกรอคิว + เก็บเงินเลย — รถที่รอในคิวไม่อยากรอแล้ว แต่ยังต้องจ่ายค่าเวลาที่รอไปแล้ว (นับจาก joinedAt)
+  // ทำโดยโปรโมทเข้า session ปกติก่อน (entryTime = joinedAt) แล้วเปิด popup checkout ทันที
+  async function checkoutFromQueue(q: QueueEntry) {
+    setQLoading(q._id)
+    const res = await fetch(`/api/queue/${q._id}/enter`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
+      body: JSON.stringify({}),
     })
     setQLoading(null)
     if (res.ok) {
-      await Promise.all([fetchData(), fetchShift()])
-      success('เข้าลานแล้ว', `ทะเบียน ${plate} ขาเข้าสำเร็จ`)
+      const data = await res.json()
+      await fetchData()
+      openCheckoutFromCard(data.session)
     } else {
       const err = await res.json()
       toastError('ไม่สำเร็จ', err.error)
     }
-    setQEnterTarget(null)
   }
 
   // Auto-promote the first waiting queue entry into an active session as soon as a slot frees up
@@ -322,19 +306,6 @@ export default function OperatorPage() {
       }
     } catch (e) {
       console.error('[autoPromoteQueue]', e)
-    }
-  }
-
-  async function cancelQueue(id: string, plate: string) {
-    setQLoading(id)
-    const res = await fetch(`/api/queue/${id}/cancel`, { method: 'POST' })
-    setQLoading(null)
-    if (res.ok) {
-      await fetchData()
-      warning('ยกเลิกคิว', `ทะเบียน ${plate} ออกจากคิวแล้ว`)
-    } else {
-      const err = await res.json()
-      toastError('ไม่สำเร็จ', err.error)
     }
   }
 
@@ -808,7 +779,7 @@ export default function OperatorPage() {
               style={{ background: 'rgba(29,78,216,0.1)', color: '#1D4ED8' }}>
               {activeSessions.length} คัน
             </span>
-            {stats && <span className="text-[10px] text-slate-400">/ {stats.totalCapacity} ที่</span>}
+            {stats && <span className="text-[10px] text-slate-400">/ {stats.totalCapacity} ที่จอด</span>}
             <div className="flex-1" />
             <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full text-slate-400" style={{ border: '1px solid #E2E8F0' }}>F2</span>
           </button>
@@ -865,24 +836,15 @@ export default function OperatorPage() {
                   <span className="text-[9px] text-slate-400 shrink-0">{Math.floor((nowTick - new Date(q.joinedAt).getTime()) / 60000)}น.</span>
                   <div className="flex-1" />
                   <button
-                    onClick={() => openQEnterDialog(q._id, q.plate)}
+                    onClick={() => checkoutFromQueue(q)}
                     disabled={!!qLoading}
                     className="flex items-center justify-center size-5 rounded transition-all disabled:opacity-40 shrink-0"
-                    style={{ background: 'rgba(5,150,105,0.12)' }}
-                    title="เข้าลาน"
+                    style={{ background: 'rgba(29,78,216,0.1)' }}
+                    title="ไม่รอแล้ว — เช็คเอาต์เลย"
                   >
                     {qLoading === q._id
-                      ? <RefreshCw className="size-3 text-emerald-600 animate-spin" />
-                      : <CheckCheck className="size-3" style={{ color: '#059669' }} />}
-                  </button>
-                  <button
-                    onClick={() => cancelQueue(q._id, q.plate)}
-                    disabled={!!qLoading}
-                    className="flex items-center justify-center size-5 rounded transition-all disabled:opacity-40 shrink-0"
-                    style={{ background: 'rgba(239,68,68,0.08)' }}
-                    title="ยกเลิก"
-                  >
-                    <X className="size-3" style={{ color: '#DC2626' }} />
+                      ? <RefreshCw className="size-3 text-blue-600 animate-spin" />
+                      : <LogOut className="size-3" style={{ color: '#1D4ED8' }} />}
                   </button>
                 </div>
               ))}
@@ -892,58 +854,6 @@ export default function OperatorPage() {
         </div>
 
       </div> {/* end body */}
-
-      {/* ─── Queue Enter Dialog (custom time) ─── */}
-      {qEnterOpen && qEnterTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center"
-          style={{ background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)' }}>
-          <div className="bg-white rounded-3xl w-full max-w-xs mx-4 overflow-hidden shadow-2xl">
-            <div className="px-6 py-5 flex items-center justify-between"
-              style={{ background: 'linear-gradient(135deg, #065F46 0%, #059669 100%)' }}>
-              <div>
-                <p className="text-white font-black">เข้าลานจอด</p>
-                <p className="text-emerald-200 text-xs mt-0.5">ทะเบียน {qEnterTarget.plate}</p>
-              </div>
-              <button onClick={() => setQEnterOpen(false)}
-                className="size-8 rounded-lg flex items-center justify-center"
-                style={{ background: 'rgba(255,255,255,0.15)' }}>
-                <X className="size-4 text-white" />
-              </button>
-            </div>
-
-            <div className="p-5 space-y-4">
-              <div>
-                <label className="block text-xs font-black text-slate-700 mb-1.5">
-                  เวลาเข้าลาน
-                  <span className="text-slate-400 font-normal ml-1">— ปรับได้ถึงวินาที</span>
-                </label>
-                <input
-                  type="datetime-local" step="1"
-                  value={qEnterTime}
-                  onChange={e => setQEnterTime(e.target.value)}
-                  className="w-full h-11 rounded-xl px-4 text-sm text-slate-800 outline-none"
-                  style={{ border: '2px solid #E2E8F0', background: '#FAFBFF' }}
-                  onFocus={e => { e.currentTarget.style.borderColor = '#059669' }}
-                  onBlur={e => { e.currentTarget.style.borderColor = '#E2E8F0' }}
-                />
-              </div>
-
-              <div className="flex gap-2">
-                <button onClick={() => setQEnterOpen(false)}
-                  className="flex-1 h-11 rounded-xl text-sm font-bold text-slate-600"
-                  style={{ background: '#F1F5F9', border: '1px solid #E2E8F0' }}>
-                  ยกเลิก
-                </button>
-                <button onClick={confirmQEnter}
-                  className="flex-1 h-11 rounded-xl text-sm font-black text-white transition-all hover:opacity-90"
-                  style={{ background: 'linear-gradient(135deg, #065F46 0%, #059669 100%)' }}>
-                  ยืนยันเข้าลาน
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* ─── Force Start Shift Overlay (ปิดไม่ได้) ─── */}
       {shift === null && (

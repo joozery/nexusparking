@@ -56,7 +56,7 @@ export function CarsInLotDialog<T extends CarLike>({
             </div>
             <div>
               <DialogTitle className="text-white text-sm">
-                รถในลาน — {sessions.length} คัน{stats ? ` / ${stats.totalCapacity} ที่` : ''}
+                รถในลาน — {sessions.length} คัน{stats ? ` / ${stats.totalCapacity} ที่จอด` : ''}
               </DialogTitle>
               <DialogDescription className="text-blue-100 text-xs mt-0">F2 เปิด/ปิดหน้าต่างนี้</DialogDescription>
             </div>
