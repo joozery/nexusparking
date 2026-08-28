@@ -5,10 +5,17 @@ const COOKIE  = 'np_session'
 
 const PUBLIC = ['/login', '/api/auth', '/api/line/webhook']
 
-async function verifyJWT(token: string): Promise<boolean> {
+interface JWTPayload {
+  sub:  string
+  name: string
+  role: 'superadmin' | 'admin' | 'operator'
+  exp:  number
+}
+
+async function verifyJWT(token: string): Promise<JWTPayload | null> {
   try {
     const parts = token.split('.')
-    if (parts.length !== 3) return false
+    if (parts.length !== 3) return null
     const [header, payload, sig] = parts
 
     const enc = new TextEncoder()
@@ -24,15 +31,15 @@ async function verifyJWT(token: string): Promise<boolean> {
     const sigBuf = Uint8Array.from(atob(sigB64), c => c.charCodeAt(0))
 
     const valid = await crypto.subtle.verify('HMAC', key, sigBuf, enc.encode(`${header}.${payload}`))
-    if (!valid) return false
+    if (!valid) return null
 
     const payloadB64 = pad(payload.replace(/-/g, '+').replace(/_/g, '/'))
-    const data = JSON.parse(atob(payloadB64))
-    if (data.exp && data.exp < Math.floor(Date.now() / 1000)) return false
+    const data = JSON.parse(atob(payloadB64)) as JWTPayload
+    if (data.exp && data.exp < Math.floor(Date.now() / 1000)) return null
 
-    return true
+    return data
   } catch {
-    return false
+    return null
   }
 }
 
@@ -48,11 +55,20 @@ export async function middleware(req: NextRequest) {
   const token = req.cookies.get(COOKIE)?.value
   if (!token) return NextResponse.redirect(new URL('/login', req.url))
 
-  const valid = await verifyJWT(token)
-  if (!valid) {
+  const payload = await verifyJWT(token)
+  if (!payload) {
     const res = NextResponse.redirect(new URL('/login', req.url))
     res.cookies.set(COOKIE, '', { maxAge: 0, path: '/' })
     return res
+  }
+
+  // Role gate: operator only gets the /operator screen — everything else
+  // (dashboard, cards, settings, reports, ...) requires admin/superadmin.
+  // API routes are left alone here; they do their own auth checks.
+  const isApiRoute     = pathname.startsWith('/api')
+  const isOperatorArea = pathname === '/operator' || pathname.startsWith('/operator/')
+  if (!isApiRoute && !isOperatorArea && payload.role === 'operator') {
+    return NextResponse.redirect(new URL('/operator', req.url))
   }
 
   return NextResponse.next()
