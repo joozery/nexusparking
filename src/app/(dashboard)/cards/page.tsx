@@ -118,6 +118,7 @@ export default function CardsPage() {
   const [loading,   setLoading]   = useState(true)
   const [search,    setSearch]    = useState('')
   const [typeTab,   setTypeTab]   = useState('')
+  const [page,      setPage]      = useState(1)
   const [showForm,  setShowForm]  = useState(false)
   const [saving,    setSaving]    = useState(false)
   const [confirmId, setConfirmId] = useState<string | null>(null)
@@ -166,6 +167,7 @@ export default function CardsPage() {
   }
 
   useEffect(() => { fetchCards() }, [])
+  useEffect(() => { setPage(1) }, [search, typeTab])
 
   function resetAddForm() {
     setUid(''); setLabel(''); setType('car'); setCardCategory('temporary')
@@ -316,6 +318,11 @@ export default function CardsPage() {
 
   const activeCount   = cards.filter(c => c.isActive).length
   const inactiveCount = cards.length - activeCount
+
+  const pageSize = 10
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize))
+  const pageSafe = Math.min(page, totalPages)
+  const pageItems = filtered.slice((pageSafe - 1) * pageSize, pageSafe * pageSize)
 
   return (
     <>
@@ -724,8 +731,8 @@ export default function CardsPage() {
           </div>
         </div>
 
-        {/* ── CARD GRID ── */}
-        <div className="flex-1 overflow-y-auto px-5 pb-5 scrollbar-hide">
+        {/* ── CARD TABLE ── */}
+        <div className="flex-1 flex flex-col overflow-hidden px-5 pb-5 min-h-0">
           {loading ? (
             <div className="flex items-center justify-center h-40">
               <RefreshCw className="size-5 text-slate-300 animate-spin" />
@@ -741,141 +748,156 @@ export default function CardsPage() {
               </button>
             </div>
           ) : (
-            <div className="grid grid-cols-2 xl:grid-cols-3 gap-3">
-              {filtered.map(card => {
-                const m = TYPE_META[card.type]
-                const Icon = m.icon
-                const isConfirm = confirmId === card._id
-                const cm = CATEGORY_META[card.cardCategory ?? 'temporary']
+            <>
+              <div className="flex-1 overflow-y-auto bg-white rounded-xl" style={{ border: '1px solid #E8ECF4' }}>
+                <table className="w-full border-collapse">
+                  <thead className="sticky top-0 z-10 bg-white">
+                    <tr style={{ borderBottom: '1px solid #E8ECF4' }}>
+                      <th className="text-left text-[10px] font-black text-slate-400 uppercase tracking-widest px-4 py-2.5 w-8">#</th>
+                      <th className="text-left text-[10px] font-black text-slate-400 uppercase tracking-widest px-3 py-2.5">UID</th>
+                      <th className="text-left text-[10px] font-black text-slate-400 uppercase tracking-widest px-3 py-2.5">ประเภทบัตร</th>
+                      <th className="text-left text-[10px] font-black text-slate-400 uppercase tracking-widest px-3 py-2.5">ลงทะเบียน</th>
+                      <th className="text-left text-[10px] font-black text-slate-400 uppercase tracking-widest px-3 py-2.5">ทะเบียนรถ</th>
+                      <th className="text-left text-[10px] font-black text-slate-400 uppercase tracking-widest px-3 py-2.5">ชื่อ / เจ้าของ</th>
+                      <th className="text-left text-[10px] font-black text-slate-400 uppercase tracking-widest px-3 py-2.5">ติดต่อ</th>
+                      <th className="text-left text-[10px] font-black text-slate-400 uppercase tracking-widest px-3 py-2.5">สถานะบัตร</th>
+                      <th className="text-left text-[10px] font-black text-slate-400 uppercase tracking-widest px-3 py-2.5">ใช้งาน</th>
+                      <th className="py-2.5 pr-4 w-28" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pageItems.map((card, idx) => {
+                      const m = TYPE_META[card.type]
+                      const Icon = m.icon
+                      const isConfirm = confirmId === card._id
+                      const cm = CATEGORY_META[card.cardCategory ?? 'temporary']
+                      const status = expiryStatus(card.expiryDate)
+                      const em = EXPIRY_META[status]
+                      const isRenew = renewId === card._id
+                      const rowNum = (pageSafe - 1) * pageSize + idx + 1
 
-                const status = expiryStatus(card.expiryDate)
-                const em = EXPIRY_META[status]
-                const isRenew = renewId === card._id
-
-                return (
-                  <div key={card._id}
-                    className="bg-white rounded-xl overflow-hidden transition-shadow hover:shadow-md"
-                    style={{ border: `1px solid ${isConfirm ? 'rgba(220,38,38,0.3)' : status === 'expired' ? 'rgba(220,38,38,0.2)' : '#E8ECF4'}` }}>
-
-                    {/* Card header — gradient / bg image */}
-                    <div className="relative px-4 pt-4 pb-3 overflow-hidden"
-                      style={m.bgImage
-                        ? { backgroundImage: `url(${m.bgImage})`, backgroundSize: 'cover', backgroundPosition: 'center' }
-                        : { background: m.grad }}>
-                      <div className="absolute -top-4 -right-4 size-20 rounded-full pointer-events-none"
-                        style={{ background: 'rgba(255,255,255,0.08)' }} />
-                      <div className="absolute -bottom-3 -left-3 size-12 rounded-full pointer-events-none"
-                        style={{ background: 'rgba(255,255,255,0.05)' }} />
-                      <div className="relative z-10 flex items-start justify-between">
-                        <div className="size-9 rounded-lg flex items-center justify-center"
-                          style={{ background: 'rgba(255,255,255,0.2)' }}>
-                          <Icon className="size-5 text-white" strokeWidth={1.75} />
-                        </div>
-                        <div className="flex items-center gap-1">
-                          {/* Active toggle */}
-                          <button onClick={() => handleToggle(card._id, card.isActive)}
-                            className="h-6 px-2 rounded-full text-[10px] font-semibold transition-all"
-                            style={card.isActive
-                              ? { background: 'rgba(255,255,255,0.25)', color: 'white' }
-                              : { background: 'rgba(0,0,0,0.2)', color: 'rgba(255,255,255,0.6)' }}>
-                            {card.isActive ? '● ใช้งาน' : '○ ปิดใช้'}
-                          </button>
-                        </div>
-                      </div>
-                      <div className="relative z-10 mt-3">
-                        <p className="text-white/60 text-[9px] font-semibold uppercase tracking-widest">UID</p>
-                        <p className="text-white font-bold font-mono text-base tracking-wider leading-tight">{card.uid}</p>
-                      </div>
-                    </div>
-
-                    {/* Card body */}
-                    <div className="px-4 py-3">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <p className="text-xs font-semibold text-slate-700 truncate">
-                            {card.ownerName || card.label || <span className="text-slate-300 italic">ไม่มีชื่อ</span>}
-                          </p>
-                          {card.plate && (
-                            <p className="text-[10px] font-mono font-semibold text-slate-600 mt-0.5">{card.plate}</p>
-                          )}
-                          <div className="flex items-center gap-1 mt-0.5 flex-wrap">
-                            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
-                              style={{ background: m.bg, color: m.color }}>{m.label}</span>
+                      return (
+                        <tr key={card._id}
+                          style={{
+                            borderBottom: idx < pageItems.length - 1 ? '1px solid #F1F5F9' : 'none',
+                            background: isConfirm ? 'rgba(220,38,38,0.03)' : idx % 2 === 1 ? '#FAFBFF' : 'white',
+                          }}>
+                          <td className="px-4 py-2.5 text-[10px] text-slate-400 tabular-nums">{rowNum}</td>
+                          <td className="px-3 py-2.5"><span className="text-xs font-bold font-mono text-slate-800 tracking-wider">{card.uid}</span></td>
+                          <td className="px-3 py-2.5">
+                            <div className="flex items-center gap-1.5">
+                              <Icon className="size-3.5 shrink-0" style={{ color: m.color }} strokeWidth={1.75} />
+                              <span className="text-[11px] font-semibold" style={{ color: m.color }}>{m.label}</span>
+                            </div>
+                          </td>
+                          <td className="px-3 py-2.5">
                             <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
                               style={{ background: cm.bg, color: cm.color }}>{cm.label}</span>
-                            {status !== 'none' && (
-                              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
+                          </td>
+                          <td className="px-3 py-2.5"><span className="text-[11px] font-mono font-semibold text-slate-600">{card.plate || '—'}</span></td>
+                          <td className="px-3 py-2.5 max-w-[140px]">
+                            <span className="text-[11px] font-semibold text-slate-700 truncate block">
+                              {card.ownerName || card.label || <span className="text-slate-300 italic">ไม่มีชื่อ</span>}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2.5"><span className="text-[11px] text-slate-500">{card.phone || '—'}</span></td>
+                          <td className="px-3 py-2.5">
+                            {status !== 'none' ? (
+                              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full whitespace-nowrap"
                                 style={{ background: em.bg, color: em.color }}>
                                 {em.label} · {fmtDate(card.expiryDate!)}
                               </span>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Actions */}
-                        <div className="shrink-0 flex items-center gap-1">
-                          {/* Edit */}
-                          {!isRenew && !isConfirm && (
-                            <button onClick={() => openEdit(card)}
-                              className="size-6 rounded-lg flex items-center justify-center hover:bg-blue-50 transition-colors"
-                              style={{ color: '#64748B' }}
-                              title="แก้ไขบัตร">
-                              <Pencil className="size-3" />
+                            ) : <span className="text-[11px] text-slate-300">—</span>}
+                          </td>
+                          <td className="px-3 py-2.5">
+                            <button onClick={() => handleToggle(card._id, card.isActive)}
+                              className="h-6 px-2 rounded-full text-[10px] font-semibold transition-all"
+                              style={card.isActive
+                                ? { background: 'rgba(5,150,105,0.1)', color: '#059669' }
+                                : { background: '#F1F5F9', color: '#94A3B8' }}>
+                              {card.isActive ? '● ใช้งาน' : '○ ปิดใช้'}
                             </button>
-                          )}
-                          {/* Renew */}
-                          {status !== 'none' && !isConfirm && (
-                            isRenew ? (
-                              <div className="flex items-center gap-1">
-                                <button onClick={() => handleRenew(card._id)}
-                                  className="h-6 px-2 rounded-lg text-[10px] font-semibold text-white"
-                                  style={{ background: '#059669' }}>
-                                  ยืนยัน +1 เดือน
-                                </button>
-                                <button onClick={() => setRenewId(null)}
-                                  className="size-6 rounded-lg flex items-center justify-center hover:bg-slate-100 text-slate-400">
-                                  <X className="size-3" />
-                                </button>
-                              </div>
-                            ) : (
-                              <button onClick={() => setRenewId(card._id)}
-                                className="h-6 px-2 rounded-lg text-[10px] font-semibold transition-colors hover:bg-green-50"
-                                style={{ color: '#059669', border: '1px solid rgba(5,150,105,0.3)' }}>
-                                ต่ออายุ
-                              </button>
-                            )
-                          )}
-                          {/* Delete */}
-                          {!isRenew && (isConfirm ? (
-                            <div className="flex items-center gap-1">
-                              <button onClick={() => handleDelete(card._id)} disabled={deleting === card._id}
-                                className="size-7 rounded-lg flex items-center justify-center transition-colors"
-                                style={{ background: '#DC2626', color: 'white' }}>
-                                {deleting === card._id
-                                  ? <RefreshCw className="size-3 animate-spin" />
-                                  : <Check className="size-3" />}
-                              </button>
-                              <button onClick={() => setConfirmId(null)}
-                                className="size-7 rounded-lg flex items-center justify-center hover:bg-slate-100 transition-colors text-slate-400">
-                                <X className="size-3" />
-                              </button>
+                          </td>
+                          <td className="pr-4 py-1.5">
+                            <div className="flex items-center justify-end gap-1">
+                              {isRenew ? (
+                                <div className="flex items-center gap-1">
+                                  <button onClick={() => handleRenew(card._id)}
+                                    className="h-6 px-2 rounded-lg text-[10px] font-semibold text-white whitespace-nowrap"
+                                    style={{ background: '#059669' }}>
+                                    +1 เดือน
+                                  </button>
+                                  <button onClick={() => setRenewId(null)}
+                                    className="size-6 rounded-lg flex items-center justify-center hover:bg-slate-100 text-slate-400 shrink-0">
+                                    <X className="size-3" />
+                                  </button>
+                                </div>
+                              ) : isConfirm ? (
+                                <div className="flex items-center gap-1">
+                                  <button onClick={() => handleDelete(card._id)} disabled={deleting === card._id}
+                                    className="size-6 rounded-lg flex items-center justify-center transition-colors shrink-0"
+                                    style={{ background: '#DC2626', color: 'white' }}>
+                                    {deleting === card._id
+                                      ? <RefreshCw className="size-3 animate-spin" />
+                                      : <Check className="size-3" />}
+                                  </button>
+                                  <button onClick={() => setConfirmId(null)}
+                                    className="size-6 rounded-lg flex items-center justify-center hover:bg-slate-100 transition-colors text-slate-400 shrink-0">
+                                    <X className="size-3" />
+                                  </button>
+                                </div>
+                              ) : (
+                                <>
+                                  <button onClick={() => openEdit(card)}
+                                    className="size-6 rounded-lg flex items-center justify-center hover:bg-blue-50 transition-colors shrink-0"
+                                    style={{ color: '#64748B' }} title="แก้ไขบัตร">
+                                    <Pencil className="size-3" />
+                                  </button>
+                                  {status !== 'none' && (
+                                    <button onClick={() => setRenewId(card._id)}
+                                      className="h-6 px-2 rounded-lg text-[10px] font-semibold transition-colors hover:bg-green-50 shrink-0 whitespace-nowrap"
+                                      style={{ color: '#059669', border: '1px solid rgba(5,150,105,0.3)' }}>
+                                      ต่ออายุ
+                                    </button>
+                                  )}
+                                  <button onClick={() => setConfirmId(card._id)}
+                                    className="size-6 rounded-lg flex items-center justify-center transition-all hover:bg-red-50 shrink-0"
+                                    style={{ color: '#CBD5E1' }}
+                                    onMouseEnter={e => e.currentTarget.style.color = '#EF4444'}
+                                    onMouseLeave={e => e.currentTarget.style.color = '#CBD5E1'}>
+                                    <Trash2 className="size-3.5" />
+                                  </button>
+                                </>
+                              )}
                             </div>
-                          ) : (
-                            <button onClick={() => setConfirmId(card._id)}
-                              className="size-7 rounded-lg flex items-center justify-center transition-all hover:bg-red-50"
-                              style={{ color: '#CBD5E1' }}
-                              onMouseEnter={e => e.currentTarget.style.color = '#EF4444'}
-                              onMouseLeave={e => e.currentTarget.style.color = '#CBD5E1'}>
-                              <Trash2 className="size-3.5" />
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* ── PAGINATION ── */}
+              <div className="shrink-0 flex items-center justify-between pt-3">
+                <span className="text-[11px] text-slate-400">
+                  แสดง {(pageSafe - 1) * pageSize + 1}–{Math.min(pageSafe * pageSize, filtered.length)} จาก {filtered.length} ใบ
+                </span>
+                <div className="flex items-center gap-1">
+                  <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={pageSafe <= 1}
+                    className="h-7 px-2.5 rounded-lg text-[11px] font-semibold transition-colors disabled:opacity-40"
+                    style={{ background: 'white', border: '1px solid #E8ECF4', color: '#64748B' }}>
+                    ก่อนหน้า
+                  </button>
+                  <span className="text-[11px] text-slate-500 px-2 tabular-nums">{pageSafe} / {totalPages}</span>
+                  <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={pageSafe >= totalPages}
+                    className="h-7 px-2.5 rounded-lg text-[11px] font-semibold transition-colors disabled:opacity-40"
+                    style={{ background: 'white', border: '1px solid #E8ECF4', color: '#64748B' }}>
+                    ถัดไป
+                  </button>
+                </div>
+              </div>
+            </>
           )}
         </div>
       </div>
