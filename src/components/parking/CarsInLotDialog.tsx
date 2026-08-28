@@ -13,7 +13,7 @@ interface Stats {
 
 const TYPE_META: Record<CardType, { label: string; icon: typeof Car; color: string }> = {
   car:        { label: 'รถยนต์',       icon: Car, color: '#1D4ED8' },
-  motorcycle: { label: 'มอเตอร์ไซค์', icon: Car, color: '#6D28D9' },
+  motorcycle: { label: 'รถจักรยานยนต์', icon: Car, color: '#6D28D9' },
   overnight:  { label: 'ค้างคืน',     icon: Car, color: '#B45309' },
 }
 

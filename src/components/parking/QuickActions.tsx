@@ -59,7 +59,7 @@ export function QuickActions({ onCheckIn, onCheckOut, onLostCard }: Props) {
         <div className="space-y-2.5">
           {[
             { icon: Car,  label: 'รถยนต์',      rate: '30 ฿ ชม.แรก • 20 ฿ / ชม.ต่อไป', color: 'text-blue-600'   },
-            { icon: Bike, label: 'มอเตอร์ไซค์', rate: '20 ฿ ชม.แรก • 10 ฿ / ชม.ต่อไป', color: 'text-violet-600' },
+            { icon: Bike, label: 'รถจักรยานยนต์', rate: '20 ฿ ชม.แรก • 10 ฿ / ชม.ต่อไป', color: 'text-violet-600' },
             { icon: Moon, label: 'ค้างคืน',      rate: '100 ฿ เหมา (18:00 – 07:00)',    color: 'text-amber-600'  },
           ].map(({ icon: Icon, label, rate, color }) => (
             <div key={label} className="flex items-start gap-2.5">

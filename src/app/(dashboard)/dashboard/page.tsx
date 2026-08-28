@@ -26,7 +26,7 @@ interface Session {
 }
 
 const TYPE_ICON: Record<string, typeof Car> = { car: Car, motorcycle: Bike, overnight: Moon }
-const TYPE_LABEL: Record<string, string>   = { car: 'รถยนต์', motorcycle: 'มอเตอร์ไซค์', overnight: 'ค้างคืน' }
+const TYPE_LABEL: Record<string, string>   = { car: 'รถยนต์', motorcycle: 'รถจักรยานยนต์', overnight: 'ค้างคืน' }
 
 const QUICK_LINKS = [
   { href: '/gate',    icon: DoorOpen,       label: 'เกท / เช็คอิน',  sub: 'รับรถเข้า-ออก',    color: '#1D4ED8', bg: 'rgba(29,78,216,0.08)'  },

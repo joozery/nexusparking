@@ -38,7 +38,7 @@ export interface ReceiptData {
 }
 
 const CARD_TYPE_LABEL: Record<string, string> = {
-  car: 'รถยนต์', motorcycle: 'มอเตอร์ไซค์', overnight: 'ค้างคืน',
+  car: 'รถยนต์', motorcycle: 'รถจักรยานยนต์', overnight: 'ค้างคืน',
 }
 
 /** Build a full ESC/POS receipt for the EPSON TM-T82II (58/80mm thermal). */

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import {
   CreditCard, Plus, Trash2, Car, Bike, Moon,
   Search, RefreshCw, Nfc, X, Check, ShieldCheck, ShieldOff,
+  Pencil, Phone, MapPin, ImagePlus, Clock8, Zap,
 } from 'lucide-react'
 import { useToast } from '@/components/ui/Toast'
 import {
@@ -52,14 +53,19 @@ function sanitizeUid(raw: string): string {
 }
 
 type CardType = 'car' | 'motorcycle' | 'overnight'
+type CardCategory = 'temporary' | 'monthly'
 
 interface ParkingCard {
   _id: string
   uid: string
   type: CardType
+  cardCategory?: CardCategory
   label: string
   ownerName: string
   plate: string
+  phone?: string
+  address?: string
+  idCardPhotoPath?: string
   expiryDate?: string
   isActive: boolean
   createdAt: string
@@ -82,20 +88,29 @@ const EXPIRY_META = {
 
 const TYPE_META: Record<CardType, { label: string; icon: typeof Car; color: string; bg: string; grad: string; bgImage?: string }> = {
   car:        { label: 'รถยนต์',       icon: Car,  color: '#1D4ED8', bg: 'rgba(29,78,216,0.08)',  grad: 'linear-gradient(135deg,#1E3A8A,#2563EB)', bgImage: '/cardbg/car.png' },
-  motorcycle: { label: 'มอเตอร์ไซค์', icon: Bike, color: '#0891B2', bg: 'rgba(8,145,178,0.08)',  grad: 'linear-gradient(135deg,#164E63,#0891B2)', bgImage: '/cardbg/motor.png' },
+  motorcycle: { label: 'รถจักรยานยนต์', icon: Bike, color: '#0891B2', bg: 'rgba(8,145,178,0.08)',  grad: 'linear-gradient(135deg,#164E63,#0891B2)', bgImage: '/cardbg/motor.png' },
   overnight:  { label: 'ค้างคืน',     icon: Moon, color: '#7C3AED', bg: 'rgba(124,58,237,0.08)', grad: 'linear-gradient(135deg,#4C1D95,#7C3AED)' },
+}
+
+const CATEGORY_META: Record<CardCategory, { label: string; color: string; bg: string; icon: typeof Zap }> = {
+  temporary: { label: 'บัตรชั่วคราว', color: '#64748B', bg: 'rgba(100,116,139,0.1)', icon: Zap },
+  monthly:   { label: 'บัตรรายเดือน', color: '#059669', bg: 'rgba(5,150,105,0.1)',   icon: Clock8 },
 }
 
 const TYPE_TABS = [
   { key: '',            label: 'ทั้งหมด' },
   { key: 'car',        label: 'รถยนต์' },
-  { key: 'motorcycle', label: 'มอเตอร์ไซค์' },
+  { key: 'motorcycle', label: 'รถจักรยานยนต์' },
   { key: 'overnight',  label: 'ค้างคืน' },
 ] as const
 
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' })
 }
+
+const inputStyle = { border: '1.5px solid #E8ECF4', background: '#F8FAFF' }
+function focusIn(e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement>)  { e.currentTarget.style.borderColor = '#1D4ED8' }
+function focusOut(e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement>) { e.currentTarget.style.borderColor = '#E8ECF4' }
 
 export default function CardsPage() {
   const { success, error: toastError } = useToast()
@@ -108,14 +123,33 @@ export default function CardsPage() {
   const [confirmId, setConfirmId] = useState<string | null>(null)
   const [deleting,  setDeleting]  = useState<string | null>(null)
 
-  const [uid,        setUid]        = useState('')
-  const [type,       setType]       = useState<CardType>('car')
-  const [label,      setLabel]      = useState('')
-  const [ownerName,  setOwnerName]  = useState('')
-  const [plate,      setPlate]      = useState('')
-  const [expiryDate, setExpiryDate] = useState('')
-  const [renewId,    setRenewId]    = useState<string | null>(null)
+  const [uid,          setUid]          = useState('')
+  const [type,          setType]         = useState<CardType>('car')
+  const [cardCategory,  setCardCategory] = useState<CardCategory>('temporary')
+  const [label,        setLabel]        = useState('')
+  const [ownerName,    setOwnerName]    = useState('')
+  const [plate,        setPlate]        = useState('')
+  const [phone,        setPhone]        = useState('')
+  const [address,      setAddress]      = useState('')
+  const [expiryDate,   setExpiryDate]   = useState('')
+  const [renewId,      setRenewId]      = useState<string | null>(null)
   const uidInputRef = useRef<HTMLInputElement>(null)
+
+  // ── Edit dialog ──
+  const [editCard,         setEditCard]         = useState<ParkingCard | null>(null)
+  const [editSaving,        setEditSaving]        = useState(false)
+  const [eType,             setEType]             = useState<CardType>('car')
+  const [eCardCategory,     setECardCategory]     = useState<CardCategory>('temporary')
+  const [eLabel,            setELabel]            = useState('')
+  const [eOwnerName,        setEOwnerName]        = useState('')
+  const [ePlate,            setEPlate]            = useState('')
+  const [ePhone,            setEPhone]            = useState('')
+  const [eAddress,          setEAddress]          = useState('')
+  const [eExpiryDate,       setEExpiryDate]       = useState('')
+  const [ePhotoFile,        setEPhotoFile]        = useState<File | null>(null)
+  const [ePhotoPreview,     setEPhotoPreview]     = useState<string | null>(null)
+  const [ePhotoBroken,      setEPhotoBroken]      = useState(false)
+  const [uploadingPhoto,    setUploadingPhoto]    = useState(false)
 
   // Radix Dialog has a FocusTrap that finishes setting up *after*
   // onOpenAutoFocus fires. A double requestAnimationFrame lets the trap
@@ -133,6 +167,11 @@ export default function CardsPage() {
 
   useEffect(() => { fetchCards() }, [])
 
+  function resetAddForm() {
+    setUid(''); setLabel(''); setType('car'); setCardCategory('temporary')
+    setOwnerName(''); setPlate(''); setPhone(''); setAddress(''); setExpiryDate('')
+  }
+
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault()
     if (!uid.trim()) return
@@ -141,14 +180,20 @@ export default function CardsPage() {
       const res = await fetch('/api/cards', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ uid: uid.trim(), type, label, ownerName, plate, expiryDate: expiryDate || null }),
+        body: JSON.stringify({
+          uid: uid.trim(), type, cardCategory, label, ownerName, plate,
+          phone: cardCategory === 'monthly' ? phone : '',
+          address: cardCategory === 'monthly' ? address : '',
+          expiryDate: cardCategory === 'monthly' ? (expiryDate || null) : null,
+        }),
       })
       if (!res.ok) {
         const err = await res.json()
         toastError('ลงทะเบียนไม่สำเร็จ', err.error ?? 'เกิดข้อผิดพลาด')
         return
       }
-      setUid(''); setLabel(''); setType('car'); setOwnerName(''); setPlate(''); setExpiryDate(''); setShowForm(false)
+      resetAddForm()
+      setShowForm(false)
       success('ลงทะเบียนบัตรสำเร็จ', `UID: ${uid.trim()}`)
       fetchCards()
     } finally {
@@ -200,6 +245,69 @@ export default function CardsPage() {
     setCards(prev => prev.map(c => c._id === id ? { ...c, isActive: !isActive } : c))
   }
 
+  function openEdit(card: ParkingCard) {
+    setEditCard(card)
+    setEType(card.type)
+    setECardCategory(card.cardCategory ?? 'temporary')
+    setELabel(card.label)
+    setEOwnerName(card.ownerName)
+    setEPlate(card.plate)
+    setEPhone(card.phone ?? '')
+    setEAddress(card.address ?? '')
+    setEExpiryDate(card.expiryDate ? card.expiryDate.slice(0, 10) : '')
+    setEPhotoFile(null)
+    setEPhotoPreview(null)
+    setEPhotoBroken(false)
+  }
+
+  function handleEditPhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setEPhotoFile(file)
+    setEPhotoPreview(URL.createObjectURL(file))
+  }
+
+  async function handleEditSave(e: React.FormEvent) {
+    e.preventDefault()
+    if (!editCard) return
+    setEditSaving(true)
+    try {
+      const res = await fetch(`/api/cards/${editCard._id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: eType, cardCategory: eCardCategory, label: eLabel, ownerName: eOwnerName, plate: ePlate,
+          phone: eCardCategory === 'monthly' ? ePhone : '',
+          address: eCardCategory === 'monthly' ? eAddress : '',
+          expiryDate: eCardCategory === 'monthly' ? (eExpiryDate || null) : null,
+        }),
+      })
+      if (!res.ok) {
+        const err = await res.json()
+        toastError('บันทึกไม่สำเร็จ', err.error ?? 'เกิดข้อผิดพลาด')
+        return
+      }
+
+      if (ePhotoFile) {
+        setUploadingPhoto(true)
+        const fd = new FormData()
+        fd.append('photo', ePhotoFile)
+        const pRes = await fetch(`/api/cards/${editCard._id}/photo`, { method: 'POST', body: fd })
+        setUploadingPhoto(false)
+        if (!pRes.ok) {
+          const err = await pRes.json()
+          toastError('อัปโหลดรูปบัตรไม่สำเร็จ', err.error ?? 'เกิดข้อผิดพลาด')
+        }
+      }
+
+      await fetchCards()
+      setEditCard(null)
+      success('บันทึกการแก้ไขแล้ว', `UID: ${editCard.uid}`)
+    } finally {
+      setEditSaving(false)
+    }
+  }
+
   const filtered = cards.filter(c => {
     const matchType   = !typeTab || c.type === typeTab
     const matchSearch = !search || c.uid.toLowerCase().includes(search.toLowerCase()) || c.label.toLowerCase().includes(search.toLowerCase())
@@ -242,7 +350,7 @@ export default function CardsPage() {
       {/* ── ADD CARD DIALOG ── */}
       <Dialog open={showForm} onOpenChange={open => {
         setShowForm(open)
-        if (!open) { setUid(''); setLabel(''); setType('car'); setOwnerName(''); setPlate(''); setExpiryDate('') }
+        if (!open) resetAddForm()
       }}>
         <DialogContent className="max-w-md"
           onOpenAutoFocus={e => {
@@ -258,6 +366,32 @@ export default function CardsPage() {
           </DialogHeader>
           <form onSubmit={handleAdd}>
             <div className="p-5 space-y-4">
+              {/* Category toggle — temporary (type only) vs monthly (full details) */}
+              <div>
+                <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide block mb-2">ประเภทการลงทะเบียน</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {(Object.entries(CATEGORY_META) as [CardCategory, typeof CATEGORY_META[CardCategory]][]).map(([key, m]) => {
+                    const Icon = m.icon
+                    const active = cardCategory === key
+                    return (
+                      <button key={key} type="button" onClick={() => setCardCategory(key)}
+                        className="flex items-center gap-2 px-3 py-2.5 rounded-lg transition-all text-left"
+                        style={active
+                          ? { background: m.bg, border: `1.5px solid ${m.color}`, color: m.color }
+                          : { background: '#F8FAFF', border: '1.5px solid #E8ECF4', color: '#94A3B8' }}>
+                        <Icon className="size-4 shrink-0" strokeWidth={1.75} />
+                        <span className="text-xs font-semibold">{m.label}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+                <p className="text-[10px] text-slate-400 mt-1.5">
+                  {cardCategory === 'temporary'
+                    ? 'สำหรับลูกค้าจอดชั่วคราว — ลงแค่ประเภทบัตรและทะเบียนพอ'
+                    : 'สำหรับลูกค้าสมัครรายเดือน — กรอกข้อมูลติดต่อและวันหมดอายุเพิ่ม'}
+                </p>
+              </div>
+
               {/* Card type visual selector */}
               <div>
                 <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide block mb-2">ประเภทบัตร</label>
@@ -288,46 +422,64 @@ export default function CardsPage() {
                     placeholder="แตะบัตรหรือพิมพ์ UID"
                     required
                     className="w-full h-9 px-3 rounded-lg text-sm font-mono text-slate-800 outline-none"
-                    style={{ border: '1.5px solid #E8ECF4', background: '#F8FAFF' }}
-                    onFocus={e => e.currentTarget.style.borderColor = '#1D4ED8'}
-                    onBlur={e => e.currentTarget.style.borderColor = '#E8ECF4'} />
+                    style={inputStyle} onFocus={focusIn} onBlur={focusOut} />
                 </div>
                 <div>
                   <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide block mb-1.5">ทะเบียนรถ</label>
                   <input value={plate} onChange={e => setPlate(e.target.value)}
                     placeholder="เช่น กข 1234"
                     className="w-full h-9 px-3 rounded-lg text-sm text-slate-800 outline-none"
-                    style={{ border: '1.5px solid #E8ECF4', background: '#F8FAFF' }}
-                    onFocus={e => e.currentTarget.style.borderColor = '#1D4ED8'}
-                    onBlur={e => e.currentTarget.style.borderColor = '#E8ECF4'} />
-                </div>
-                <div>
-                  <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide block mb-1.5">ชื่อเจ้าของ</label>
-                  <input value={ownerName} onChange={e => setOwnerName(e.target.value)}
-                    placeholder="เช่น สมชาย ใจดี"
-                    className="w-full h-9 px-3 rounded-lg text-sm text-slate-800 outline-none"
-                    style={{ border: '1.5px solid #E8ECF4', background: '#F8FAFF' }}
-                    onFocus={e => e.currentTarget.style.borderColor = '#1D4ED8'}
-                    onBlur={e => e.currentTarget.style.borderColor = '#E8ECF4'} />
-                </div>
-                <div>
-                  <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide block mb-1.5">ชื่อ / หมายเหตุ</label>
-                  <input value={label} onChange={e => setLabel(e.target.value)}
-                    placeholder="เช่น บัตรรายเดือน #001"
-                    className="w-full h-9 px-3 rounded-lg text-sm text-slate-800 outline-none"
-                    style={{ border: '1.5px solid #E8ECF4', background: '#F8FAFF' }}
-                    onFocus={e => e.currentTarget.style.borderColor = '#1D4ED8'}
-                    onBlur={e => e.currentTarget.style.borderColor = '#E8ECF4'} />
-                </div>
-                <div className="col-span-2">
-                  <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide block mb-1.5">วันหมดอายุ (ถ้าเป็นบัตรรายเดือน)</label>
-                  <input type="date" value={expiryDate} onChange={e => setExpiryDate(e.target.value)}
-                    className="w-full h-9 px-3 rounded-lg text-sm text-slate-800 outline-none"
-                    style={{ border: '1.5px solid #E8ECF4', background: '#F8FAFF' }}
-                    onFocus={e => e.currentTarget.style.borderColor = '#1D4ED8'}
-                    onBlur={e => e.currentTarget.style.borderColor = '#E8ECF4'} />
+                    style={inputStyle} onFocus={focusIn} onBlur={focusOut} />
                 </div>
               </div>
+
+              {/* Monthly-only fields */}
+              {cardCategory === 'monthly' && (
+                <div className="space-y-3 p-3 rounded-lg" style={{ background: 'rgba(5,150,105,0.04)', border: '1px solid rgba(5,150,105,0.15)' }}>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide block mb-1.5">ชื่อเจ้าของ</label>
+                      <input value={ownerName} onChange={e => setOwnerName(e.target.value)}
+                        placeholder="เช่น สมชาย ใจดี"
+                        className="w-full h-9 px-3 rounded-lg text-sm text-slate-800 outline-none"
+                        style={inputStyle} onFocus={focusIn} onBlur={focusOut} />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide block mb-1.5">ชื่อ / หมายเหตุ</label>
+                      <input value={label} onChange={e => setLabel(e.target.value)}
+                        placeholder="เช่น บัตรรายเดือน #001"
+                        className="w-full h-9 px-3 rounded-lg text-sm text-slate-800 outline-none"
+                        style={inputStyle} onFocus={focusIn} onBlur={focusOut} />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide block mb-1.5 flex items-center gap-1">
+                        <Phone className="size-3" /> เบอร์โทรติดต่อ
+                      </label>
+                      <input value={phone} onChange={e => setPhone(e.target.value.replace(/[^\d-]/g, ''))}
+                        placeholder="เช่น 081-234-5678"
+                        className="w-full h-9 px-3 rounded-lg text-sm text-slate-800 outline-none"
+                        style={inputStyle} onFocus={focusIn} onBlur={focusOut} />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide block mb-1.5">วันหมดอายุ</label>
+                      <input type="date" value={expiryDate} onChange={e => setExpiryDate(e.target.value)}
+                        className="w-full h-9 px-3 rounded-lg text-sm text-slate-800 outline-none"
+                        style={inputStyle} onFocus={focusIn} onBlur={focusOut} />
+                    </div>
+                    <div className="col-span-2">
+                      <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide block mb-1.5 flex items-center gap-1">
+                        <MapPin className="size-3" /> ที่อยู่ติดต่อ
+                      </label>
+                      <textarea value={address} onChange={e => setAddress(e.target.value)}
+                        placeholder="ที่อยู่สำหรับติดต่อ"
+                        rows={2}
+                        className="w-full px-3 py-2 rounded-lg text-sm text-slate-800 outline-none resize-none"
+                        style={inputStyle} onFocus={focusIn} onBlur={focusOut} />
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-slate-400">อัปโหลดรูปบัตรประชาชนได้หลังบันทึก ผ่านปุ่ม &quot;แก้ไข&quot; บนบัตร</p>
+                </div>
+              )}
             </div>
 
             <div className="flex justify-end gap-2 px-5 pb-5">
@@ -343,6 +495,160 @@ export default function CardsPage() {
               </button>
             </div>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── EDIT CARD DIALOG ── */}
+      <Dialog open={!!editCard} onOpenChange={open => { if (!open) setEditCard(null) }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <div className="flex items-center gap-2 px-5 py-3.5"
+              style={{ background: 'rgba(29,78,216,0.04)', borderBottom: '1px solid rgba(29,78,216,0.1)' }}>
+              <Pencil className="size-4" style={{ color: '#1D4ED8' }} />
+              <DialogTitle>แก้ไขบัตร {editCard?.uid}</DialogTitle>
+            </div>
+          </DialogHeader>
+          {editCard && (
+            <form onSubmit={handleEditSave}>
+              <div className="p-5 space-y-4 max-h-[65vh] overflow-y-auto">
+                {/* Category toggle */}
+                <div>
+                  <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide block mb-2">ประเภทการลงทะเบียน</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {(Object.entries(CATEGORY_META) as [CardCategory, typeof CATEGORY_META[CardCategory]][]).map(([key, m]) => {
+                      const Icon = m.icon
+                      const active = eCardCategory === key
+                      return (
+                        <button key={key} type="button" onClick={() => setECardCategory(key)}
+                          className="flex items-center gap-2 px-3 py-2.5 rounded-lg transition-all text-left"
+                          style={active
+                            ? { background: m.bg, border: `1.5px solid ${m.color}`, color: m.color }
+                            : { background: '#F8FAFF', border: '1.5px solid #E8ECF4', color: '#94A3B8' }}>
+                          <Icon className="size-4 shrink-0" strokeWidth={1.75} />
+                          <span className="text-xs font-semibold">{m.label}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                {/* Card type */}
+                <div>
+                  <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide block mb-2">ประเภทบัตร</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {(['car', 'motorcycle', 'overnight'] as CardType[]).map(t => {
+                      const m = TYPE_META[t]
+                      const Icon = m.icon
+                      const active = eType === t
+                      return (
+                        <button key={t} type="button" onClick={() => setEType(t)}
+                          className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg transition-all text-left"
+                          style={active
+                            ? { background: m.bg, border: `1.5px solid ${m.color}`, color: m.color }
+                            : { background: '#F8FAFF', border: '1.5px solid #E8ECF4', color: '#94A3B8' }}>
+                          <Icon className="size-4 shrink-0" strokeWidth={1.75} />
+                          <span className="text-xs font-semibold">{m.label}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide block mb-1.5">ทะเบียนรถ</label>
+                    <input value={ePlate} onChange={e => setEPlate(e.target.value)}
+                      placeholder="เช่น กข 1234"
+                      className="w-full h-9 px-3 rounded-lg text-sm text-slate-800 outline-none"
+                      style={inputStyle} onFocus={focusIn} onBlur={focusOut} />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide block mb-1.5">ชื่อ / หมายเหตุ</label>
+                    <input value={eLabel} onChange={e => setELabel(e.target.value)}
+                      className="w-full h-9 px-3 rounded-lg text-sm text-slate-800 outline-none"
+                      style={inputStyle} onFocus={focusIn} onBlur={focusOut} />
+                  </div>
+                </div>
+
+                {eCardCategory === 'monthly' && (
+                  <div className="space-y-3 p-3 rounded-lg" style={{ background: 'rgba(5,150,105,0.04)', border: '1px solid rgba(5,150,105,0.15)' }}>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide block mb-1.5">ชื่อเจ้าของ</label>
+                        <input value={eOwnerName} onChange={e => setEOwnerName(e.target.value)}
+                          placeholder="เช่น สมชาย ใจดี"
+                          className="w-full h-9 px-3 rounded-lg text-sm text-slate-800 outline-none"
+                          style={inputStyle} onFocus={focusIn} onBlur={focusOut} />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide block mb-1.5">วันหมดอายุ</label>
+                        <input type="date" value={eExpiryDate} onChange={e => setEExpiryDate(e.target.value)}
+                          className="w-full h-9 px-3 rounded-lg text-sm text-slate-800 outline-none"
+                          style={inputStyle} onFocus={focusIn} onBlur={focusOut} />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide block mb-1.5 flex items-center gap-1">
+                          <Phone className="size-3" /> เบอร์โทรติดต่อ
+                        </label>
+                        <input value={ePhone} onChange={e => setEPhone(e.target.value.replace(/[^\d-]/g, ''))}
+                          placeholder="เช่น 081-234-5678"
+                          className="w-full h-9 px-3 rounded-lg text-sm text-slate-800 outline-none"
+                          style={inputStyle} onFocus={focusIn} onBlur={focusOut} />
+                      </div>
+                      <div className="col-span-2">
+                        <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide block mb-1.5 flex items-center gap-1">
+                          <MapPin className="size-3" /> ที่อยู่ติดต่อ
+                        </label>
+                        <textarea value={eAddress} onChange={e => setEAddress(e.target.value)}
+                          rows={2}
+                          className="w-full px-3 py-2 rounded-lg text-sm text-slate-800 outline-none resize-none"
+                          style={inputStyle} onFocus={focusIn} onBlur={focusOut} />
+                      </div>
+                    </div>
+
+                    {/* ID card photo upload */}
+                    <div>
+                      <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide block mb-1.5 flex items-center gap-1">
+                        <ImagePlus className="size-3" /> รูปบัตรประชาชน
+                      </label>
+                      <div className="flex items-center gap-3">
+                        <div className="size-16 rounded-lg overflow-hidden shrink-0 flex items-center justify-center"
+                          style={{ background: '#F1F5F9', border: '1px solid #E2E8F0' }}>
+                          {ePhotoPreview ? (
+                            <img src={ePhotoPreview} alt="preview" className="w-full h-full object-cover" />
+                          ) : editCard.idCardPhotoPath && !ePhotoBroken ? (
+                            <img src={`/api/cards/${editCard._id}/photo`} alt="บัตรประชาชน"
+                              className="w-full h-full object-cover" onError={() => setEPhotoBroken(true)} />
+                          ) : (
+                            <ImagePlus className="size-5 text-slate-300" />
+                          )}
+                        </div>
+                        <label className="h-8 px-3 rounded-lg text-xs font-semibold cursor-pointer flex items-center gap-1.5"
+                          style={{ background: 'white', border: '1px solid #E8ECF4', color: '#1D4ED8' }}>
+                          <ImagePlus className="size-3.5" />
+                          {editCard.idCardPhotoPath || ePhotoPreview ? 'เปลี่ยนรูป' : 'อัปโหลดรูป'}
+                          <input type="file" accept="image/*" className="hidden" onChange={handleEditPhotoChange} />
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex justify-end gap-2 px-5 pb-5">
+                <button type="button" onClick={() => setEditCard(null)}
+                  className="h-8 px-4 rounded-lg text-xs font-semibold text-slate-500 hover:bg-slate-100 transition-colors">
+                  ยกเลิก
+                </button>
+                <button type="submit" disabled={editSaving || uploadingPhoto}
+                  className="h-8 px-5 rounded-lg text-xs font-semibold text-white flex items-center gap-1.5 hover:opacity-90 disabled:opacity-50 transition-opacity"
+                  style={{ background: '#1D4ED8' }}>
+                  {editSaving || uploadingPhoto ? <RefreshCw className="size-3 animate-spin" /> : <Check className="size-3" />}
+                  {uploadingPhoto ? 'กำลังอัปโหลดรูป...' : editSaving ? 'กำลังบันทึก...' : 'บันทึกการแก้ไข'}
+                </button>
+              </div>
+            </form>
+          )}
         </DialogContent>
       </Dialog>
 
@@ -440,6 +746,7 @@ export default function CardsPage() {
                 const m = TYPE_META[card.type]
                 const Icon = m.icon
                 const isConfirm = confirmId === card._id
+                const cm = CATEGORY_META[card.cardCategory ?? 'temporary']
 
                 const status = expiryStatus(card.expiryDate)
                 const em = EXPIRY_META[status]
@@ -494,6 +801,8 @@ export default function CardsPage() {
                           <div className="flex items-center gap-1 mt-0.5 flex-wrap">
                             <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
                               style={{ background: m.bg, color: m.color }}>{m.label}</span>
+                            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
+                              style={{ background: cm.bg, color: cm.color }}>{cm.label}</span>
                             {status !== 'none' && (
                               <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
                                 style={{ background: em.bg, color: em.color }}>
@@ -505,6 +814,15 @@ export default function CardsPage() {
 
                         {/* Actions */}
                         <div className="shrink-0 flex items-center gap-1">
+                          {/* Edit */}
+                          {!isRenew && !isConfirm && (
+                            <button onClick={() => openEdit(card)}
+                              className="size-6 rounded-lg flex items-center justify-center hover:bg-blue-50 transition-colors"
+                              style={{ color: '#64748B' }}
+                              title="แก้ไขบัตร">
+                              <Pencil className="size-3" />
+                            </button>
+                          )}
                           {/* Renew */}
                           {status !== 'none' && !isConfirm && (
                             isRenew ? (

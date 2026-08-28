@@ -102,7 +102,7 @@ export function LostCardDialog({ open, onOpenChange, onConfirm, defaultPlate }: 
             <div className="grid grid-cols-2 gap-1.5">
               {([
                 { key: 'car',        label: 'รถยนต์',       icon: Car  },
-                { key: 'motorcycle', label: 'มอเตอร์ไซค์', icon: Bike },
+                { key: 'motorcycle', label: 'รถจักรยานยนต์', icon: Bike },
               ] as const).map(({ key, label, icon: Icon }) => (
                 <button key={key} type="button"
                   onClick={() => setCardType(key)}

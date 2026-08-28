@@ -54,7 +54,7 @@ interface OperatorGroup {
 
 const TYPE_META = {
   car:        { label: 'รถยนต์',       icon: Car,  color: '#1D4ED8' },
-  motorcycle: { label: 'มอเตอร์ไซค์', icon: Bike, color: '#6D28D9' },
+  motorcycle: { label: 'รถจักรยานยนต์', icon: Bike, color: '#6D28D9' },
   overnight:  { label: 'ค้างคืน',     icon: Moon, color: '#B45309' },
 }
 

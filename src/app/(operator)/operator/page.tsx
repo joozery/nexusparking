@@ -5,7 +5,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import {
   LogIn, LogOut,
   Car, Bike, RefreshCw, Clock,
-  Play, Square, X,
+  Play, X,
   XCircle, Nfc, Scan,
 } from 'lucide-react'
 import { CheckInDialog } from '@/components/parking/CheckInDialog'
@@ -587,10 +587,15 @@ export default function OperatorPage() {
         e.preventDefault()
         setCarsListOpen(o => !o)
       }
+
+      if (e.key === 'F7' && shift) {
+        e.preventDefault()
+        setShiftEnding(true)
+      }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [checkInOpen, checkOutOpen, lostOpen, shiftEnding, regOpen])
+  }, [checkInOpen, checkOutOpen, lostOpen, shiftEnding, regOpen, shift])
 
   return (
     <div className="h-screen flex flex-col bg-[#F0F4FF]">
@@ -693,32 +698,6 @@ export default function OperatorPage() {
         </div>
       </header>
 
-      {/* ─── Shift bar (active only) ─── */}
-      {shift ? (
-        <div className="shrink-0 flex items-center gap-4 px-6 py-2"
-          style={{ background: 'rgba(5,150,105,0.06)', borderBottom: '1px solid rgba(5,150,105,0.15)' }}>
-          <div className="flex items-center gap-1.5">
-            <span className="size-2 rounded-full animate-pulse inline-block" style={{ background: '#10B981' }} />
-            <span className="text-xs font-bold text-emerald-700">กะเริ่ม {fmtTime(shift.startTime)}</span>
-          </div>
-          <div className="w-px h-4 bg-emerald-200" />
-          <div className="flex items-center gap-3 text-xs text-slate-600">
-            <span>รถเข้า <strong className="text-slate-800">{shift.checkinsCount}</strong></span>
-            <span>รถออก <strong className="text-slate-800">{shift.checkoutsCount}</strong></span>
-          </div>
-          <div className="flex-1" />
-          <button
-            onClick={() => setShiftEnding(true)}
-            className="h-7 px-3 rounded-lg text-xs font-bold flex items-center gap-1.5"
-            style={{ background: 'rgba(239,68,68,0.08)', color: '#991B1B', border: '1px solid rgba(239,68,68,0.2)' }}
-            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.14)' }}
-            onMouseLeave={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.08)' }}
-          >
-            <Square className="size-2.5 fill-red-700" /> ปิดกะ
-          </button>
-        </div>
-      ) : null}
-
       {/* ─── Body ─── */}
       <div className="flex-1 min-h-0 p-3 flex gap-3">
 
@@ -811,7 +790,7 @@ export default function OperatorPage() {
             <div className="flex-1 min-h-0 flex">
               {([
                 { type: 'car' as const, label: 'รถยนต์', icon: Car, list: queues.filter(q => q.cardType === 'car') },
-                { type: 'motorcycle' as const, label: 'มอไซค์', icon: Bike, list: queues.filter(q => q.cardType === 'motorcycle') },
+                { type: 'motorcycle' as const, label: 'รถจักรยานยนต์', icon: Bike, list: queues.filter(q => q.cardType === 'motorcycle') },
               ]).map((col, colIdx) => (
                 <div key={col.type}
                   className="flex-1 min-w-0 flex flex-col"

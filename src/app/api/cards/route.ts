@@ -10,7 +10,7 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   const body = await req.json()
-  const { uid, type, label, ownerName, plate } = body
+  const { uid, type, cardCategory, label, ownerName, plate, phone, address, expiryDate } = body
 
   if (!uid || !type) {
     return NextResponse.json({ error: 'uid and type are required' }, { status: 400 })
@@ -26,9 +26,13 @@ export async function POST(req: NextRequest) {
   const card = await ParkingCard.create({
     uid: uid.trim(),
     type,
+    cardCategory: cardCategory === 'monthly' ? 'monthly' : 'temporary',
     label: label ?? '',
     ownerName: ownerName ?? '',
     plate: plate ?? '',
+    phone: phone ?? '',
+    address: address ?? '',
+    expiryDate: expiryDate || null,
   })
   return NextResponse.json(card, { status: 201 })
 }

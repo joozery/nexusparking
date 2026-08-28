@@ -40,21 +40,21 @@ const PERIODS: { key: PeriodKey; label: string }[] = [
 
 const TYPE_META: Record<string, { label: string; icon: typeof Car; color: string; bg: string; grad: string }> = {
   car:        { label: 'รถยนต์',       icon: Car,  color: '#1D4ED8', bg: 'rgba(29,78,216,0.1)',  grad: 'linear-gradient(135deg,#1E3A8A,#1D4ED8)' },
-  motorcycle: { label: 'มอเตอร์ไซค์', icon: Bike, color: '#0891B2', bg: 'rgba(8,145,178,0.1)',  grad: 'linear-gradient(135deg,#164E63,#0891B2)' },
+  motorcycle: { label: 'รถจักรยานยนต์', icon: Bike, color: '#0891B2', bg: 'rgba(8,145,178,0.1)',  grad: 'linear-gradient(135deg,#164E63,#0891B2)' },
   overnight:  { label: 'ค้างคืน',     icon: Moon, color: '#7C3AED', bg: 'rgba(124,58,237,0.1)', grad: 'linear-gradient(135deg,#4C1D95,#7C3AED)' },
 }
 
 // ── Chart configs ────────────────────────────────────────────────
 const dailyChartConfig = {
   car:        { label: 'รถยนต์',       color: '#1D4ED8' },
-  motorcycle: { label: 'มอเตอร์ไซค์', color: '#0891B2' },
+  motorcycle: { label: 'รถจักรยานยนต์', color: '#0891B2' },
   overnight:  { label: 'ค้างคืน',     color: '#7C3AED' },
 } satisfies ChartConfig
 
 const monthlyChartConfig = {
   total:      { label: 'รายได้รวม',   color: '#1D4ED8' },
   car:        { label: 'รถยนต์',      color: '#2563EB' },
-  motorcycle: { label: 'มอเตอร์ไซค์', color: '#0891B2' },
+  motorcycle: { label: 'รถจักรยานยนต์', color: '#0891B2' },
   overnight:  { label: 'ค้างคืน',    color: '#7C3AED' },
 } satisfies ChartConfig
 
@@ -497,7 +497,7 @@ export default function ReportsPage() {
                   <table className="w-full">
                     <thead>
                       <tr style={{ background: '#F8FAFF', borderBottom: '1px solid #E8ECF4' }}>
-                        {['วันที่', 'รถยนต์', 'มอเตอร์ไซค์', 'ค้างคืน', 'ค่าปรับ', 'คัน', 'รวม'].map(h => (
+                        {['วันที่', 'รถยนต์', 'รถจักรยานยนต์', 'ค้างคืน', 'ค่าปรับ', 'คัน', 'รวม'].map(h => (
                           <th key={h} className="px-4 py-2.5 text-left text-[10px] font-bold text-slate-400 uppercase tracking-wide whitespace-nowrap">
                             {h}
                           </th>

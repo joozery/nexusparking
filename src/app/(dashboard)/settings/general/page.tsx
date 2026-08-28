@@ -127,7 +127,7 @@ export default function GeneralSettingsPage() {
         </div>
         <div className="p-5">
           <div className="grid grid-cols-2 gap-4 max-w-xs">
-            {([['รถยนต์ (คัน)', 'car'], ['มอเตอร์ไซค์ (คัน)', 'motorcycle']] as const).map(([label, key]) => (
+            {([['รถยนต์ (คัน)', 'car'], ['รถจักรยานยนต์ (คัน)', 'motorcycle']] as const).map(([label, key]) => (
               <div key={key}>
                 <label className="text-[10px] font-black text-slate-500 uppercase tracking-wide block mb-1.5">{label}</label>
                 <input type="number" min={1} value={settings.capacity[key]}
@@ -182,7 +182,7 @@ export default function GeneralSettingsPage() {
           <div className="rounded-lg p-4" style={{ background: '#F8FAFF', border: '1px solid rgba(8,145,178,0.1)' }}>
             <div className="flex items-center gap-2 mb-3">
               <Bike className="size-4" style={{ color: '#0891B2' }} />
-              <p className="text-xs font-black text-slate-800">มอเตอร์ไซค์ (Motorcycle)</p>
+              <p className="text-xs font-black text-slate-800">รถจักรยานยนต์ (Motorcycle)</p>
             </div>
             <div className="grid grid-cols-2 gap-3 max-w-xs">
               {[

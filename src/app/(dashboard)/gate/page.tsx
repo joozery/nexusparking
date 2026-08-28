@@ -44,7 +44,7 @@ interface Stats {
 
 const TYPE_META: Record<CardType, { label: string; icon: typeof Car; color: string; bg: string }> = {
   car:        { label: 'รถยนต์',       icon: Car,  color: '#1D4ED8', bg: 'rgba(29,78,216,0.08)'  },
-  motorcycle: { label: 'มอเตอร์ไซค์', icon: Bike, color: '#3B82F6', bg: 'rgba(59,130,246,0.08)' },
+  motorcycle: { label: 'รถจักรยานยนต์', icon: Bike, color: '#3B82F6', bg: 'rgba(59,130,246,0.08)' },
   overnight:  { label: 'ค้างคืน',     icon: Moon, color: '#F59E0B', bg: 'rgba(245,158,11,0.08)' },
 }
 
@@ -217,7 +217,7 @@ export default function GatePage() {
     const durMn    = durMin % 60
     const fmt      = (d: Date) => d.toLocaleString('th-TH', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: '2-digit', hour12: false })
     const now      = new Date()
-    const typeLabel: Record<CardType, string> = { car: 'รถยนต์', motorcycle: 'มอเตอร์ไซค์', overnight: 'ค้างคืน' }
+    const typeLabel: Record<CardType, string> = { car: 'รถยนต์', motorcycle: 'รถจักรยานยนต์', overnight: 'ค้างคืน' }
 
     const html = `<!DOCTYPE html>
 <html lang="th">

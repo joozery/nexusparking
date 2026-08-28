@@ -61,7 +61,7 @@ const KIND_STYLE: Record<FeeSegment['kind'], { bg: string; border: string; label
 
 const TYPE_META: Record<CardType, { label: string; icon: typeof Car; color: string }> = {
   car:        { label: 'รถยนต์',       icon: Car,  color: '#1D4ED8' },
-  motorcycle: { label: 'มอเตอร์ไซค์', icon: Bike, color: '#6D28D9' },
+  motorcycle: { label: 'รถจักรยานยนต์', icon: Bike, color: '#6D28D9' },
   overnight:  { label: 'ค้างคืน',     icon: Moon, color: '#B45309' },
 }
 
@@ -630,7 +630,7 @@ function parseExcelDate(val: unknown): Date | null {
 function normalizeCardType(val: unknown): CardType | null {
   const s = String(val ?? '').toLowerCase().trim()
   if (['car', 'รถยนต์', 'ยนต์', 'c'].includes(s)) return 'car'
-  if (['motorcycle', 'มอเตอร์ไซค์', 'moto', 'bike', 'm', 'motor'].includes(s)) return 'motorcycle'
+  if (['motorcycle', 'มอเตอร์ไซค์', 'รถจักรยานยนต์', 'moto', 'bike', 'm', 'motor'].includes(s)) return 'motorcycle'
   if (['overnight', 'ค้างคืน', 'o', 'night'].includes(s)) return 'overnight'
   return null
 }

@@ -23,7 +23,7 @@ interface Props {
 
 const TYPE_OPTIONS: { value: CardType; label: string; icon: typeof Car; color: string; bg: string }[] = [
   { value: 'car',        label: 'รถยนต์',       icon: Car,  color: '#1D4ED8', bg: 'rgba(29,78,216,0.08)'  },
-  { value: 'motorcycle', label: 'มอเตอร์ไซค์', icon: Bike, color: '#0891B2', bg: 'rgba(8,145,178,0.08)'  },
+  { value: 'motorcycle', label: 'รถจักรยานยนต์', icon: Bike, color: '#0891B2', bg: 'rgba(8,145,178,0.08)'  },
   { value: 'overnight',  label: 'ค้างคืน',     icon: Moon, color: '#7C3AED', bg: 'rgba(124,58,237,0.08)' },
 ]
 

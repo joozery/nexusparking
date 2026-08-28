@@ -33,7 +33,7 @@ const STATUS_META: Record<SessionRow['status'], { label: string; color: string; 
   lost:      { label: 'บัตรหาย',   color: '#DC2626', bg: 'rgba(220,38,38,0.1)' },
 }
 
-const CARD_TYPE_LABEL: Record<string, string> = { car: 'รถยนต์', motorcycle: 'มอเตอร์ไซค์', overnight: 'ค้างคืน' }
+const CARD_TYPE_LABEL: Record<string, string> = { car: 'รถยนต์', motorcycle: 'รถจักรยานยนต์', overnight: 'ค้างคืน' }
 
 function fmtDT(iso?: string) {
   if (!iso) return '—'

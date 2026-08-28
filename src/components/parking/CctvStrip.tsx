@@ -207,21 +207,20 @@ export function CctvStrip({ isExit, onToggleExit }: CctvStripProps) {
     <>
       <div className="flex-1 flex flex-col gap-2 min-h-0">
 
-        {/* header row: mode badge + Shortcut hint */}
-        <div className="shrink-0 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold"
-              style={isExit
-                ? { background: 'rgba(234,88,12,0.1)', color: '#EA580C', border: '1px solid rgba(234,88,12,0.2)' }
-                : { background: 'rgba(29,78,216,0.1)', color: '#1D4ED8', border: '1px solid rgba(29,78,216,0.2)' }}>
-              {isExit
-                ? <><LogOut className="size-3" /> กล้องขาออก</>
-                : <><LogIn  className="size-3" /> กล้องขาเข้า</>}
-            </div>
+        {/* header row: mode badge (centered) + Shortcut hint (stays right, F12 unchanged) */}
+        <div className="shrink-0 grid grid-cols-3 items-center">
+          <div />
+          <div className="justify-self-center flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold"
+            style={isExit
+              ? { background: 'rgba(234,88,12,0.1)', color: '#EA580C', border: '1px solid rgba(234,88,12,0.2)' }
+              : { background: 'rgba(29,78,216,0.1)', color: '#1D4ED8', border: '1px solid rgba(29,78,216,0.2)' }}>
+            {isExit
+              ? <><LogOut className="size-3" /> ขาออก</>
+              : <><LogIn  className="size-3" /> ขาเข้า</>}
           </div>
           <button
             onClick={onToggleExit}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all"
+            className="justify-self-end flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all"
             style={{ background: '#F1F5F9', color: '#64748B', border: '1px solid #E2E8F0' }}
             onMouseEnter={e => e.currentTarget.style.background = '#E2E8F0'}
             onMouseLeave={e => e.currentTarget.style.background = '#F1F5F9'}
