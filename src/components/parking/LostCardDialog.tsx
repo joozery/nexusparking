@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { AlertTriangle, ShieldAlert, Banknote, Car, Bike } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -17,12 +17,17 @@ interface Props {
   open: boolean
   onOpenChange: (open: boolean) => void
   onConfirm: (plate: string, estimatedHours: number, cardType: 'car' | 'motorcycle') => void
+  defaultPlate?: string
 }
 
-export function LostCardDialog({ open, onOpenChange, onConfirm }: Props) {
+export function LostCardDialog({ open, onOpenChange, onConfirm, defaultPlate }: Props) {
   const [plate,    setPlate]    = useState('')
   const [hours,    setHours]    = useState(2)
   const [cardType, setCardType] = useState<'car' | 'motorcycle'>('car')
+
+  useEffect(() => {
+    if (open) setPlate(defaultPlate ?? '')
+  }, [open, defaultPlate])
 
   const parkingFee = calcFeeFromMinutes(cardType, hours * 60)
   const totalFee   = parkingFee + LOST_FINE

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { CreditCard, LogOut, Clock, Banknote, Smartphone, Tag, ChevronDown, Timer, Moon, CheckCircle2, Printer } from 'lucide-react'
+import { CreditCard, LogOut, Clock, Banknote, Smartphone, Tag, ChevronDown, Timer, Moon, CheckCircle2, Printer, AlertTriangle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
@@ -36,10 +36,12 @@ interface Props {
   overnightCfg?: OvernightConfig
   afterHoursCfg?: AfterHoursConfig
   printing?: boolean
+  lostCardFine?: number
+  defaultLostCard?: boolean
   onCustomExitTimeChange?: (v: string) => void
   onSimulateScan: () => void
   onBack: () => void
-  onConfirm: (paymentMethod: PaymentMethod, discountId?: string, dailyDiscountId?: string) => void
+  onConfirm: (paymentMethod: PaymentMethod, discountId?: string, dailyDiscountId?: string, isLostCard?: boolean) => void
   onPrintReceipt?: () => void
   onDone?: () => void
 }
@@ -63,7 +65,7 @@ function fmtDuration(entryTime: Date | null | undefined, exitTime: Date | null |
 }
 
 export function CheckOutDialog({
-  open, onOpenChange, step, cardType, hours, fee, paidAmount, printing,
+  open, onOpenChange, step, cardType, hours, fee, paidAmount, printing, lostCardFine = 300, defaultLostCard,
   entryTime, customExitTime, overnightCfg, afterHoursCfg, onCustomExitTimeChange,
   onSimulateScan, onBack, onConfirm, onPrintReceipt, onDone,
 }: Props) {
@@ -72,6 +74,11 @@ export function CheckOutDialog({
   const [selectedId, setSelectedId] = useState<string>('')
   const [dailySelectedId, setDailySelectedId] = useState<string>('')
   const [cashReceived, setCashReceived] = useState('')
+  const [isLostCard, setIsLostCard] = useState(false)
+
+  useEffect(() => {
+    if (open) setIsLostCard(!!defaultLostCard)
+  }, [open, defaultLostCard])
 
   const storeDiscounts = discounts.filter(d => d.discountType !== 'per_day')
   const dailyDiscounts = discounts.filter(d => d.discountType === 'per_day')
@@ -92,7 +99,7 @@ export function CheckOutDialog({
   const dailyDiscountAmount = selectedDailyDiscount ? selectedDailyDiscount.discountValue * nights : 0
 
   const totalDiscountAmount = discountAmount + dailyDiscountAmount
-  const finalFee = Math.max(0, fee - totalDiscountAmount)
+  const finalFee = Math.max(0, fee - totalDiscountAmount) + (isLostCard ? lostCardFine : 0)
   const cashNum = parseFloat(cashReceived) || 0
   const change = cashNum - finalFee
 
@@ -108,7 +115,7 @@ export function CheckOutDialog({
   }, [open])
 
   function handleClose(o: boolean) {
-    if (!o) { setPaymentMethod('cash'); setSelectedId(''); setDailySelectedId(''); setCashReceived('') }
+    if (!o) { setPaymentMethod('cash'); setSelectedId(''); setDailySelectedId(''); setCashReceived(''); setIsLostCard(false) }
     onOpenChange(o)
   }
 
@@ -243,9 +250,15 @@ export function CheckOutDialog({
                           <span className="tabular-nums">-฿{dailyDiscountAmount}</span>
                         </div>
                       )}
+                      {isLostCard && (
+                        <div className="flex justify-between text-xs font-semibold pt-0.5 border-t border-dashed border-slate-100" style={{ color: '#B45309' }}>
+                          <span className="flex items-center gap-1"><AlertTriangle className="size-3" />ค่าปรับบัตรหาย</span>
+                          <span className="tabular-nums">+฿{lostCardFine}</span>
+                        </div>
+                      )}
                     </div>
                     <div className="px-2.5 py-2 flex items-center justify-between"
-                      style={{ background: totalDiscountAmount > 0 ? 'linear-gradient(135deg,#059669,#10B981)' : '#059669' }}>
+                      style={{ background: totalDiscountAmount > 0 || isLostCard ? 'linear-gradient(135deg,#059669,#10B981)' : '#059669' }}>
                       <div>
                         <span className="text-emerald-100 text-[11px] font-semibold">ยอดชำระ</span>
                         {totalDiscountAmount > 0 && (
@@ -256,6 +269,25 @@ export function CheckOutDialog({
                     </div>
                   </div>
                 )}
+
+                {/* Lost card toggle */}
+                <button
+                  type="button"
+                  onClick={() => setIsLostCard(v => !v)}
+                  className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-left transition-all"
+                  style={isLostCard
+                    ? { background: 'rgba(217,119,6,0.1)', border: '1.5px solid rgba(217,119,6,0.4)' }
+                    : { background: '#FAFBFF', border: '1px solid #E8ECF4' }}
+                >
+                  <div className="flex items-center justify-center size-4 rounded shrink-0"
+                    style={isLostCard ? { background: '#D97706' } : { border: '1.5px solid #CBD5E1' }}>
+                    {isLostCard && <CheckCircle2 className="size-3 text-white" />}
+                  </div>
+                  <AlertTriangle className="size-3.5 shrink-0" style={{ color: isLostCard ? '#B45309' : '#94A3B8' }} />
+                  <span className="text-[11px] font-bold flex-1" style={{ color: isLostCard ? '#92400E' : '#64748B' }}>
+                    ลูกค้าทำบัตรหาย — เก็บค่าปรับเพิ่ม ฿{lostCardFine}
+                  </span>
+                </button>
 
                 {/* Sim: custom exit time */}
                 {onCustomExitTimeChange && (
@@ -421,7 +453,7 @@ export function CheckOutDialog({
                   (paymentMethod === 'cash' && cashReceived !== '' && change < 0)
                 }
                 style={paymentMethod === 'qr' ? { background: '#7C3AED' } : { background: '#059669' }}
-                onClick={() => onConfirm(paymentMethod, selectedId || undefined, dailySelectedId || undefined)}
+                onClick={() => onConfirm(paymentMethod, selectedId || undefined, dailySelectedId || undefined, isLostCard)}
               >
                 {paymentMethod === 'cash'
                   ? <><Banknote className="size-4" /> รับเงินสด ฿{finalFee}</>

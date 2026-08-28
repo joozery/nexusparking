@@ -3,10 +3,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 
 import {
-  LogIn, LogOut, AlertTriangle,
+  LogIn, LogOut,
   Car, Bike, RefreshCw, Clock,
-  Play, Square, X, CreditCard,
-  ListOrdered, Plus, CheckCheck, XCircle, Nfc, Scan,
+  Play, Square, X,
+  ListOrdered, CheckCheck, XCircle, Nfc, Scan,
 } from 'lucide-react'
 import { CheckInDialog } from '@/components/parking/CheckInDialog'
 import { CheckOutDialog, type PaymentMethod } from '@/components/parking/CheckOutDialog'
@@ -86,6 +86,7 @@ export default function OperatorPage() {
   const [afterHoursCfg,  setAfterHoursCfg]  = useState<AfterHoursConfig | undefined>(undefined)
   const [monthlyDeposit, setMonthlyDeposit] = useState(500)
   const [monthlyFee,     setMonthlyFee]     = useState(300)
+  const [lostCardFine,   setLostCardFine]   = useState(300)
   const [sessions, setSessions] = useState<Session[]>([])
   const [stats, setStats] = useState<Stats | null>(null)
   const [shift, setShift] = useState<Shift | null | undefined>(undefined) // undefined = loading
@@ -103,11 +104,6 @@ export default function OperatorPage() {
 
   // Queue
   const [queues,      setQueues]      = useState<QueueEntry[]>([])
-  const [queueOpen,   setQueueOpen]   = useState(false)
-  const [qStep,       setQStep]       = useState<'scan' | 'confirm'>('scan')
-  const [qPlate,      setQPlate]      = useState('')
-  const [qType,       setQType]       = useState<'car' | 'motorcycle'>('car')
-  const [qUid,        setQUid]        = useState('')
   const [qLoading,    setQLoading]    = useState<string | null>(null)
   // queue enter dialog (custom time)
   const [qEnterOpen,   setQEnterOpen]   = useState(false)
@@ -133,12 +129,15 @@ export default function OperatorPage() {
   const [coSessionId,   setCoSessionId]   = useState('')
   const [coCustomTime,  setCoCustomTime]  = useState('')
   const [coEntryTime,   setCoEntryTime]   = useState<Date | null>(null)
+  const [coAssumeLostCard, setCoAssumeLostCard] = useState(false)
 
   // Sidebar quick plate lookup (checkin/checkout auto-route by typed plate)
   const [plateQuick, setPlateQuick] = useState('')
+  const [isExitView, setIsExitView] = useState(false) // mirrors CctvStrip's F12 entry/exit toggle
 
   // Lost card
-  const [lostOpen, setLostOpen] = useState(false)
+  const [lostOpen,  setLostOpen]  = useState(false)
+  const [lostPlate, setLostPlate] = useState('')
 
   const [carsListOpen, setCarsListOpen] = useState(false)
 
@@ -157,8 +156,7 @@ export default function OperatorPage() {
   const [serialBaud, setSerialBaudState] = useState(9600)
 
   function resetCI() { setCiStep('scan'); setCiPlate(''); setCiType('car'); setCiUid(''); setCiCustomTime('') }
-  function resetCO() { setCoStep('scan'); setCoSessionId(''); setCoCustomTime(''); setCoEntryTime(null); setCoPaidAmount(0) }
-  function resetQ()  { setQStep('scan'); setQPlate(''); setQType('car'); setQUid('') }
+  function resetCO() { setCoStep('scan'); setCoSessionId(''); setCoCustomTime(''); setCoEntryTime(null); setCoPaidAmount(0); setCoAssumeLostCard(false) }
 
   const fetchShift = useCallback(async () => {
     const res = await fetch('/api/shifts/current')
@@ -205,6 +203,7 @@ export default function OperatorPage() {
         }
         if (s?.monthlyDeposit !== undefined) setMonthlyDeposit(s.monthlyDeposit)
         if (s?.monthlyFee     !== undefined) setMonthlyFee(s.monthlyFee)
+        if (s?.lostCardFine   !== undefined) setLostCardFine(s.lostCardFine)
       })
       .catch(() => {})
   }, [])
@@ -221,7 +220,7 @@ export default function OperatorPage() {
   }, [fetchData, fetchSettings])
 
   // ── Scan input focus management ─────────────────────────────────────────
-  const noDialogOpen = !checkInOpen && !checkOutOpen && !lostOpen && !queueOpen && !shiftEnding && !regOpen && shift !== null
+  const noDialogOpen = !checkInOpen && !checkOutOpen && !lostOpen && !shiftEnding && !regOpen && shift !== null
   useEffect(() => {
     if (noDialogOpen) {
       setTimeout(() => scanInputRef.current?.focus(), 50)
@@ -270,39 +269,6 @@ export default function OperatorPage() {
     setSerialConnected(false)
   }
 
-  // Queue actions
-  async function simulateQScan() {
-    const res = await fetch('/api/cards')
-    const cards = await res.json()
-    const eligible = cards.filter((c: { type: string }) => c.type === 'car' || c.type === 'motorcycle')
-    if (eligible.length > 0) {
-      const card = eligible[Math.floor(Math.random() * eligible.length)]
-      setQUid(card.uid); setQType(card.type)
-    } else {
-      const types = ['car', 'motorcycle'] as const
-      setQType(types[Math.floor(Math.random() * types.length)])
-      setQUid('DEMO-Q-' + Math.random().toString(36).slice(2, 8).toUpperCase())
-    }
-    setQStep('confirm')
-  }
-
-  async function addToQueue() {
-    if (!qPlate || qPlate.length < 2) return
-    const res = await fetch('/api/queue', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ plate: qPlate, cardType: qType, cardUid: qUid || undefined }),
-    })
-    if (res.ok) {
-      setQueueOpen(false); resetQ()
-      await fetchData()
-      success('เพิ่มคิวแล้ว', `ทะเบียน ${qPlate} อยู่ในคิว — กล้อง + ไม้กั้นเปิดแล้ว`)
-    } else {
-      const err = await res.json()
-      toastError('เพิ่มคิวไม่สำเร็จ', err.error)
-    }
-  }
-
   function openQEnterDialog(id: string, plate: string) {
     const now = new Date()
     now.setSeconds(0, 0)
@@ -333,6 +299,30 @@ export default function OperatorPage() {
       toastError('ไม่สำเร็จ', err.error)
     }
     setQEnterTarget(null)
+  }
+
+  // Auto-promote the first waiting queue entry into an active session as soon as a slot frees up
+  // (called right after a checkout — fetches fresh stats/queue instead of relying on possibly-stale state)
+  async function autoPromoteQueue() {
+    try {
+      const [stRes, qRes] = await Promise.all([fetch('/api/stats'), fetch('/api/queue')])
+      if (!stRes.ok || !qRes.ok) return
+      const st = await stRes.json() as Stats | null
+      const qs = await qRes.json() as QueueEntry[]
+      const next = Array.isArray(qs) ? qs[0] : undefined
+      if (!st || st.availableSlots <= 0 || !next) return
+      const res = await fetch(`/api/queue/${next._id}/enter`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      })
+      if (res.ok) {
+        await Promise.all([fetchData(), fetchShift()])
+        success('เข้าลานอัตโนมัติ', `มีที่ว่าง — ทะเบียน ${next.plate} จากคิวเข้าลานแล้ว`)
+      }
+    } catch (e) {
+      console.error('[autoPromoteQueue]', e)
+    }
   }
 
   async function cancelQueue(id: string, plate: string) {
@@ -413,10 +403,34 @@ export default function OperatorPage() {
       void triggerBarrierClient('checkin')
       await Promise.all([fetchData(), fetchShift()])
       success('ขาเข้าสำเร็จ', `ทะเบียน ${ciPlate} เข้าลานเรียบร้อย`)
-    } else {
-      const err = await res.json()
-      toastError('ขาเข้าไม่สำเร็จ', err.error ?? 'เกิดข้อผิดพลาด')
+      return
     }
+
+    const err = await res.json()
+
+    // Lot full → same popup, but fall back to the queue instead of failing outright
+    if (res.status === 409 && err.error === 'ลานจอดเต็มแล้ว กรุณาใช้ระบบคิวรอ') {
+      if (ciType === 'overnight') {
+        toastError('เข้าคิวไม่ได้', 'ลานเต็ม และบัตรค้างคืนไม่รองรับระบบคิวรอ')
+        return
+      }
+      const qRes = await fetch('/api/queue', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plate: ciPlate, cardType: ciType, cardUid: ciUid || undefined }),
+      })
+      if (qRes.ok) {
+        setCheckInOpen(false); resetCI()
+        await fetchData()
+        success('ลานเต็ม — เข้าคิวรอแล้ว', `ทะเบียน ${ciPlate} อยู่ในคิวรอ`)
+      } else {
+        const qErr = await qRes.json()
+        toastError('เข้าคิวไม่สำเร็จ', qErr.error ?? 'เกิดข้อผิดพลาด')
+      }
+      return
+    }
+
+    toastError('ขาเข้าไม่สำเร็จ', err.error ?? 'เกิดข้อผิดพลาด')
   }
 
   function handleCoCustomTimeChange(v: string) {
@@ -448,7 +462,9 @@ export default function OperatorPage() {
     setCoStep('payment')
   }
 
-  function openCheckoutFromCard(s: Session) {
+  // assumeLostCard: true when checkout was triggered without an actual card tap
+  // (e.g. typed straight into the sidebar) — pre-ticks the "บัตรหาย" checkbox in the popup
+  function openCheckoutFromCard(s: Session, assumeLostCard = false) {
     fetchSettings()
     const entry = new Date(s.entryTime)
     const now = new Date()
@@ -458,20 +474,22 @@ export default function OperatorPage() {
     setCoHours(hours)
     setCoFee(calcFeeFromMinutes(s.cardType, durationMin, entry, now, overnightCfg, afterHoursCfg))
     setCoSessionId(s._id); setCoEntryTime(entry); setCoStep('payment'); setCheckOutOpen(true)
+    setCoAssumeLostCard(assumeLostCard)
   }
 
-  // Sidebar plate input → auto-route: active session with this plate = checkout,
-  // else = checkin (or queue, if the lot is full — same rule as the old CHECK IN button)
+  // Sidebar plate input → auto-route:
+  //  - active session with this plate           → checkout
+  //  - no session, but exit camera view is on    → lost card (car is at the exit gate with no record)
+  //  - no session, otherwise                     → checkin (handleCheckin falls back to queue itself if the lot is full)
   function handlePlateQuickSubmit() {
     const plate = toAsciiPlate(convertThaiToEn(plateQuick))
     if (plate.length !== 4) return
     const activeSession = sessions.find(s => s.status === 'active' && s.plate === plate)
     if (activeSession) {
-      openCheckoutFromCard(activeSession)
-    } else if (stats && stats.availableSlots === 0) {
-      resetQ()
-      setQPlate(plate)
-      setQueueOpen(true)
+      openCheckoutFromCard(activeSession, true) // typed manually, no card tap → assume lost card
+    } else if (isExitView) {
+      setLostPlate(plate)
+      setLostOpen(true)
     } else {
       resetCI()
       setCiPlate(plate)
@@ -481,8 +499,8 @@ export default function OperatorPage() {
     setPlateQuick('')
   }
 
-  async function handleCheckout(paymentMethod: PaymentMethod, discountId?: string, dailyDiscountId?: string) {
-    const body: Record<string, unknown> = { sessionId: coSessionId || undefined, paymentMethod, discountId, dailyDiscountId }
+  async function handleCheckout(paymentMethod: PaymentMethod, discountId?: string, dailyDiscountId?: string, isLostCard?: boolean) {
+    const body: Record<string, unknown> = { sessionId: coSessionId || undefined, paymentMethod, discountId, dailyDiscountId, lostCard: isLostCard }
     if (coCustomTime) body.exitTime = new Date(coCustomTime).toISOString()
     const res = await fetch('/api/sessions/checkout', {
       method: 'POST',
@@ -497,6 +515,7 @@ export default function OperatorPage() {
       await Promise.all([fetchData(), fetchShift()])
       const label = paymentMethod === 'qr' ? 'โอนเงิน' : 'เงินสด'
       success('ขาออกสำเร็จ', `รับ${label} เรียบร้อย`)
+      void autoPromoteQueue()
     } else {
       const err = await res.json()
       toastError('ขาออกไม่สำเร็จ', err.error ?? 'เกิดข้อผิดพลาด')
@@ -524,7 +543,7 @@ export default function OperatorPage() {
   useEffect(() => {
     onCardScanRef.current = async (uid: string) => {
       // Ignore scan when any dialog is already open — prevents resetting in-progress forms
-      if (checkInOpen || checkOutOpen || lostOpen || queueOpen || shiftEnding || regOpen) return
+      if (checkInOpen || checkOutOpen || lostOpen || shiftEnding || regOpen) return
 
       // Cards/sessions registered before Thai→ASCII conversion have Thai chars stored as UID.
       // Match by the converted uid OR by converting the stored uid (backward-compat).
@@ -586,7 +605,7 @@ export default function OperatorPage() {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // ป้องกันการทำงานซ้อนถ้ามี modal เปิดอยู่แล้ว (ยกเว้น carsListOpen เอง — F2 ต้องสลับปิดได้)
-      if (checkInOpen || checkOutOpen || lostOpen || queueOpen || shiftEnding || regOpen) return
+      if (checkInOpen || checkOutOpen || lostOpen || shiftEnding || regOpen) return
 
       if (e.key === 'F2') {
         e.preventDefault()
@@ -595,7 +614,7 @@ export default function OperatorPage() {
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [checkInOpen, checkOutOpen, lostOpen, queueOpen, shiftEnding, regOpen])
+  }, [checkInOpen, checkOutOpen, lostOpen, shiftEnding, regOpen])
 
   return (
     <div className="h-screen flex flex-col bg-[#F0F4FF]">
@@ -625,7 +644,7 @@ export default function OperatorPage() {
           // Don't steal focus from a real input the operator clicked (e.g. search box)
           const target = e.relatedTarget as HTMLElement | null
           if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT')) return
-          if (!checkInOpen && !checkOutOpen && !lostOpen && !queueOpen && !shiftEnding && shift !== null) {
+          if (!checkInOpen && !checkOutOpen && !lostOpen && !shiftEnding && shift !== null) {
             setTimeout(() => scanInputRef.current?.focus(), 50)
           }
         }}
@@ -729,13 +748,14 @@ export default function OperatorPage() {
 
         {/* ── Camera strip — main area, fills all available space ── */}
         <div className="flex-1 min-w-0 min-h-0 flex flex-col rounded-2xl overflow-hidden">
-          <CctvStrip />
+          <CctvStrip isExit={isExitView} onToggleExit={() => setIsExitView(v => !v)} />
         </div>
 
         {/* ── Right sidebar: check-in / check-out / queue ── */}
         <div className="w-75 shrink-0 flex flex-col gap-2 min-h-0">
 
-          {/* Quick plate lookup — auto-route: active session found = checkout, else = checkin (or queue if full) */}
+          {/* Quick plate lookup — auto-route: active session found = checkout,
+              no session + exit camera view = lost card, no session + lot full = queue, else = checkin */}
           <div className="shrink-0 flex flex-col gap-1.5 p-3 rounded-xl"
             style={{ background: 'white', border: '1px solid #E8ECF4', boxShadow: '0 1px 8px rgba(0,0,0,0.05)' }}>
             <label className="text-[10px] font-bold text-slate-400 px-0.5">เลขทะเบียน (4 หลัก) — Enter เพื่อยืนยัน</label>
@@ -761,20 +781,17 @@ export default function OperatorPage() {
                 ยืนยัน
               </button>
             </form>
-            {stats && stats.availableSlots === 0 && (
+            {isExitView ? (
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full self-start"
+                style={{ background: 'rgba(217,119,6,0.1)', color: '#92400E' }}>
+                กล้องขาออก — ไม่พบทะเบียนจะถือว่าบัตรหาย
+              </span>
+            ) : stats && stats.availableSlots === 0 && (
               <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full self-start"
                 style={{ background: 'rgba(124,58,237,0.08)', color: '#7C3AED' }}>
                 ลานเต็ม — ทะเบียนใหม่จะเข้าคิวรอแทน
               </span>
             )}
-
-            <button
-              onClick={() => setLostOpen(true)}
-              className="mt-1 shrink-0 flex items-center justify-center gap-1.5 h-8 rounded-lg text-xs font-bold transition-all active:scale-[0.97]"
-              style={{ background: 'rgba(217,119,6,0.08)', color: '#92400E', border: '1px solid rgba(217,119,6,0.2)' }}
-            >
-              <AlertTriangle className="size-3.5" /> บัตรหาย
-            </button>
           </div>
 
           {/* ── Cars-in-lot trigger — full table lives in the F2 popup (CarsInLotDialog) ── */}
@@ -826,14 +843,6 @@ export default function OperatorPage() {
                   ลานเต็ม
                 </span>
               )}
-              <div className="flex-1" />
-              <button
-                onClick={() => { resetQ(); setQueueOpen(true) }}
-                className="shrink-0 h-6 px-2 rounded-lg flex items-center gap-1 text-[10px] font-black text-white transition-all hover:brightness-110 active:scale-[0.97]"
-                style={{ background: 'linear-gradient(135deg,#5B21B6,#7C3AED)', boxShadow: '0 2px 6px rgba(124,58,237,0.3)' }}
-              >
-                <Plus className="size-3" /> เพิ่มคิว
-              </button>
             </div>
 
             <div className="flex-1 min-h-0 overflow-y-auto p-2 flex flex-col gap-1.5">
@@ -931,134 +940,6 @@ export default function OperatorPage() {
                   ยืนยันเข้าลาน
                 </button>
               </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ─── Add Queue Dialog (scan → confirm, like checkin) ─── */}
-      {queueOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center"
-          style={{ background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)' }}>
-          <div className="bg-white rounded-3xl w-full max-w-xs mx-4 overflow-hidden shadow-2xl">
-
-            {/* Header */}
-            <div className="px-5 py-4 flex items-center gap-3"
-              style={{ background: 'linear-gradient(135deg,#5B21B6,#7C3AED)' }}>
-              <div className="flex size-8 items-center justify-center rounded-lg shrink-0"
-                style={{ background: 'rgba(255,255,255,0.2)' }}>
-                <ListOrdered className="size-4 text-white" />
-              </div>
-              <div className="flex-1">
-                <p className="text-white font-black text-sm">เพิ่มรถเข้าคิว</p>
-                <p className="text-violet-200 text-xs">แตะบัตร → เปิดไม้กั้น → รอในพื้นที่คิว</p>
-              </div>
-              <button onClick={() => { setQueueOpen(false); resetQ() }}
-                className="size-8 rounded-lg flex items-center justify-center"
-                style={{ background: 'rgba(255,255,255,0.15)' }}>
-                <X className="size-4 text-white" />
-              </button>
-            </div>
-
-            <div className="p-5">
-              {qStep === 'scan' ? (
-                <div className="flex flex-col items-center gap-3">
-                  {/* Scan zone */}
-                  <div
-                    onClick={simulateQScan}
-                    className="w-full cursor-pointer flex flex-col items-center gap-2 p-5 rounded-xl transition-all active:scale-[0.98]"
-                    style={{ border: '2px dashed rgba(124,58,237,0.35)', background: 'rgba(124,58,237,0.04)' }}
-                    onMouseEnter={e => { e.currentTarget.style.background = 'rgba(124,58,237,0.08)'; e.currentTarget.style.borderColor = 'rgba(124,58,237,0.6)' }}
-                    onMouseLeave={e => { e.currentTarget.style.background = 'rgba(124,58,237,0.04)'; e.currentTarget.style.borderColor = 'rgba(124,58,237,0.35)' }}
-                  >
-                    <div className="flex size-12 items-center justify-center rounded-xl animate-pulse"
-                      style={{ background: 'linear-gradient(135deg,#5B21B6,#7C3AED)', boxShadow: '0 4px 16px rgba(124,58,237,0.4)' }}>
-                      <CreditCard className="size-6 text-white" />
-                    </div>
-                    <div className="text-center">
-                      <p className="text-sm font-black" style={{ color: '#5B21B6' }}>รอการสแกนบัตร...</p>
-                      <p className="text-xs mt-0.5" style={{ color: 'rgba(91,33,182,0.6)' }}>แตะบัตรที่เครื่องอ่านบัตร</p>
-                      <p className="text-[10px] mt-1.5 px-2 py-0.5 rounded-full inline-block"
-                        style={{ border: '1px solid rgba(124,58,237,0.25)', color: 'rgba(124,58,237,0.6)', background: 'white' }}>
-                        คลิกจำลองการสแกน
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Manual type select */}
-                  <div className="w-full grid grid-cols-2 gap-2">
-                    {(['car', 'motorcycle'] as const).map(t => {
-                      const Icon = t === 'car' ? Car : Bike
-                      const label = t === 'car' ? 'รถยนต์' : 'มอเตอร์ไซค์'
-                      return (
-                        <button key={t}
-                          onClick={() => { setQType(t); setQUid(''); setQStep('confirm') }}
-                          className="flex items-center justify-center gap-1.5 h-10 rounded-xl font-bold text-xs transition-all"
-                          style={{ background: 'rgba(124,58,237,0.06)', border: '1.5px solid rgba(124,58,237,0.2)', color: '#5B21B6' }}
-                          onMouseEnter={e => { e.currentTarget.style.background = 'rgba(124,58,237,0.12)' }}
-                          onMouseLeave={e => { e.currentTarget.style.background = 'rgba(124,58,237,0.06)' }}
-                        >
-                          <Icon className="size-3.5" /> {label}
-                        </button>
-                      )
-                    })}
-                  </div>
-                  <p className="text-[10px] text-slate-400">หรือเลือกประเภทบัตรด้านบน</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {/* Card type badge */}
-                  <div className="flex items-center justify-between px-3 py-2.5 rounded-xl"
-                    style={{ background: 'rgba(124,58,237,0.06)', border: '1px solid rgba(124,58,237,0.2)' }}>
-                    <span className="text-xs text-slate-600 font-medium">ประเภทบัตร</span>
-                    <span className="flex items-center gap-1.5 text-xs font-black" style={{ color: '#5B21B6' }}>
-                      {qType === 'car' ? <Car className="size-3.5" /> : <Bike className="size-3.5" />}
-                      {qType === 'car' ? 'รถยนต์' : 'มอเตอร์ไซค์'}
-                    </span>
-                  </div>
-
-                  {/* Plate input */}
-                  <div className="space-y-1">
-                    <label className="text-xs font-black text-slate-700">เลขทะเบียน 4 ตัวท้าย</label>
-                    <input
-                      autoFocus
-                      value={qPlate}
-                      onChange={e => setQPlate(e.target.value.replace(/\D/g, '').slice(0, 4))}
-                      onKeyDown={e => e.key === 'Enter' && addToQueue()}
-                      placeholder="1234"
-                      maxLength={4}
-                      className="w-full h-12 rounded-xl px-4 text-2xl font-black text-slate-800 text-center outline-none tracking-[0.4em]"
-                      style={{ border: '2px solid #E2E8F0', background: '#FAFBFF' }}
-                      onFocus={e => { e.currentTarget.style.borderColor = '#7C3AED' }}
-                      onBlur={e => { e.currentTarget.style.borderColor = '#E2E8F0' }}
-                    />
-                    <p className="text-[10px] text-slate-400">กรอกเฉพาะตัวเลข 4 หลักท้าย</p>
-                  </div>
-
-                  {/* Hardware note */}
-                  <div className="flex items-center gap-2 px-3 py-2 rounded-xl"
-                    style={{ background: 'rgba(124,58,237,0.05)', border: '1px solid rgba(124,58,237,0.15)' }}>
-                    <CheckCheck className="size-3.5 shrink-0" style={{ color: '#7C3AED' }} />
-                    <p className="text-[10px] font-medium" style={{ color: '#5B21B6' }}>
-                      เมื่อยืนยัน: กล้องถ่ายภาพ + ไม้กั้นเปิด (รถเข้าพื้นที่รอคิว)
-                    </p>
-                  </div>
-
-                  <div className="flex gap-2 pt-1">
-                    <button onClick={() => setQStep('scan')}
-                      className="flex-1 h-11 rounded-xl text-sm font-bold text-slate-600"
-                      style={{ background: '#F1F5F9', border: '1px solid #E2E8F0' }}>
-                      ← ย้อนกลับ
-                    </button>
-                    <button onClick={addToQueue}
-                      disabled={qPlate.length !== 4}
-                      className="flex-1 h-11 rounded-xl text-sm font-black text-white disabled:opacity-40 transition-all hover:opacity-90 flex items-center justify-center gap-1.5"
-                      style={{ background: 'linear-gradient(135deg,#5B21B6,#7C3AED)' }}>
-                      <ListOrdered className="size-3.5" /> ยืนยัน — เพิ่มคิว
-                    </button>
-                  </div>
-                </div>
-              )}
             </div>
           </div>
         </div>
@@ -1228,6 +1109,8 @@ export default function OperatorPage() {
         step={coStep} cardType={coType} hours={coHours} fee={coFee}
         paidAmount={coPaidAmount}
         printing={coPrinting}
+        lostCardFine={lostCardFine}
+        defaultLostCard={coAssumeLostCard}
         entryTime={coEntryTime}
         overnightCfg={overnightCfg}
         afterHoursCfg={afterHoursCfg}
@@ -1241,6 +1124,7 @@ export default function OperatorPage() {
         open={lostOpen}
         onOpenChange={setLostOpen}
         onConfirm={handleLostCard}
+        defaultPlate={lostPlate}
       />
       <CardRegisterDialog
         open={regOpen}

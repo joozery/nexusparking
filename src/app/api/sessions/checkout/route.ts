@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const { uid, sessionId, paymentMethod = 'cash', discountId, dailyDiscountId, exitTime: exitTimeRaw } = await req.json()
+  const { uid, sessionId, paymentMethod = 'cash', discountId, dailyDiscountId, exitTime: exitTimeRaw, lostCard } = await req.json()
 
   const jar     = await cookies()
   const token   = jar.get(COOKIE_NAME)?.value
@@ -91,12 +91,13 @@ export async function POST(req: NextRequest) {
   }
 
   const discountName = discountNames.join(' + ') || undefined
-  const totalFee = Math.max(0, fee - discountAmount)
+  const lostFine = lostCard ? settings.lostCardFine : 0
+  const totalFee = Math.max(0, fee - discountAmount) + lostFine
 
   session.exitTime       = now
   session.durationMin    = durationMin
   session.fee            = fee
-  session.lostFine       = 0
+  session.lostFine       = lostFine
   session.totalFee       = totalFee
   session.discountId     = discountId ?? undefined
   session.discountName   = discountName
