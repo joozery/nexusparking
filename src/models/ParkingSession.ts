@@ -21,6 +21,10 @@ export interface IParkingSession extends Document {
   isSimulated?:   boolean
   entryPhotoPath?: string
   exitPhotoPath?:  string
+  entryCamPlate?:  string
+  entryCamFace?:   string
+  entryCamRear?:   string
+  entryCamExit?:   string
 }
 
 const ParkingSessionSchema = new Schema<IParkingSession>({
@@ -44,6 +48,10 @@ const ParkingSessionSchema = new Schema<IParkingSession>({
   isSimulated:    { type: Boolean, default: false },
   entryPhotoPath: { type: String },
   exitPhotoPath:  { type: String },
+  entryCamPlate:  { type: String },
+  entryCamFace:   { type: String },
+  entryCamRear:   { type: String },
+  entryCamExit:   { type: String },
 }, { timestamps: true })
 
 ParkingSessionSchema.index({ status: 1, entryTime: -1 })

@@ -125,9 +125,15 @@ export default function OperatorPage() {
   const [coHours,       setCoHours]       = useState(1)
   const [coFee,         setCoFee]         = useState(0)
   const [coSessionId,   setCoSessionId]   = useState('')
+  const [coPlate,       setCoPlate]       = useState('')
   const [coCustomTime,  setCoCustomTime]  = useState('')
   const [coEntryTime,   setCoEntryTime]   = useState<Date | null>(null)
   const [coAssumeLostCard, setCoAssumeLostCard] = useState(false)
+
+  // Entry-capture replay (CctvStrip exit view) — deliberately NOT cleared by resetCO/finishCheckout,
+  // so the last car's entry photos stay on screen until the next car starts checking out.
+  const [lastExitSessionId, setLastExitSessionId] = useState('')
+  const [lastExitPlate,     setLastExitPlate]     = useState('')
 
   // Sidebar quick plate lookup (checkin/checkout auto-route by typed plate)
   const [plateQuick, setPlateQuick] = useState('')
@@ -154,7 +160,7 @@ export default function OperatorPage() {
   const [serialBaud, setSerialBaudState] = useState(9600)
 
   function resetCI() { setCiStep('scan'); setCiPlate(''); setCiType('car'); setCiUid(''); setCiCustomTime('') }
-  function resetCO() { setCoStep('scan'); setCoSessionId(''); setCoCustomTime(''); setCoEntryTime(null); setCoPaidAmount(0); setCoAssumeLostCard(false) }
+  function resetCO() { setCoStep('scan'); setCoSessionId(''); setCoPlate(''); setCoCustomTime(''); setCoEntryTime(null); setCoPaidAmount(0); setCoAssumeLostCard(false) }
 
   const fetchShift = useCallback(async () => {
     const res = await fetch('/api/shifts/current')
@@ -449,7 +455,8 @@ export default function OperatorPage() {
     setCoType(s.cardType)
     setCoHours(hours)
     setCoFee(calcFeeFromMinutes(s.cardType, durationMin, entry, now, overnightCfg, afterHoursCfg))
-    setCoSessionId(s._id); setCoEntryTime(entry); setCoStep('payment'); setCheckOutOpen(true)
+    setCoSessionId(s._id); setCoPlate(s.plate); setCoEntryTime(entry); setCoStep('payment'); setCheckOutOpen(true)
+    setLastExitSessionId(s._id); setLastExitPlate(s.plate)
     setCoAssumeLostCard(assumeLostCard)
   }
 
@@ -704,7 +711,12 @@ export default function OperatorPage() {
         {/* ── Camera strip + fleet status bar — main area, fills all available space ── */}
         <div className="flex-1 min-w-0 min-h-0 flex flex-col gap-2">
           <div className="flex-1 min-h-0 flex flex-col rounded-2xl overflow-hidden">
-            <CctvStrip isExit={isExitView} onToggleExit={() => setIsExitView(v => !v)} />
+            <CctvStrip
+              isExit={isExitView}
+              onToggleExit={() => setIsExitView(v => !v)}
+              entrySessionId={lastExitSessionId || undefined}
+              entryPlate={lastExitPlate || undefined}
+            />
           </div>
           <FleetStatusBar stats={fleetStats} />
         </div>

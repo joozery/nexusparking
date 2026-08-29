@@ -6,7 +6,7 @@ import { ParkingCard } from '@/models/ParkingCard'
 import { ParkingSession } from '@/models/ParkingSession'
 import { Shift } from '@/models/Shift'
 import { getSettings } from '@/models/SystemSettings'
-import { runCheckinSequence } from '@/lib/hardware'
+import { runCheckinSequence, captureEntryCctvSnapshots } from '@/lib/hardware'
 
 export async function POST(req: NextRequest) {
   const { uid, plate, cardType: manualType, entryTime: customEntryTime } = await req.json()
@@ -84,6 +84,7 @@ export async function POST(req: NextRequest) {
   })
 
   void runCheckinSequence(settings.hardware, { sessionId: String(session._id), cardUid: resolvedUid, plate: plate.trim() })
+  void captureEntryCctvSnapshots(settings.cctvUrls, { sessionId: String(session._id), plate: plate.trim() })
 
   return NextResponse.json({
     ...session.toObject(),

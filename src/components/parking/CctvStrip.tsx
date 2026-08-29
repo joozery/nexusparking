@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { Camera, X, LogIn, LogOut } from 'lucide-react'
 
 type CamId = 'plate' | 'face' | 'rear' | 'exit' | 'plateOut' | 'faceOut'
@@ -162,13 +162,74 @@ function FullscreenCam({ cam, url, onClose }: { cam: CamDef; url: string; onClos
   )
 }
 
+/* ── entry-capture thumbnail (static photo taken at checkin, replayed at checkout) ── */
+const ENTRY_CAPTURE_CAMS = [
+  { camType: 'cam-plate' as const, label: 'ป้ายทะเบียน', accent: '#1D4ED8' },
+  { camType: 'cam-face'  as const, label: 'หน้าคนขับ',   accent: '#059669' },
+  { camType: 'cam-rear'  as const, label: 'Rear',         accent: '#7C3AED' },
+  { camType: 'cam-exit'  as const, label: 'ขาออก',        accent: '#EA580C' },
+]
+
+function EntryCaptureThumb({ sessionId, camType, label, accent }: {
+  sessionId?: string; camType: string; label: string; accent: string
+}) {
+  const [failed, setFailed] = useState(false)
+  const src = sessionId ? `/api/sessions/${sessionId}/photo?type=${camType}` : ''
+
+  useEffect(() => setFailed(false), [sessionId, camType])
+
+  return (
+    <div className="relative flex-1 bg-[#0D1117] rounded-lg overflow-hidden" style={{ minHeight: 0 }}>
+      {src && !failed ? (
+        <img src={src} alt={label}
+          className="absolute inset-0 w-full h-full object-cover"
+          onError={() => setFailed(true)} />
+      ) : (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 select-none">
+          <Camera className="size-4" style={{ color: 'rgba(255,255,255,0.1)' }} />
+          <span className="text-[8px]" style={{ color: 'rgba(255,255,255,0.15)' }}>
+            {sessionId ? 'ไม่มีภาพ' : 'รอสแกนบัตร'}
+          </span>
+        </div>
+      )}
+      <div className="absolute bottom-0 left-0 right-0 px-1.5 py-1"
+        style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.85) 0%, transparent 100%)' }}>
+        <span className="text-[9px] font-semibold" style={{ color: accent }}>{label}</span>
+      </div>
+    </div>
+  )
+}
+
+function EntryCapturePanel({ sessionId, plate, style }: { sessionId?: string; plate?: string; style?: CSSProperties }) {
+  return (
+    <div className="shrink-0 flex flex-col gap-1.5 min-h-0" style={style}>
+      <div className="shrink-0 flex items-center gap-1.5 px-0.5">
+        <span className="text-[10px] font-bold" style={{ color: '#64748B' }}>ภาพตอนเข้า</span>
+        {plate && (
+          <span className="text-[9px] font-black px-1.5 py-0.5 rounded tabular-nums"
+            style={{ background: '#F1F5F9', color: '#334155', border: '1px solid #E2E8F0' }}>
+            {plate}
+          </span>
+        )}
+      </div>
+      <div className="flex-1 grid grid-cols-4 gap-1.5 min-h-0">
+        {ENTRY_CAPTURE_CAMS.map(cam => (
+          <EntryCaptureThumb key={cam.camType} sessionId={sessionId} {...cam} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
 /* ── exported strip ── */
 interface CctvStripProps {
   isExit: boolean
   onToggleExit: () => void
+  entrySessionId?: string
+  entryPlate?: string
 }
 
-export function CctvStrip({ isExit, onToggleExit }: CctvStripProps) {
+export function CctvStrip({ isExit, onToggleExit, entrySessionId, entryPlate }: CctvStripProps) {
   const [urls, setUrls]         = useState<CameraUrls>({ plate: '', face: '', rear: '', exit: '', plateOut: '', faceOut: '' })
   const [expanded, setExpanded] = useState<CamDef | null>(null)
 
@@ -232,6 +293,11 @@ export function CctvStrip({ isExit, onToggleExit }: CctvStripProps) {
             </kbd>
           </button>
         </div>
+
+        {/* entry-capture replay: 4 slots in one row, on top — empty placeholders until a car is being checked out */}
+        {isExit && (
+          <EntryCapturePanel sessionId={entrySessionId} plate={entryPlate} style={{ height: '30%' }} />
+        )}
 
         {/* camera grid: 2 cols, 2 rows (entry) or 2 cols 1 row (exit) */}
         <div className="flex-1 grid grid-cols-2 gap-2.5 min-h-0">

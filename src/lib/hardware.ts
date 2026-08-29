@@ -101,6 +101,71 @@ async function linkPhotoToSession(sessionId: string, event: 'checkin' | 'checkou
   }
 }
 
+// ── กล้อง CCTV (cctvUrls จาก operator page) — แคป snapshot 4 มุมตอน checkin ───
+// คนละชุดกับ cameraEntry/cameraExit (ISAPI+digest) — พวกนี้เป็น snapshot URL เปล่าๆ ไม่มี auth
+// เก็บไว้โชว์ตอน checkout ว่าตอนเข้ามารถคันนี้หน้าตาเป็นยังไง
+export interface CctvUrls { plate: string; face: string; rear: string; exit: string }
+const ENTRY_CAM_IDS = ['plate', 'face', 'rear', 'exit'] as const
+
+// go2rtc live view URLs are MJPEG streams (`.../api/stream.mjpeg?src=X`) — can't grab a single
+// frame from those with a plain fetch. go2rtc also exposes `.../api/frame.jpeg?src=X`, a REST
+// endpoint that returns one still JPEG from the same source — use that for capture instead.
+function toSnapshotUrl(url: string): string | null {
+  if (!url || url.startsWith('rtsp://')) return null
+  if (url.includes('stream.mjpeg')) return url.replace('stream.mjpeg', 'frame.jpeg')
+  if (url.includes('.mjpg') || url.includes('mjpeg')) return null // unrecognized mjpeg pattern — can't convert to a snapshot URL
+  return url // assume it's already a plain snapshot JPEG URL
+}
+
+async function captureCctvUrl(rawUrl: string, subDir: string, filename: string): Promise<string | null> {
+  const url = toSnapshotUrl(rawUrl)
+  if (!url) return null
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(3000) })
+    if (!res.ok) return null
+    const buf = Buffer.from(await res.arrayBuffer())
+    const dir = path.join(CAPTURE_DIR, subDir)
+    await fs.mkdir(dir, { recursive: true })
+    const filePath = path.join(dir, filename)
+    await fs.writeFile(filePath, buf)
+    return filePath
+  } catch (e) {
+    console.warn('[Hardware] CCTV capture failed:', (e as Error).message)
+    return null
+  }
+}
+
+export async function captureEntryCctvSnapshots(
+  cctvUrls: CctvUrls,
+  data: { sessionId: string; plate: string }
+) {
+  const now       = new Date()
+  const safePlate = data.plate.replace(/[^a-zA-Z0-9ก-๙]/g, '') || 'unknown'
+  const subDir    = path.join(dateFolder(now), 'entry-cams')
+
+  const results = await Promise.all(ENTRY_CAM_IDS.map(cam =>
+    captureCctvUrl(cctvUrls[cam], subDir, `${timeStamp(now)}_${cam}_${safePlate}_${data.sessionId}.jpg`)
+  ))
+
+  const fields: Record<string, string> = {}
+  ENTRY_CAM_IDS.forEach((cam, i) => {
+    const filePath = results[i]
+    if (filePath) fields[`entryCam${cam[0].toUpperCase()}${cam.slice(1)}`] = filePath
+  })
+  if (Object.keys(fields).length === 0) return
+
+  try {
+    const [{ connectDB }, { ParkingSession }] = await Promise.all([
+      import('@/lib/mongodb'),
+      import('@/models/ParkingSession'),
+    ])
+    await connectDB()
+    await ParkingSession.updateOne({ _id: data.sessionId }, fields)
+  } catch (e) {
+    console.warn('[Hardware] Failed to link entry cctv photos to session:', (e as Error).message)
+  }
+}
+
 export async function triggerCamera(
   hw: HardwareConfig,
   data: { sessionId: string; cardUid: string; plate: string; event: 'checkin' | 'checkout' | 'lost' }
