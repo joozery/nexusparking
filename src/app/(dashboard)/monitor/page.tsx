@@ -16,7 +16,7 @@ interface CameraSlot {
 }
 
 const CAMERAS: CameraSlot[] = [
-  { id: 'plate',    label: 'กล้องป้ายทะเบียน (ขาเข้า)', subLabel: 'Plate In',  camNum: 'CAM-01', accent: '#1D4ED8' },
+  { id: 'plate',    label: 'กล้องป้ายทะเบียน (ขาเข้า)', subLabel: 'Plate In',  camNum: 'CAM-01', accent: '#A16207' },
   { id: 'face',     label: 'กล้องหน้าคนขับ (ขาเข้า)',  subLabel: 'Face In',   camNum: 'CAM-02', accent: '#059669' },
   { id: 'rear',     label: 'กล้อง Rear',                 subLabel: 'Rear View', camNum: 'CAM-03', accent: '#7C3AED' },
   { id: 'exit',     label: 'กล้องขาออก',                 subLabel: 'Exit View', camNum: 'CAM-04', accent: '#EA580C' },
@@ -48,15 +48,30 @@ function FrameTs() {
   return <>{ts}</>
 }
 
+const DEFAULT_PLACEHOLDERS: Record<CameraSlot['id'], string> = {
+  plate:    '/cctv/cam_plate.jpg',
+  face:     '/cctv/cam_face.jpg',
+  rear:     '/cctv/cam_rear.jpg',
+  exit:     '/cctv/cam_exit.jpg',
+  plateOut: '/cctv/cam_plate_out.jpg',
+  faceOut:  '/cctv/cam_face_out.jpg',
+}
+
 /* ── single camera card ── */
 function CameraCard({ slot, url, onExpand }: { slot: CameraSlot; url: string; onExpand: () => void }) {
   const [status, setStatus] = useState<Status>('idle')
+  const [imgFailed, setImgFailed] = useState(false)
   const [ticker, setTicker] = useState(Date.now())
   const timer = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const safeUrl  = url ?? ''
   const isRtsp   = safeUrl.startsWith('rtsp://')
   const isMjpeg  = safeUrl.includes('stream.mjpeg') || safeUrl.includes('.mjpg') || safeUrl.includes('mjpeg')
+  const placeholder = DEFAULT_PLACEHOLDERS[slot.id]
+
+  useEffect(() => {
+    setImgFailed(false)
+  }, [safeUrl])
 
   useEffect(() => {
     if (timer.current) clearInterval(timer.current)
@@ -66,14 +81,21 @@ function CameraCard({ slot, url, onExpand }: { slot: CameraSlot; url: string; on
     return () => { if (timer.current) clearInterval(timer.current) }
   }, [safeUrl, isRtsp, isMjpeg])
 
-  const src = isRtsp ? '' : isMjpeg ? safeUrl : safeUrl ? `${safeUrl}${safeUrl.includes('?') ? '&' : '?'}_t=${ticker}` : ''
+  const isShowingPlaceholder = !safeUrl || isRtsp || imgFailed
+  const src = isShowingPlaceholder
+    ? placeholder
+    : isMjpeg
+      ? safeUrl
+      : `${safeUrl}${safeUrl.includes('?') ? '&' : '?'}_t=${ticker}`
 
   const statusColor =
     status === 'online'  ? '#059669' :
-    status === 'offline' ? '#DC2626' : '#94A3B8'
+    status === 'offline' ? '#DC2626' :
+    isShowingPlaceholder ? '#D97706' : '#94A3B8'
   const statusLabel =
     status === 'online'  ? 'ONLINE' :
-    status === 'offline' ? 'OFFLINE' :
+    status === 'offline' ? 'OFFLINE (ภาพจำลอง)' :
+    isShowingPlaceholder ? 'ภาพจำลอง' :
     status === 'loading' ? 'กำลังเชื่อมต่อ…' : 'STANDBY'
 
   return (
@@ -91,28 +113,31 @@ function CameraCard({ slot, url, onExpand }: { slot: CameraSlot; url: string; on
             <p className="text-[11px] font-bold" style={{ color: 'rgba(251,191,36,0.8)' }}>ไม่รองรับ RTSP โดยตรง</p>
             <p className="text-[10px] leading-relaxed" style={{ color: 'rgba(255,255,255,0.3)' }}>
               ต้องผ่าน go2rtc ก่อน<br />ใส่ URL นี้แทน:<br />
-              <span style={{ color: 'rgba(96,165,250,0.9)' }} className="font-mono">
+              <span style={{ color: 'rgba(250,204,21,0.9)' }} className="font-mono">
                 http://localhost:1984/api/stream.mjpeg?src=cam_plate
               </span>
             </p>
           </div>
-        ) : safeUrl ? (
-          <img src={src} alt={slot.label}
-            className="absolute inset-0 w-full h-full object-cover"
-            onLoad={() => setStatus('online')}
-            onError={() => setStatus('offline')} />
         ) : (
-          <div className="flex flex-col items-center gap-2 select-none">
-            <div className="flex size-12 items-center justify-center rounded-xl"
-              style={{ background: 'rgba(255,255,255,0.04)', border: '1px dashed rgba(255,255,255,0.1)' }}>
-              <Camera className="size-5" style={{ color: 'rgba(255,255,255,0.15)' }} />
-            </div>
-            <p className="text-[11px] font-medium" style={{ color: 'rgba(255,255,255,0.2)' }}>ยังไม่ได้ตั้งค่า URL</p>
-          </div>
+          <img
+            key={isShowingPlaceholder ? `placeholder-${slot.id}` : `live-${safeUrl}`}
+            src={src}
+            alt={slot.label}
+            className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 hover:scale-105"
+            onLoad={() => {
+              if (safeUrl && !isShowingPlaceholder) setStatus('online')
+            }}
+            onError={() => {
+              if (!isShowingPlaceholder) {
+                setStatus('offline')
+                setImgFailed(true)
+              }
+            }}
+          />
         )}
 
         {/* LIVE pill — top-left */}
-        {status === 'online' && (
+        {status === 'online' && !isShowingPlaceholder && (
           <div className="absolute top-2.5 left-2.5 flex items-center gap-1 px-2 py-0.5 rounded-full pointer-events-none"
             style={{ background: 'rgba(220,38,38,0.85)' }}>
             <span className="size-1.5 rounded-full bg-red-200 animate-pulse" />
@@ -120,9 +145,24 @@ function CameraCard({ slot, url, onExpand }: { slot: CameraSlot; url: string; on
           </div>
         )}
 
+        {/* Simulation / Offline badge */}
+        {isShowingPlaceholder && !isRtsp && (
+          <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5 px-2.5 py-0.5 rounded-full pointer-events-none"
+            style={{
+              background: 'rgba(15,23,42,0.85)',
+              backdropFilter: 'blur(4px)',
+              border: `1px solid ${status === 'offline' ? 'rgba(239,68,68,0.35)' : 'rgba(251,191,36,0.35)'}`
+            }}>
+            <span className={`size-1.5 rounded-full ${status === 'offline' ? 'bg-red-400' : 'bg-amber-400'}`} />
+            <span className={`${status === 'offline' ? 'text-red-300' : 'text-amber-300'} text-[9px] font-bold tracking-wider`}>
+              {status === 'offline' ? 'OFFLINE · แสดงภาพจำลอง' : 'ภาพจำลอง'}
+            </span>
+          </div>
+        )}
+
         {/* Timestamp — bottom-left */}
         <div className="absolute bottom-2 left-2.5 pointer-events-none">
-          <span className="text-[9px] tabular-nums font-mono" style={{ color: 'rgba(255,255,255,0.3)' }}>
+          <span className="text-[9px] tabular-nums font-mono" style={{ color: 'rgba(255,255,255,0.45)' }}>
             <FrameTs />
           </span>
         </div>
@@ -130,10 +170,10 @@ function CameraCard({ slot, url, onExpand }: { slot: CameraSlot; url: string; on
         {/* Expand — top-right */}
         <button onClick={onExpand}
           className="absolute top-2 right-2 flex size-7 items-center justify-center rounded-lg transition-all"
-          style={{ background: 'rgba(0,0,0,0.35)' }}
-          onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.6)'}
-          onMouseLeave={e => e.currentTarget.style.background = 'rgba(0,0,0,0.35)'}>
-          <Maximize2 className="size-3.5 text-white/70" />
+          style={{ background: 'rgba(0,0,0,0.45)' }}
+          onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.7)'}
+          onMouseLeave={e => e.currentTarget.style.background = 'rgba(0,0,0,0.45)'}>
+          <Maximize2 className="size-3.5 text-white/80" />
         </button>
       </div>
 
@@ -167,6 +207,12 @@ function CameraCard({ slot, url, onExpand }: { slot: CameraSlot; url: string; on
 function FullscreenView({ slot, url, onClose }: { slot: CameraSlot; url: string; onClose: () => void }) {
   const [ticker, setTicker] = useState(Date.now())
   const [status, setStatus] = useState<Status>(url ? 'loading' : 'idle')
+  const [imgFailed, setImgFailed] = useState(false)
+  const placeholder = DEFAULT_PLACEHOLDERS[slot.id]
+
+  useEffect(() => {
+    setImgFailed(false)
+  }, [url])
 
   useEffect(() => {
     if (!url) return
@@ -181,7 +227,8 @@ function FullscreenView({ slot, url, onClose }: { slot: CameraSlot; url: string;
   }, [onClose])
 
   const isMjpegFull = url.includes('stream.mjpeg') || url.includes('.mjpg') || url.includes('mjpeg')
-  const src = isMjpegFull ? url : url ? `${url}${url.includes('?') ? '&' : '?'}_t=${ticker}` : ''
+  const isShowingPlaceholder = !url || imgFailed
+  const src = isShowingPlaceholder ? placeholder : isMjpegFull ? url : `${url}${url.includes('?') ? '&' : '?'}_t=${ticker}`
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-black">
@@ -192,6 +239,11 @@ function FullscreenView({ slot, url, onClose }: { slot: CameraSlot; url: string;
           <span className="size-2 rounded-full" style={{ background: slot.accent }} />
           <span className="text-white text-sm font-bold">{slot.label}</span>
           <span className="text-white/40 text-xs">{slot.subLabel} · {slot.camNum}</span>
+          {isShowingPlaceholder && (
+            <span className="text-amber-300 text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-amber-950/70 border border-amber-500/30">
+              {status === 'offline' ? 'OFFLINE · ภาพจำลอง' : 'ภาพจำลอง (Simulation)'}
+            </span>
+          )}
         </div>
         <button onClick={onClose}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white/50 hover:text-white hover:bg-white/10 transition-all">
@@ -201,14 +253,26 @@ function FullscreenView({ slot, url, onClose }: { slot: CameraSlot; url: string;
       </div>
       {/* feed */}
       <div className="flex-1 relative flex items-center justify-center overflow-hidden">
-        {url
-          ? <img src={src} alt={slot.label} className="max-w-full max-h-full object-contain"
-              onLoad={() => setStatus('online')} onError={() => setStatus('offline')} />
-          : <div className="flex flex-col items-center gap-3">
-              <Camera className="size-16 text-slate-700" />
-              <p className="text-slate-500 text-sm">ยังไม่ได้ตั้งค่า URL กล้อง</p>
-            </div>
-        }
+        <img
+          key={isShowingPlaceholder ? `placeholder-${slot.id}` : `live-${url}`}
+          src={src}
+          alt={slot.label}
+          className="max-w-full max-h-full object-contain"
+          onLoad={() => { if (url && !isShowingPlaceholder) setStatus('online') }}
+          onError={() => {
+            if (!isShowingPlaceholder) {
+              setStatus('offline')
+              setImgFailed(true)
+            }
+          }}
+        />
+        {isShowingPlaceholder && (
+          <div className="absolute top-4 left-4 flex items-center gap-2 px-3 py-1.5 rounded-full pointer-events-none"
+            style={{ background: 'rgba(15,23,42,0.85)', backdropFilter: 'blur(4px)', border: '1px solid rgba(251,191,36,0.3)' }}>
+            <span className="size-2 rounded-full bg-amber-400" />
+            <span className="text-amber-300 text-xs font-bold">ภาพจำลองระบบกล้อง (Simulation Feed)</span>
+          </div>
+        )}
         {/* bottom overlay */}
         <div className="absolute bottom-4 right-4 flex items-center gap-3">
           {status === 'online' && (
@@ -303,8 +367,8 @@ export default function MonitorPage() {
 
         <div className="flex items-center gap-3">
           <div className="flex size-9 items-center justify-center rounded-xl shrink-0"
-            style={{ background: 'linear-gradient(135deg,#1E3A8A,#1D4ED8)', boxShadow: '0 2px 10px rgba(29,78,216,0.3)' }}>
-            <Camera className="size-4 text-white" />
+            style={{ background: 'linear-gradient(135deg,#713F12,#EAB308)', boxShadow: '0 2px 10px rgba(161,98,7,0.3)' }}>
+            <Camera className="size-4 text-black" />
           </div>
           <div>
             <h1 className="text-sm font-bold text-slate-800">ระบบกล้องวงจรปิด</h1>
@@ -337,15 +401,15 @@ export default function MonitorPage() {
 
           {/* Alt+C — fullscreen กล้องขาออก */}
           <button onClick={() => setExpanded(prev => prev ? null : CAMERAS[0])}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white transition-all hover:opacity-90"
-            style={{ background: 'linear-gradient(135deg,#1E3A8A,#1D4ED8)', boxShadow: '0 2px 8px rgba(29,78,216,0.3)' }}>
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-black transition-all hover:opacity-90"
+            style={{ background: 'linear-gradient(135deg,#713F12,#EAB308)', boxShadow: '0 2px 8px rgba(161,98,7,0.3)' }}>
             กล้องขาออก
-            <kbd className="text-[9px] bg-white/20 px-1.5 py-0.5 rounded font-mono">Alt+C</kbd>
+            <kbd className="text-[9px] bg-black/10 px-1.5 py-0.5 rounded font-mono">Alt+C</kbd>
           </button>
 
           {/* settings button */}
           <button onClick={openSettings}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-500 bg-white transition-all hover:bg-blue-50 hover:text-blue-700"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-500 bg-white transition-all hover:bg-yellow-50 hover:text-yellow-700"
             style={{ border: '1px solid #E8ECF4' }}>
             <Settings className="size-3.5" />
             ตั้งค่ากล้อง
@@ -375,8 +439,8 @@ export default function MonitorPage() {
               style={{ borderBottom: '1px solid #F1F5F9' }}>
               <div className="flex items-center gap-2.5">
                 <div className="flex size-7 items-center justify-center rounded-lg"
-                  style={{ background: 'rgba(29,78,216,0.08)' }}>
-                  <Settings className="size-3.5 text-blue-600" />
+                  style={{ background: 'rgba(161,98,7,0.08)' }}>
+                  <Settings className="size-3.5 text-yellow-700" />
                 </div>
                 <h2 className="text-sm font-bold text-slate-800">ตั้งค่า URL กล้อง</h2>
               </div>
@@ -388,11 +452,21 @@ export default function MonitorPage() {
 
             {/* body */}
             <div className="px-5 py-4 space-y-4">
-              <p className="text-xs text-slate-400 leading-relaxed">
-                ใส่ URL ของกล้อง เช่น{' '}
-                <code className="text-slate-600 bg-slate-100 px-1 py-0.5 rounded text-[11px]">http://192.168.1.100/snapshot.jpg</code>
-                {' '}สำหรับ snapshot หรือ MJPEG stream URL
-              </p>
+              <div className="flex items-start justify-between gap-3">
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  ใส่ URL ของกล้อง เช่น{' '}
+                  <code className="text-slate-600 bg-slate-100 px-1 py-0.5 rounded text-[11px]">http://192.168.1.100/snapshot.jpg</code>
+                  {' '}สำหรับ snapshot หรือ MJPEG stream URL
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setDraft({ plate: '', face: '', rear: '', exit: '', plateOut: '', faceOut: '' })}
+                  className="shrink-0 text-[11px] font-bold text-amber-700 hover:text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200 px-2.5 py-1.5 rounded-lg transition-colors"
+                  title="รีเซ็ตทุกช่องเพื่อแสดงภาพจำลองทั้งหมด"
+                >
+                  ใช้ภาพจำลองทั้งหมด
+                </button>
+              </div>
 
               {CAMERAS.map(c => (
                 <div key={c.id}>
@@ -426,7 +500,7 @@ export default function MonitorPage() {
                     <p className="mt-1 text-[10px] text-amber-600 leading-relaxed">
                       ⚠️ Browser ใช้ rtsp:// ไม่ได้โดยตรง — ต้องผ่าน go2rtc ก่อน<br />
                       <span className="text-slate-500">บน Windows (Tailscale): ติดตั้ง go2rtc → ใส่ URL</span>{' '}
-                      <code className="font-mono text-blue-600">http://100.x.x.x:1984/api/stream.mjpeg?src=cam_plate</code><br />
+                      <code className="font-mono text-yellow-700">http://100.x.x.x:1984/api/stream.mjpeg?src=cam_plate</code><br />
                       <span className="text-slate-500">หรือบน Mac นี้:</span>{' '}
                       <code className="font-mono">http://localhost:1984/api/stream.mjpeg?src=cam_plate</code>
                     </p>
@@ -442,7 +516,7 @@ export default function MonitorPage() {
                 <div className="mt-2 pt-2" style={{ borderTop: '1px solid #E8ECF4' }}>
                   <p className="font-semibold text-slate-500 mb-1">ใช้ผ่าน Tailscale (Windows ที่ลานจอดรถ)</p>
                   <p>1. ติดตั้ง go2rtc บน Windows → เปิด port 1984</p>
-                  <p>2. ใส่ URL:<code className="font-mono text-blue-600 ml-1">http://100.x.x.x:1984/api/stream.mjpeg?src=cam_plate</code></p>
+                  <p>2. ใส่ URL:<code className="font-mono text-yellow-700 ml-1">http://100.x.x.x:1984/api/stream.mjpeg?src=cam_plate</code></p>
                   <p className="mt-1 text-slate-400">แทนที่ <code className="font-mono">100.x.x.x</code> ด้วย Tailscale IP ของ Windows</p>
                 </div>
                 <p className="mt-1.5 text-slate-400">URL บันทึกใน MongoDB — ทุกเครื่องเห็นค่าเดียวกัน</p>
@@ -466,8 +540,8 @@ export default function MonitorPage() {
                 </button>
                 <button onClick={saveSettings}
                   disabled={saveStatus === 'saving'}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
-                  style={{ background: 'linear-gradient(135deg,#1E3A8A,#1D4ED8)', boxShadow: '0 2px 8px rgba(29,78,216,0.35)' }}>
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold text-black transition-opacity hover:opacity-90 disabled:opacity-60"
+                  style={{ background: 'linear-gradient(135deg,#713F12,#EAB308)', boxShadow: '0 2px 8px rgba(161,98,7,0.35)' }}>
                   <Save className="size-3.5" />
                   {saveStatus === 'saving' ? 'กำลังบันทึก…' : 'บันทึก'}
                 </button>

@@ -13,7 +13,7 @@ export interface ParkingLog {
 }
 
 export const cardMeta = {
-  car:        { label: 'รถยนต์',      color: 'text-blue-600',   bg: 'bg-blue-50   border-blue-200'   },
+  car:        { label: 'รถยนต์',      color: 'text-yellow-700',   bg: 'bg-yellow-50   border-yellow-200'   },
   motorcycle: { label: 'รถจักรยานยนต์', color: 'text-violet-600', bg: 'bg-violet-50 border-violet-200' },
   overnight:  { label: 'ค้างคืน',     color: 'text-amber-600',  bg: 'bg-amber-50  border-amber-200'  },
 } as const

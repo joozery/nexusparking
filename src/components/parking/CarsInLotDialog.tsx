@@ -12,7 +12,7 @@ interface Stats {
 }
 
 const TYPE_META: Record<CardType, { label: string; icon: typeof Car; color: string }> = {
-  car:        { label: 'รถยนต์',       icon: Car, color: '#1D4ED8' },
+  car:        { label: 'รถยนต์',       icon: Car, color: '#A16207' },
   motorcycle: { label: 'รถจักรยานยนต์', icon: Car, color: '#6D28D9' },
   overnight:  { label: 'ค้างคืน',     icon: Car, color: '#B45309' },
 }
@@ -49,16 +49,16 @@ export function CarsInLotDialog<T extends CarLike>({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-3xl max-h-[85vh] flex flex-col" showCloseButton>
-        <DialogHeader className="bg-gradient-to-r from-blue-700 to-blue-600">
+        <DialogHeader className="bg-gradient-to-r from-yellow-700 to-yellow-600">
           <div className="flex items-center gap-3 px-4 py-2.5">
-            <div className="flex size-7 items-center justify-center rounded-lg bg-white/20 shrink-0">
-              <Car className="size-3.5 text-white" />
+            <div className="flex size-7 items-center justify-center rounded-lg bg-black/10 shrink-0">
+              <Car className="size-3.5 text-black" />
             </div>
             <div>
-              <DialogTitle className="text-white text-sm">
+              <DialogTitle className="text-black text-sm">
                 รถในลาน — {sessions.length} คัน{stats ? ` / ${stats.totalCapacity} ที่จอด` : ''}
               </DialogTitle>
-              <DialogDescription className="text-blue-100 text-xs mt-0">F2 เปิด/ปิดหน้าต่างนี้</DialogDescription>
+              <DialogDescription className="text-black/70 text-xs mt-0">F2 เปิด/ปิดหน้าต่างนี้</DialogDescription>
             </div>
           </div>
         </DialogHeader>

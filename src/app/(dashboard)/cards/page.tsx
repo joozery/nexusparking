@@ -87,7 +87,7 @@ const EXPIRY_META = {
 }
 
 const TYPE_META: Record<CardType, { label: string; icon: typeof Car; color: string; bg: string; grad: string; bgImage?: string }> = {
-  car:        { label: 'รถยนต์',       icon: Car,  color: '#1D4ED8', bg: 'rgba(29,78,216,0.08)',  grad: 'linear-gradient(135deg,#1E3A8A,#2563EB)', bgImage: '/cardbg/car.png' },
+  car:        { label: 'รถยนต์',       icon: Car,  color: '#A16207', bg: 'rgba(161,98,7,0.08)',  grad: 'linear-gradient(135deg,#713F12,#CA8A04)', bgImage: '/cardbg/car.png' },
   motorcycle: { label: 'รถจักรยานยนต์', icon: Bike, color: '#0891B2', bg: 'rgba(8,145,178,0.08)',  grad: 'linear-gradient(135deg,#164E63,#0891B2)', bgImage: '/cardbg/motor.png' },
   overnight:  { label: 'ค้างคืน',     icon: Moon, color: '#7C3AED', bg: 'rgba(124,58,237,0.08)', grad: 'linear-gradient(135deg,#4C1D95,#7C3AED)' },
 }
@@ -111,7 +111,7 @@ function fmtDate(iso: string) {
 }
 
 const inputStyle = { border: '1.5px solid #E8ECF4', background: '#F8FAFF' }
-function focusIn(e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement>)  { e.currentTarget.style.borderColor = '#1D4ED8' }
+function focusIn(e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement>)  { e.currentTarget.style.borderColor = '#A16207' }
 function focusOut(e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement>) { e.currentTarget.style.borderColor = '#E8ECF4' }
 
 export default function CardsPage() {
@@ -343,8 +343,8 @@ export default function CardsPage() {
         <div className="flex items-center justify-between px-6 h-14">
           <div className="flex items-center gap-3">
             <div className="flex size-7 items-center justify-center rounded-lg"
-              style={{ background: 'rgba(29,78,216,0.08)' }}>
-              <CreditCard className="size-3.5" style={{ color: '#1D4ED8' }} />
+              style={{ background: 'rgba(161,98,7,0.08)' }}>
+              <CreditCard className="size-3.5" style={{ color: '#A16207' }} />
             </div>
             <div>
               <h1 className="text-sm font-bold text-slate-900 leading-none">จัดการบัตรจอดรถ</h1>
@@ -357,8 +357,8 @@ export default function CardsPage() {
               <RefreshCw className={`size-3.5 text-slate-400 ${loading ? 'animate-spin' : ''}`} />
             </button>
             <button onClick={() => setShowForm(true)}
-              className="h-8 px-4 rounded-lg text-white text-xs font-semibold flex items-center gap-1.5 hover:opacity-90 transition-opacity"
-              style={{ background: '#1D4ED8', boxShadow: '0 1px 8px rgba(29,78,216,0.3)' }}>
+              className="h-8 px-4 rounded-lg text-black text-xs font-semibold flex items-center gap-1.5 hover:opacity-90 transition-opacity"
+              style={{ background: '#EAB308', boxShadow: '0 1px 8px rgba(161,98,7,0.3)' }}>
               <Plus className="size-3.5" />
               เพิ่มบัตรใหม่
             </button>
@@ -378,8 +378,8 @@ export default function CardsPage() {
           }}>
           <DialogHeader>
             <div className="flex items-center gap-2 px-5 py-3.5"
-              style={{ background: 'rgba(29,78,216,0.04)', borderBottom: '1px solid rgba(29,78,216,0.1)' }}>
-              <Nfc className="size-4" style={{ color: '#1D4ED8' }} />
+              style={{ background: 'rgba(161,98,7,0.04)', borderBottom: '1px solid rgba(161,98,7,0.1)' }}>
+              <Nfc className="size-4" style={{ color: '#A16207' }} />
               <DialogTitle>ลงทะเบียนบัตรใหม่</DialogTitle>
             </div>
           </DialogHeader>
@@ -514,8 +514,8 @@ export default function CardsPage() {
                 ยกเลิก
               </button>
               <button type="submit" disabled={saving || !uid.trim()}
-                className="h-8 px-5 rounded-lg text-xs font-semibold text-white flex items-center gap-1.5 hover:opacity-90 disabled:opacity-50 transition-opacity"
-                style={{ background: '#1D4ED8' }}>
+                className="h-8 px-5 rounded-lg text-xs font-semibold text-black flex items-center gap-1.5 hover:opacity-90 disabled:opacity-50 transition-opacity"
+                style={{ background: '#EAB308' }}>
                 {saving ? <RefreshCw className="size-3 animate-spin" /> : <Check className="size-3" />}
                 {saving ? 'กำลังบันทึก...' : 'บันทึกบัตร'}
               </button>
@@ -529,8 +529,8 @@ export default function CardsPage() {
         <DialogContent className="max-w-md">
           <DialogHeader>
             <div className="flex items-center gap-2 px-5 py-3.5"
-              style={{ background: 'rgba(29,78,216,0.04)', borderBottom: '1px solid rgba(29,78,216,0.1)' }}>
-              <Pencil className="size-4" style={{ color: '#1D4ED8' }} />
+              style={{ background: 'rgba(161,98,7,0.04)', borderBottom: '1px solid rgba(161,98,7,0.1)' }}>
+              <Pencil className="size-4" style={{ color: '#A16207' }} />
               <DialogTitle>แก้ไขบัตร {editCard?.uid}</DialogTitle>
             </div>
           </DialogHeader>
@@ -655,7 +655,7 @@ export default function CardsPage() {
                           )}
                         </div>
                         <label className="h-8 px-3 rounded-lg text-xs font-semibold cursor-pointer flex items-center gap-1.5"
-                          style={{ background: 'white', border: '1px solid #E8ECF4', color: '#1D4ED8' }}>
+                          style={{ background: 'white', border: '1px solid #E8ECF4', color: '#A16207' }}>
                           <ImagePlus className="size-3.5" />
                           {editCard.idCardPhotoPath || ePhotoPreview ? 'เปลี่ยนรูป' : 'อัปโหลดรูป'}
                           <input type="file" accept="image/*" className="hidden" onChange={handleEditPhotoChange} />
@@ -672,8 +672,8 @@ export default function CardsPage() {
                   ยกเลิก
                 </button>
                 <button type="submit" disabled={editSaving || uploadingPhoto}
-                  className="h-8 px-5 rounded-lg text-xs font-semibold text-white flex items-center gap-1.5 hover:opacity-90 disabled:opacity-50 transition-opacity"
-                  style={{ background: '#1D4ED8' }}>
+                  className="h-8 px-5 rounded-lg text-xs font-semibold text-black flex items-center gap-1.5 hover:opacity-90 disabled:opacity-50 transition-opacity"
+                  style={{ background: '#EAB308' }}>
                   {editSaving || uploadingPhoto ? <RefreshCw className="size-3 animate-spin" /> : <Check className="size-3" />}
                   {uploadingPhoto ? 'กำลังอัปโหลดรูป...' : editSaving ? 'กำลังบันทึก...' : 'บันทึกการแก้ไข'}
                 </button>
@@ -692,8 +692,8 @@ export default function CardsPage() {
             <div className="col-span-2 bg-white rounded-xl px-4 py-3 flex items-center gap-3"
               style={{ border: '1px solid #E8ECF4' }}>
               <div className="size-9 rounded-lg flex items-center justify-center shrink-0"
-                style={{ background: 'rgba(29,78,216,0.08)' }}>
-                <CreditCard className="size-4" style={{ color: '#1D4ED8' }} />
+                style={{ background: 'rgba(161,98,7,0.08)' }}>
+                <CreditCard className="size-4" style={{ color: '#A16207' }} />
               </div>
               <div>
                 <p className="text-[10px] text-slate-400">บัตรทั้งหมด</p>
@@ -736,7 +736,7 @@ export default function CardsPage() {
                 placeholder="ค้นหา UID หรือชื่อบัตร..."
                 className="h-8 pl-8 pr-3 rounded-lg text-xs text-slate-700 outline-none w-52"
                 style={{ background: 'white', border: '1px solid #E8ECF4' }}
-                onFocus={e => e.currentTarget.style.borderColor = '#1D4ED8'}
+                onFocus={e => e.currentTarget.style.borderColor = '#A16207'}
                 onBlur={e => e.currentTarget.style.borderColor = '#E8ECF4'} />
             </div>
             <div className="flex items-center flex-wrap rounded-lg p-0.5 gap-0.5" style={{ background: '#F1F5F9' }}>
@@ -745,7 +745,7 @@ export default function CardsPage() {
                   onClick={() => setTypeTab(t.key)}
                   className="h-7 px-3 rounded-md text-[11px] font-semibold transition-all whitespace-nowrap"
                   style={typeTab === t.key
-                    ? { background: 'white', color: '#1D4ED8', boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }
+                    ? { background: 'white', color: '#A16207', boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }
                     : { color: '#94A3B8' }}>
                   {t.label}
                 </button>
@@ -767,7 +767,7 @@ export default function CardsPage() {
               <CreditCard className="size-8 text-slate-200" />
               <p className="text-sm text-slate-400">ยังไม่มีบัตรที่ลงทะเบียน</p>
               <button onClick={() => setShowForm(true)}
-                className="text-xs font-semibold mt-1" style={{ color: '#1D4ED8' }}>
+                className="text-xs font-semibold mt-1" style={{ color: '#A16207' }}>
                 + เพิ่มบัตรแรก
               </button>
             </div>
@@ -873,7 +873,7 @@ export default function CardsPage() {
                               ) : (
                                 <>
                                   <button onClick={() => openEdit(card)}
-                                    className="size-6 rounded-lg flex items-center justify-center hover:bg-blue-50 transition-colors shrink-0"
+                                    className="size-6 rounded-lg flex items-center justify-center hover:bg-yellow-50 transition-colors shrink-0"
                                     style={{ color: '#64748B' }} title="แก้ไขบัตร">
                                     <Pencil className="size-3" />
                                   </button>

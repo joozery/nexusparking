@@ -23,7 +23,7 @@ interface Props {
 
 // ไม่มี "ค้างคืน" ในตัวเลือก — อัตราค้างคืนคำนวณอัตโนมัติตามเวลา ไม่ใช่ประเภทบัตรแยกต่างหากแล้ว
 const TYPE_OPTIONS: { value: CardType; label: string; icon: typeof Car; color: string; bg: string }[] = [
-  { value: 'car',        label: 'รถยนต์',       icon: Car,  color: '#1D4ED8', bg: 'rgba(29,78,216,0.08)'  },
+  { value: 'car',        label: 'รถยนต์',       icon: Car,  color: '#A16207', bg: 'rgba(161,98,7,0.08)'  },
   { value: 'motorcycle', label: 'รถจักรยานยนต์', icon: Bike, color: '#0891B2', bg: 'rgba(8,145,178,0.08)'  },
 ]
 

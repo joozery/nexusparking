@@ -19,8 +19,8 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
         style={{ borderBottom: '1px solid #E8ECF4' }}>
         <div className="flex items-center gap-3">
           <div className="flex size-7 items-center justify-center rounded-lg"
-            style={{ background: 'rgba(29,78,216,0.08)' }}>
-            <Settings className="size-3.5" style={{ color: '#1D4ED8' }} />
+            style={{ background: 'rgba(161,98,7,0.08)' }}>
+            <Settings className="size-3.5" style={{ color: '#A16207' }} />
           </div>
           <div>
             <h1 className="text-sm font-black text-slate-900 leading-none">ตั้งค่าระบบ</h1>
@@ -37,10 +37,10 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
             return (
               <Link key={t.href} href={t.href}
                 className="flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold rounded-t-lg transition-all relative"
-                style={{ color: active ? '#1D4ED8' : '#94A3B8', background: active ? '#F0F2F8' : 'transparent' }}>
+                style={{ color: active ? '#A16207' : '#94A3B8', background: active ? '#F0F2F8' : 'transparent' }}>
                 <Icon className="size-3.5" />
                 {t.label}
-                {active && <span className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full" style={{ background: '#1D4ED8' }} />}
+                {active && <span className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full" style={{ background: '#EAB308' }} />}
               </Link>
             )
           })}

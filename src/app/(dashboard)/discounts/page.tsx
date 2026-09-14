@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Tag, Plus, Pencil, Trash2, ToggleLeft, ToggleRight, X, Check, Moon, Building2 } from 'lucide-react'
+import { Tag, Plus, Pencil, Trash2, ToggleLeft, ToggleRight, X, Check, Moon, Building2, AlertOctagon } from 'lucide-react'
 
 interface Discount {
   _id: string
@@ -13,9 +13,22 @@ interface Discount {
   description?: string
 }
 
+interface Fine {
+  _id: string
+  name: string
+  fineType: 'after_hours'
+  amount: number
+  isActive: boolean
+  description?: string
+}
+
 const emptyForm = {
   name: '', discountType: 'fixed' as 'fixed' | 'percent' | 'per_day',
   discountValue: '', maxDiscount: '', description: '', isActive: true,
+}
+
+const emptyFineForm = {
+  name: '', amount: '', description: '', isActive: true,
 }
 
 export default function DiscountsPage() {
@@ -95,6 +108,74 @@ export default function DiscountsPage() {
     await fetchDiscounts()
   }
 
+  // ── ค่าปรับนอกเวลา ──────────────────────────────────────────
+  const [fines,        setFines]        = useState<Fine[]>([])
+  const [loadingFines, setLoadingFines] = useState(true)
+  const [showFineForm, setShowFineForm] = useState(false)
+  const [editingFine,  setEditingFine]  = useState<Fine | null>(null)
+  const [fineForm,     setFineForm]     = useState(emptyFineForm)
+  const [savingFine,   setSavingFine]   = useState(false)
+  const [deleteFineId, setDeleteFineId] = useState<string | null>(null)
+
+  const fetchFines = useCallback(async () => {
+    setLoadingFines(true)
+    const res = await fetch('/api/fines')
+    setFines(await res.json())
+    setLoadingFines(false)
+  }, [])
+
+  useEffect(() => { fetchFines() }, [fetchFines])
+
+  function openCreateFine() {
+    setEditingFine(null)
+    setFineForm(emptyFineForm)
+    setShowFineForm(true)
+  }
+
+  function openEditFine(f: Fine) {
+    setEditingFine(f)
+    setFineForm({ name: f.name, amount: String(f.amount), description: f.description ?? '', isActive: f.isActive })
+    setShowFineForm(true)
+  }
+
+  async function handleSaveFine() {
+    if (!fineForm.name || !fineForm.amount) return
+    setSavingFine(true)
+    const body = {
+      name: fineForm.name,
+      fineType: 'after_hours' as const,
+      amount: Number(fineForm.amount),
+      description: fineForm.description || undefined,
+      isActive: fineForm.isActive,
+    }
+    if (editingFine) {
+      await fetch(`/api/fines/${editingFine._id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+      })
+    } else {
+      await fetch('/api/fines', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+      })
+    }
+    setSavingFine(false)
+    setShowFineForm(false)
+    await fetchFines()
+  }
+
+  async function toggleFineActive(f: Fine) {
+    await fetch(`/api/fines/${f._id}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ isActive: !f.isActive }),
+    })
+    await fetchFines()
+  }
+
+  async function handleDeleteFine(id: string) {
+    await fetch(`/api/fines/${id}`, { method: 'DELETE' })
+    setDeleteFineId(null)
+    await fetchFines()
+  }
+
   function fmtDiscount(d: Discount) {
     if (d.discountType === 'fixed')   return `ลด ฿${d.discountValue}`
     if (d.discountType === 'per_day') return `ลด ฿${d.discountValue}/คืน`
@@ -150,6 +231,48 @@ export default function DiscountsPage() {
     )
   }
 
+  function FineCard({ f }: { f: Fine }) {
+    return (
+      <div
+        className="bg-white rounded-2xl px-5 py-4 flex items-center gap-4"
+        style={{ border: '1px solid #E8ECF4', boxShadow: '0 1px 4px rgba(0,0,0,0.04)', opacity: f.isActive ? 1 : 0.55 }}>
+        <div className="size-10 rounded-xl flex items-center justify-center shrink-0"
+          style={{ background: f.isActive ? 'rgba(220,38,38,0.1)' : '#F1F5F9' }}>
+          <AlertOctagon className="size-4" style={{ color: f.isActive ? '#DC2626' : '#94A3B8' }} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <p className="font-black text-slate-900">{f.name}</p>
+            {f.isActive
+              ? <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full"
+                  style={{ background: 'rgba(5,150,105,0.1)', color: '#059669' }}>ใช้งานอยู่</span>
+              : <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full"
+                  style={{ background: '#F1F5F9', color: '#94A3B8' }}>ปิดใช้งาน</span>}
+          </div>
+          <p className="text-sm font-bold mt-0.5" style={{ color: '#DC2626' }}>ปรับ ฿{f.amount}</p>
+          {f.description && <p className="text-xs text-slate-400 mt-0.5">{f.description}</p>}
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <button onClick={() => toggleFineActive(f)}
+            className="size-8 rounded-lg flex items-center justify-center transition-colors hover:bg-slate-100"
+            title={f.isActive ? 'ปิดใช้งาน' : 'ใช้ค่าปรับนี้'}>
+            {f.isActive
+              ? <ToggleRight className="size-5" style={{ color: '#059669' }} />
+              : <ToggleLeft className="size-5 text-slate-300" />}
+          </button>
+          <button onClick={() => openEditFine(f)}
+            className="size-8 rounded-lg flex items-center justify-center transition-colors hover:bg-slate-100">
+            <Pencil className="size-3.5 text-slate-400" />
+          </button>
+          <button onClick={() => setDeleteFineId(f._id)}
+            className="size-8 rounded-lg flex items-center justify-center transition-colors hover:bg-red-50">
+            <Trash2 className="size-3.5 text-red-400" />
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <>
       <header className="shrink-0 h-14 bg-white flex items-center justify-between px-6"
@@ -160,8 +283,8 @@ export default function DiscountsPage() {
             <Tag className="size-3.5" style={{ color: '#EA580C' }} />
           </div>
           <div>
-            <h1 className="text-sm font-black text-slate-900">จัดการส่วนลด</h1>
-            <p className="text-[10px] text-slate-400 mt-0.5">ร้านค้าพาร์ทเนอร์ และส่วนลดรายคืนสำหรับโรงแรม</p>
+            <h1 className="text-sm font-black text-slate-900">จัดการส่วนลด / ค่าปรับ</h1>
+            <p className="text-[10px] text-slate-400 mt-0.5">ร้านค้าพาร์ทเนอร์ ส่วนลดรายคืนสำหรับโรงแรม และค่าปรับนอกเวลา</p>
           </div>
         </div>
       </header>
@@ -240,6 +363,43 @@ export default function DiscountsPage() {
             </div>
           </>
         )}
+
+        {/* ── ค่าปรับนอกเวลา ── */}
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <div className="size-7 rounded-lg flex items-center justify-center"
+                style={{ background: 'rgba(220,38,38,0.08)' }}>
+                <AlertOctagon className="size-3.5" style={{ color: '#DC2626' }} />
+              </div>
+              <div>
+                <p className="text-sm font-black text-slate-800">ค่าปรับนอกเวลา</p>
+                <p className="text-[10px] text-slate-400">คิดเพิ่มจากค่าจอดปกติ เมื่อรับรถออกนอกเวลาทำการ — ใช้ได้ครั้งละ 1 รายการเท่านั้น</p>
+              </div>
+            </div>
+            <button onClick={openCreateFine}
+              className="flex items-center gap-1.5 h-8 px-3 rounded-lg text-xs font-bold text-white transition-all hover:opacity-90"
+              style={{ background: 'linear-gradient(135deg,#991B1B,#DC2626)', boxShadow: '0 2px 8px rgba(220,38,38,0.35)' }}>
+              <Plus className="size-3.5" /> เพิ่มค่าปรับ
+            </button>
+          </div>
+
+          {loadingFines ? (
+            <div className="flex items-center justify-center h-28">
+              <div className="size-5 rounded-full border-2 border-red-400 border-t-transparent animate-spin" />
+            </div>
+          ) : fines.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-28 gap-2 rounded-2xl"
+              style={{ border: '1.5px dashed #E8ECF4' }}>
+              <AlertOctagon className="size-8 text-slate-200" />
+              <p className="text-xs text-slate-400">ยังไม่มีค่าปรับนอกเวลา</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-3 max-w-2xl">
+              {fines.map(f => <FineCard key={f._id} f={f} />)}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* ── Form Modal ── */}
@@ -382,6 +542,102 @@ export default function DiscountsPage() {
                 ยกเลิก
               </button>
               <button onClick={() => handleDelete(deleteId)}
+                className="flex-1 h-10 rounded-xl text-sm font-black text-white"
+                style={{ background: '#DC2626' }}>
+                ลบ
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Fine Form Modal ── */}
+      {showFineForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center"
+          style={{ background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)' }}>
+          <div className="bg-white rounded-3xl w-full max-w-sm mx-4 overflow-hidden shadow-2xl">
+
+            <div className="px-6 py-5 flex items-center justify-between"
+              style={{ background: 'linear-gradient(135deg,#991B1B,#DC2626)' }}>
+              <p className="text-white font-black">{editingFine ? 'แก้ไขค่าปรับ' : 'เพิ่มค่าปรับนอกเวลา'}</p>
+              <button onClick={() => setShowFineForm(false)}
+                className="size-8 rounded-lg flex items-center justify-center"
+                style={{ background: 'rgba(255,255,255,0.15)' }}>
+                <X className="size-4 text-white" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              <div>
+                <label className="block text-xs font-black text-slate-700 mb-1.5">ชื่อค่าปรับ</label>
+                <input value={fineForm.name} onChange={e => setFineForm(f => ({ ...f, name: e.target.value }))}
+                  placeholder="เช่น ค่าปรับนอกเวลา 2026"
+                  className="w-full h-10 rounded-xl px-3 text-sm text-slate-800 outline-none"
+                  style={{ border: '2px solid #E2E8F0', background: '#FAFBFF' }}
+                  onFocus={e => { e.currentTarget.style.borderColor = '#DC2626' }}
+                  onBlur={e => { e.currentTarget.style.borderColor = '#E2E8F0' }} />
+              </div>
+
+              <div>
+                <label className="block text-xs font-black text-slate-700 mb-1.5">ค่าปรับ (บาท)</label>
+                <input type="number" min="0" value={fineForm.amount}
+                  onChange={e => setFineForm(f => ({ ...f, amount: e.target.value }))}
+                  placeholder="0"
+                  className="w-full h-10 rounded-xl px-3 text-sm font-black text-slate-800 outline-none"
+                  style={{ border: '2px solid #E2E8F0', background: '#FAFBFF' }}
+                  onFocus={e => { e.currentTarget.style.borderColor = '#DC2626' }}
+                  onBlur={e => { e.currentTarget.style.borderColor = '#E2E8F0' }} />
+              </div>
+
+              <div>
+                <label className="block text-xs font-black text-slate-700 mb-1.5">หมายเหตุ (ไม่บังคับ)</label>
+                <input value={fineForm.description} onChange={e => setFineForm(f => ({ ...f, description: e.target.value }))}
+                  placeholder="เช่น ปรับตามประกาศ 1 ม.ค. 2026"
+                  className="w-full h-10 rounded-xl px-3 text-sm text-slate-800 outline-none"
+                  style={{ border: '2px solid #E2E8F0', background: '#FAFBFF' }}
+                  onFocus={e => { e.currentTarget.style.borderColor = '#DC2626' }}
+                  onBlur={e => { e.currentTarget.style.borderColor = '#E2E8F0' }} />
+              </div>
+
+              {fineForm.isActive && (
+                <p className="text-[10px] text-slate-400 flex items-center gap-1">
+                  <AlertOctagon className="size-3" /> บันทึกแล้วจะใช้งานทันที และปิดค่าปรับนอกเวลาอันอื่นให้อัตโนมัติ
+                </p>
+              )}
+
+              <div className="flex gap-2 pt-1">
+                <button onClick={() => setShowFineForm(false)}
+                  className="flex-1 h-11 rounded-xl text-sm font-bold text-slate-600"
+                  style={{ background: '#F1F5F9', border: '1px solid #E2E8F0' }}>
+                  ยกเลิก
+                </button>
+                <button onClick={handleSaveFine} disabled={savingFine || !fineForm.name || !fineForm.amount}
+                  className="flex-1 h-11 rounded-xl text-sm font-black text-white disabled:opacity-40 flex items-center justify-center gap-2"
+                  style={{ background: 'linear-gradient(135deg,#991B1B,#DC2626)' }}>
+                  <Check className="size-4" />
+                  {savingFine ? 'กำลังบันทึก...' : 'บันทึก'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Confirm Delete Fine ── */}
+      {deleteFineId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center"
+          style={{ background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)' }}>
+          <div className="bg-white rounded-2xl w-full max-w-xs mx-4 p-6 shadow-2xl text-center">
+            <Trash2 className="size-10 mx-auto mb-3 text-red-400" />
+            <p className="font-black text-slate-900">ลบค่าปรับนี้?</p>
+            <p className="text-sm text-slate-400 mt-1">ไม่สามารถกู้คืนได้</p>
+            <div className="flex gap-2 mt-5">
+              <button onClick={() => setDeleteFineId(null)}
+                className="flex-1 h-10 rounded-xl text-sm font-bold text-slate-600"
+                style={{ background: '#F1F5F9' }}>
+                ยกเลิก
+              </button>
+              <button onClick={() => handleDeleteFine(deleteFineId)}
                 className="flex-1 h-10 rounded-xl text-sm font-black text-white"
                 style={{ background: '#DC2626' }}>
                 ลบ

@@ -6,6 +6,16 @@ import {
   ChevronDown, ChevronUp, Car, Bike, Moon,
   RefreshCw, CalendarDays, User, Tag,
 } from 'lucide-react'
+import { calcFeeBreakdown, type OvernightConfig, type AfterHoursConfig } from '@/lib/calcFee'
+
+const ENTRY_TYPE_META = {
+  car:                 { label: 'รถยนต์',            icon: Car,  color: '#A16207' },
+  motorcycle:          { label: 'มอเตอร์ไซค์',        icon: Bike, color: '#0891B2' },
+  overnightCar:        { label: 'ค้างคืนรถยนต์',      icon: Moon, color: '#CA8A04' },
+  overnightMotorcycle: { label: 'ค้างคืนมอเตอร์ไซค์', icon: Moon, color: '#7C3AED' },
+} as const
+
+type EntryTypeKey = keyof typeof ENTRY_TYPE_META
 
 interface Shift {
   _id: string
@@ -53,7 +63,7 @@ interface OperatorGroup {
 }
 
 const TYPE_META = {
-  car:        { label: 'รถยนต์',       icon: Car,  color: '#1D4ED8' },
+  car:        { label: 'รถยนต์',       icon: Car,  color: '#A16207' },
   motorcycle: { label: 'รถจักรยานยนต์', icon: Bike, color: '#6D28D9' },
   overnight:  { label: 'ค้างคืน',     icon: Moon, color: '#B45309' },
 }
@@ -83,6 +93,17 @@ function shiftDuration(start: string, end?: string) {
 function ShiftSessionTable({ shift }: { shift: Shift }) {
   const [sessions, setSessions] = useState<Session[]>([])
   const [loading, setLoading] = useState(true)
+  const [feeConfig, setFeeConfig] = useState<{ overnight: OvernightConfig; afterHours: AfterHoursConfig } | null>(null)
+
+  useEffect(() => {
+    fetch('/api/settings').then(r => r.ok ? r.json() : null).then(d => {
+      if (!d) return
+      setFeeConfig({
+        overnight:  d.rates.overnight,
+        afterHours: { start: d.businessHours.close, end: d.businessHours.open, fine: d.afterHoursFine },
+      })
+    })
+  }, [])
 
   useEffect(() => {
     // query แบบ shiftId ก่อน ถ้าไม่เจอ fallback เป็น time range
@@ -117,8 +138,50 @@ function ShiftSessionTable({ shift }: { shift: Shift }) {
     <div className="py-6 text-center text-xs text-slate-300">ไม่มีรายการในกะนี้</div>
   )
 
+  const entryBreakdown: Record<EntryTypeKey, { in: number; out: number }> = {
+    car: { in: 0, out: 0 }, motorcycle: { in: 0, out: 0 },
+    overnightCar: { in: 0, out: 0 }, overnightMotorcycle: { in: 0, out: 0 },
+  }
+  if (feeConfig) {
+    for (const s of sessions) {
+      const isCar = s.cardType !== 'motorcycle'
+      const breakdown = calcFeeBreakdown(
+        s.cardType, new Date(s.entryTime), s.exitTime ? new Date(s.exitTime) : new Date(),
+        feeConfig.overnight, feeConfig.afterHours,
+      )
+      const isOvernight = breakdown.segments.some(seg => seg.kind === 'overnight')
+      const key: EntryTypeKey = isCar
+        ? (isOvernight ? 'overnightCar' : 'car')
+        : (isOvernight ? 'overnightMotorcycle' : 'motorcycle')
+      entryBreakdown[key].in += 1
+      if (s.exitTime) entryBreakdown[key].out += 1
+    }
+  }
+
   return (
-    <div className="overflow-x-auto">
+    <div>
+      {feeConfig && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 px-4 py-3"
+          style={{ background: '#FAFBFF', borderBottom: '1px solid #F1F5F9' }}>
+          {(Object.keys(ENTRY_TYPE_META) as EntryTypeKey[]).map(key => {
+            const meta = ENTRY_TYPE_META[key]
+            const Icon = meta.icon
+            const { in: inCount, out: outCount } = entryBreakdown[key]
+            return (
+              <div key={key} className="flex items-center gap-2 min-w-0">
+                <Icon className="size-3.5 shrink-0" style={{ color: meta.color }} />
+                <div className="min-w-0">
+                  <p className="text-[9px] font-semibold text-slate-400 truncate">{meta.label}</p>
+                  <p className="text-xs font-black" style={{ color: meta.color }}>
+                    เข้า {inCount} <span className="text-slate-300 mx-0.5">/</span> ออก {outCount}
+                  </p>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+      <div className="overflow-x-auto">
       <table className="w-full text-xs">
         <thead>
           <tr style={{ background: '#F8FAFF' }}>
@@ -201,7 +264,7 @@ function ShiftSessionTable({ shift }: { shift: Shift }) {
                       ? { background: 'rgba(16,185,129,0.1)', color: '#065F46' }
                       : s.status === 'lost'
                       ? { background: 'rgba(245,158,11,0.1)', color: '#92400E' }
-                      : { background: 'rgba(29,78,216,0.08)', color: '#1D4ED8' }}>
+                      : { background: 'rgba(161,98,7,0.08)', color: '#A16207' }}>
                     {s.status === 'active' ? 'จอดอยู่' : s.status === 'lost' ? 'บัตรหาย' : 'เสร็จแล้ว'}
                   </span>
                 </td>
@@ -210,6 +273,7 @@ function ShiftSessionTable({ shift }: { shift: Shift }) {
           })}
         </tbody>
       </table>
+      </div>
     </div>
   )
 }
@@ -248,7 +312,7 @@ function ShiftItem({ shift }: { shift: Shift }) {
           </div>
           <div>
             <p className="text-[9px] text-slate-400">รถเข้า</p>
-            <p className="text-sm font-black" style={{ color: '#1D4ED8' }}>{shift.checkinsCount}</p>
+            <p className="text-sm font-black" style={{ color: '#A16207' }}>{shift.checkinsCount}</p>
           </div>
           <div>
             <p className="text-[9px] text-slate-400">รถออก</p>
@@ -284,7 +348,7 @@ function ShiftItem({ shift }: { shift: Shift }) {
           </div>
           {shift.closingFloat > 0 && (
             <div className="px-2.5 py-1 rounded-lg" style={{ background: 'rgba(109,40,217,0.07)' }}>
-              <p className="text-[9px] font-semibold" style={{ color: '#6D28D9' }}>ส่ง till</p>
+              <p className="text-[9px] font-semibold" style={{ color: '#6D28D9' }}>เงินปิดกะ</p>
               <p className="text-sm font-black" style={{ color: '#6D28D9' }}>฿{shift.closingFloat}</p>
             </div>
           )}
@@ -405,7 +469,7 @@ function OperatorCard({ group }: { group: OperatorGroup }) {
 
             const slotStyle: Record<Slot, { bg: string; color: string; pillBg: string }> = {
               'กะเช้า': { bg: 'rgba(251,191,36,0.07)', color: '#92400E', pillBg: 'rgba(251,191,36,0.15)' },
-              'กะบ่าย': { bg: 'rgba(59,130,246,0.07)', color: '#1D4ED8', pillBg: 'rgba(59,130,246,0.14)' },
+              'กะบ่าย': { bg: 'rgba(234,179,8,0.07)', color: '#A16207', pillBg: 'rgba(234,179,8,0.14)' },
               'กะดึก':  { bg: 'rgba(109,40,217,0.07)', color: '#6D28D9', pillBg: 'rgba(109,40,217,0.14)' },
             }
 
@@ -540,8 +604,8 @@ export default function ShiftsPage() {
         style={{ borderBottom: '1px solid #E8ECF4' }}>
         <div className="flex items-center gap-3">
           <div className="size-7 rounded-lg flex items-center justify-center"
-            style={{ background: 'rgba(29,78,216,0.08)' }}>
-            <Clock className="size-3.5" style={{ color: '#1D4ED8' }} />
+            style={{ background: 'rgba(161,98,7,0.08)' }}>
+            <Clock className="size-3.5" style={{ color: '#A16207' }} />
           </div>
           <div>
             <h1 className="text-sm font-black text-slate-900">รายงานกะ</h1>
@@ -569,18 +633,18 @@ export default function ShiftsPage() {
 
         {/* ══ Grand Total Panel ══ */}
         <div className="shrink-0 rounded-2xl overflow-hidden"
-          style={{ background: 'linear-gradient(135deg, #0F172A 0%, #1E3A8A 60%, #1D4ED8 100%)', boxShadow: '0 4px 24px rgba(29,78,216,0.25)' }}>
+          style={{ background: 'linear-gradient(135deg, #0A0A0A 0%, #713F12 60%, #A16207 100%)', boxShadow: '0 4px 24px rgba(161,98,7,0.25)' }}>
 
           <div className="px-6 py-4 flex items-center justify-between" style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
             <div>
               <p className="text-white font-black text-base">สรุปรวมทุกกะ</p>
-              <p className="text-blue-300 text-xs mt-0.5">
+              <p className="text-yellow-300 text-xs mt-0.5">
                 {groups.length} operator · {shifts.length} กะ
                 {(dateFrom || dateTo) && ` · ช่วงวันที่เลือก`}
               </p>
             </div>
             <div className="text-right">
-              <p className="text-blue-300 text-[10px] font-semibold uppercase tracking-widest">รายได้รวมทั้งสิ้น</p>
+              <p className="text-yellow-300 text-[10px] font-semibold uppercase tracking-widest">รายได้รวมทั้งสิ้น</p>
               <p className="text-white font-black text-3xl tabular-nums">฿{grand.total.toLocaleString()}</p>
             </div>
           </div>
@@ -592,10 +656,10 @@ export default function ShiftsPage() {
               { label: 'เงินสด',      value: `฿${grand.cash.toLocaleString()}`, unit: '',   icon: Banknote, dim: false },
               { label: 'โอนเงิน',    value: `฿${grand.qr.toLocaleString()}`,   unit: '',   icon: Smartphone, dim: false },
               { label: 'ต้นกะรวม',   value: `฿${grand.opening.toLocaleString()}`, unit: '', icon: Banknote, dim: true },
-              { label: 'ส่ง till รวม', value: `฿${grand.closing.toLocaleString()}`, unit: '', icon: Banknote, dim: true },
+              { label: 'เงินปิดกะรวม', value: `฿${grand.closing.toLocaleString()}`, unit: '', icon: Banknote, dim: true },
             ].map(({ label, value, unit, icon: Icon, dim }) => (
               <div key={label} className="px-4 py-3 text-center">
-                <p className={`text-[10px] font-semibold ${dim ? 'text-blue-400/60' : 'text-blue-300'}`}>{label}</p>
+                <p className={`text-[10px] font-semibold ${dim ? 'text-yellow-400/60' : 'text-yellow-300'}`}>{label}</p>
                 <p className={`text-base font-black mt-0.5 tabular-nums ${dim ? 'text-white/50' : 'text-white'}`}>
                   {value}{unit && <span className="text-xs ml-0.5">{unit}</span>}
                 </p>

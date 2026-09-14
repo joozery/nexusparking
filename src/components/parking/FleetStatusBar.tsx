@@ -52,9 +52,9 @@ function FleetRow({ type, label, accent, bg, stats }: {
         <span className="text-[10px] font-black text-white text-center leading-tight">{label}</span>
       </div>
       <div className="flex-1 flex items-center overflow-x-auto" style={{ background: `${accent}06`, scrollbarWidth: 'none' }}>
-        <Stat label="เข้าวันนี้" value={stats.inToday} icon={LogIn} color="#2563EB" />
+        <Stat label="เข้าวันนี้" value={stats.inToday} icon={LogIn} color="#A16207" />
         <Divider />
-        <Stat label="ออกวันนี้" value={stats.outToday} icon={LogOut} color="#2563EB" />
+        <Stat label="ออกวันนี้" value={stats.outToday} icon={LogOut} color="#A16207" />
         <Divider />
         <Stat label="คงเหลือ" value={stats.activeTotal} icon={Icon} color={accent} />
         <Divider />

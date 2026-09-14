@@ -13,16 +13,16 @@ export function QuickActions({ onCheckIn, onCheckOut, onLostCard }: Props) {
 
       <button
         onClick={onCheckIn}
-        className="w-full flex items-center gap-4 p-4 rounded-xl bg-white border-2 border-slate-200 hover:border-blue-400 hover:bg-blue-50/40 transition-all group shadow-sm active:scale-[0.98]"
+        className="w-full flex items-center gap-4 p-4 rounded-xl bg-white border-2 border-slate-200 hover:border-yellow-400 hover:bg-yellow-50/40 transition-all group shadow-sm active:scale-[0.98]"
       >
-        <div className="flex size-14 shrink-0 items-center justify-center rounded-lg bg-blue-600 text-white shadow-lg shadow-blue-500/30 group-hover:shadow-blue-500/50 transition-shadow">
+        <div className="flex size-14 shrink-0 items-center justify-center rounded-lg bg-yellow-600 text-black shadow-lg shadow-yellow-500/30 group-hover:shadow-yellow-500/50 transition-shadow">
           <LogIn className="size-7" />
         </div>
         <div className="text-left flex-1">
           <p className="text-base font-bold text-slate-800">รถเข้า (Check In)</p>
           <p className="text-xs text-slate-500 mt-0.5">สแกนบัตร → กรอกทะเบียน → เปิดไม้กั้น</p>
         </div>
-        <ChevronRight className="size-4 text-slate-300 group-hover:text-blue-500 transition-colors" />
+        <ChevronRight className="size-4 text-slate-300 group-hover:text-yellow-700 transition-colors" />
       </button>
 
       <button
@@ -58,7 +58,7 @@ export function QuickActions({ onCheckIn, onCheckOut, onLostCard }: Props) {
         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-3">อัตราค่าบริการ</p>
         <div className="space-y-2.5">
           {[
-            { icon: Car,  label: 'รถยนต์',      rate: '30 ฿ ชม.แรก • 20 ฿ / ชม.ต่อไป', color: 'text-blue-600'   },
+            { icon: Car,  label: 'รถยนต์',      rate: '30 ฿ ชม.แรก • 20 ฿ / ชม.ต่อไป', color: 'text-yellow-700'   },
             { icon: Bike, label: 'รถจักรยานยนต์', rate: '20 ฿ ชม.แรก • 10 ฿ / ชม.ต่อไป', color: 'text-violet-600' },
             { icon: Moon, label: 'ค้างคืน',      rate: '100 ฿ เหมา (18:00 – 07:00)',    color: 'text-amber-600'  },
           ].map(({ icon: Icon, label, rate, color }) => (

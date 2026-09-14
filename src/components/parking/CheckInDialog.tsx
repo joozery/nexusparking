@@ -57,14 +57,14 @@ export function CheckInDialog({
         }}
       >
 
-        <DialogHeader className="bg-gradient-to-r from-blue-600 to-blue-500">
+        <DialogHeader className="bg-gradient-to-r from-yellow-600 to-yellow-500">
           <div className="flex items-center gap-3 px-4 py-3">
-            <div className="flex size-8 items-center justify-center rounded-lg bg-white/20 shrink-0">
-              <LogIn className="size-4 text-white" />
+            <div className="flex size-8 items-center justify-center rounded-lg bg-black/10 shrink-0">
+              <LogIn className="size-4 text-black" />
             </div>
             <div>
-              <DialogTitle className="text-white text-sm">ขาเข้า</DialogTitle>
-              <DialogDescription className="text-blue-100 text-xs mt-0">แตะบัตรที่เครื่องอ่าน แล้วกรอกทะเบียน</DialogDescription>
+              <DialogTitle className="text-black text-sm">ขาเข้า</DialogTitle>
+              <DialogDescription className="text-black/70 text-xs mt-0">แตะบัตรที่เครื่องอ่าน แล้วกรอกทะเบียน</DialogDescription>
             </div>
           </div>
         </DialogHeader>
@@ -74,15 +74,15 @@ export function CheckInDialog({
             <div className="flex flex-col items-center gap-3">
               <div
                 onClick={onSimulateScan}
-                className="w-full cursor-pointer flex flex-col items-center gap-2 p-5 rounded-lg border-2 border-dashed border-blue-200 bg-blue-50 hover:bg-blue-100 hover:border-blue-400 transition-all active:scale-[0.98]"
+                className="w-full cursor-pointer flex flex-col items-center gap-2 p-5 rounded-lg border-2 border-dashed border-yellow-200 bg-yellow-50 hover:bg-yellow-100 hover:border-yellow-400 transition-all active:scale-[0.98]"
               >
-                <div className="flex size-12 items-center justify-center rounded-lg bg-blue-600 shadow-md shadow-blue-500/30 animate-pulse">
-                  <CreditCard className="size-6 text-white" />
+                <div className="flex size-12 items-center justify-center rounded-lg bg-yellow-600 shadow-md shadow-yellow-500/30 animate-pulse">
+                  <CreditCard className="size-6 text-black" />
                 </div>
                 <div className="text-center">
-                  <p className="text-sm font-bold text-blue-800">รอการสแกนบัตร...</p>
-                  <p className="text-xs text-blue-500 mt-0.5">แตะบัตรที่เครื่องอ่านบัตร (Card Reader)</p>
-                  <p className="text-[10px] text-blue-400 mt-1.5 border border-blue-200 px-2 py-0.5 rounded-full bg-white/60 inline-block">คลิกจำลองการสแกน</p>
+                  <p className="text-sm font-bold text-yellow-800">รอการสแกนบัตร...</p>
+                  <p className="text-xs text-yellow-700 mt-0.5">แตะบัตรที่เครื่องอ่านบัตร (Card Reader)</p>
+                  <p className="text-[10px] text-yellow-400 mt-1.5 border border-yellow-200 px-2 py-0.5 rounded-full bg-white/60 inline-block">คลิกจำลองการสแกน</p>
                 </div>
               </div>
 
@@ -172,7 +172,7 @@ export function CheckInDialog({
               <Button variant="outline" size="sm" onClick={onBack}>← ย้อนกลับ</Button>
               <Button
                 size="sm"
-                className="bg-blue-600 hover:bg-blue-700 text-white flex-1"
+                className="bg-yellow-600 hover:bg-yellow-700 text-black flex-1"
                 disabled={plate.length !== 4}
                 onClick={onConfirm}
               >

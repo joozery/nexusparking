@@ -53,14 +53,14 @@ function exitIsDaytime(exitIso: string, cfg: OvernightConfig): boolean {
 }
 
 const KIND_STYLE: Record<FeeSegment['kind'], { bg: string; border: string; label: string; color: string }> = {
-  normal:       { bg: 'rgba(29,78,216,0.04)',  border: 'rgba(29,78,216,0.12)',  label: 'ปกติ',         color: '#1D4ED8' },
+  normal:       { bg: 'rgba(161,98,7,0.04)',  border: 'rgba(161,98,7,0.12)',  label: 'ปกติ',         color: '#A16207' },
   outside:      { bg: 'rgba(217,119,6,0.05)',  border: 'rgba(217,119,6,0.15)',  label: 'นอกช่วง',      color: '#B45309' },
   overnight:    { bg: 'rgba(109,40,217,0.05)', border: 'rgba(109,40,217,0.15)', label: 'ค้างคืน',      color: '#6D28D9' },
   'after-hours':{ bg: 'rgba(220,38,38,0.05)',  border: 'rgba(220,38,38,0.15)',  label: 'นอกเวลาทำการ', color: '#DC2626' },
 }
 
 const TYPE_META: Record<CardType, { label: string; icon: typeof Car; color: string }> = {
-  car:        { label: 'รถยนต์',       icon: Car,  color: '#1D4ED8' },
+  car:        { label: 'รถยนต์',       icon: Car,  color: '#A16207' },
   motorcycle: { label: 'รถจักรยานยนต์', icon: Bike, color: '#6D28D9' },
   overnight:  { label: 'ค้างคืน',     icon: Moon, color: '#B45309' },
 }
@@ -151,7 +151,7 @@ function FeeCalculator({ overnightCfg, discounts }: { overnightCfg: OvernightCon
               <button key={t} onClick={() => setCardType(t)}
                 className="flex items-center justify-center gap-2 h-10 rounded-xl text-xs font-bold transition-all"
                 style={active
-                  ? { background: `rgba(${t === 'car' ? '29,78,216' : t === 'motorcycle' ? '109,40,217' : '180,83,9'},0.1)`, border: `2px solid ${m.color}`, color: m.color }
+                  ? { background: `rgba(${t === 'car' ? '161,98,7' : t === 'motorcycle' ? '109,40,217' : '180,83,9'},0.1)`, border: `2px solid ${m.color}`, color: m.color }
                   : { background: '#F8FAFF', border: '2px solid #E2E8F0', color: '#64748B' }}>
                 <Icon className="size-3.5" />
                 {m.label}
@@ -181,9 +181,9 @@ function FeeCalculator({ overnightCfg, discounts }: { overnightCfg: OvernightCon
         {/* Daytime exit note */}
         {showDaytimeNote && (
           <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg"
-            style={{ background: 'rgba(29,78,216,0.04)', border: '1px solid rgba(29,78,216,0.15)' }}>
-            <Info className="size-3.5 shrink-0 mt-0.5" style={{ color: '#1D4ED8' }} />
-            <p className="text-[10px] font-medium" style={{ color: '#1D4ED8' }}>
+            style={{ background: 'rgba(161,98,7,0.04)', border: '1px solid rgba(161,98,7,0.15)' }}>
+            <Info className="size-3.5 shrink-0 mt-0.5" style={{ color: '#A16207' }} />
+            <p className="text-[10px] font-medium" style={{ color: '#A16207' }}>
               ออกก่อน {overnightCfg?.windowStart} — คิดเรทปกติ ไม่มีค่าเหมาค้างคืน แม้รถจะค้างข้ามวัน
             </p>
           </div>
@@ -283,7 +283,7 @@ function FeeCalculator({ overnightCfg, discounts }: { overnightCfg: OvernightCon
                 ) : (
                   <tr style={{ background: '#F0F2F8', borderTop: '2px solid #E8ECF4' }}>
                     <td colSpan={3} className="px-3 py-3 font-black text-slate-700 text-xs">รวมทั้งหมด</td>
-                    <td className="px-3 py-3 text-right text-lg font-black" style={{ color: '#1D4ED8' }}>฿{breakdown.total}</td>
+                    <td className="px-3 py-3 text-right text-lg font-black" style={{ color: '#A16207' }}>฿{breakdown.total}</td>
                   </tr>
                 )}
               </tfoot>
@@ -432,7 +432,7 @@ function BatchSeed({ overnightCfg }: { overnightCfg: OvernightConfig | null }) {
               <button key={t} onClick={() => setCardType(t)}
                 className="flex items-center justify-center gap-1.5 h-9 rounded-lg text-[10px] font-bold transition-all"
                 style={active
-                  ? { background: `rgba(${t === 'car' ? '29,78,216' : t === 'motorcycle' ? '109,40,217' : '180,83,9'},0.1)`, border: `1.5px solid ${m.color}`, color: m.color }
+                  ? { background: `rgba(${t === 'car' ? '161,98,7' : t === 'motorcycle' ? '109,40,217' : '180,83,9'},0.1)`, border: `1.5px solid ${m.color}`, color: m.color }
                   : { background: '#F8FAFF', border: '1.5px solid #E2E8F0', color: '#94A3B8' }}>
                 <Icon className="size-3" />{m.label}
               </button>
@@ -486,9 +486,9 @@ function BatchSeed({ overnightCfg }: { overnightCfg: OvernightConfig | null }) {
 
         {formExitIsDaytime && (
           <div className="flex items-center gap-2 px-3 py-2 rounded-lg"
-            style={{ background: 'rgba(29,78,216,0.04)', border: '1px solid rgba(29,78,216,0.15)' }}>
-            <Info className="size-3.5 shrink-0" style={{ color: '#1D4ED8' }} />
-            <p className="text-[10px] font-medium" style={{ color: '#1D4ED8' }}>
+            style={{ background: 'rgba(161,98,7,0.04)', border: '1px solid rgba(161,98,7,0.15)' }}>
+            <Info className="size-3.5 shrink-0" style={{ color: '#A16207' }} />
+            <p className="text-[10px] font-medium" style={{ color: '#A16207' }}>
               ออกก่อน {overnightCfg?.windowStart} — จะคิดเรทปกติ (ไม่มีค่าเหมาค้างคืน)
             </p>
           </div>
@@ -538,7 +538,7 @@ function BatchSeed({ overnightCfg }: { overnightCfg: OvernightConfig | null }) {
                         <span className="font-black text-emerald-700">฿{fee}</span>
                         {daytime && (
                           <span className="ml-1.5 text-[9px] font-bold px-1 py-0.5 rounded"
-                            style={{ background: 'rgba(29,78,216,0.08)', color: '#1D4ED8' }}>ปกติ</span>
+                            style={{ background: 'rgba(161,98,7,0.08)', color: '#A16207' }}>ปกติ</span>
                         )}
                       </td>
                       <td className="px-3 py-2.5">
@@ -1000,7 +1000,7 @@ function ExcelTester({ overnightCfg, discounts }: { overnightCfg: OvernightConfi
                         <td className="px-3 py-2.5">
                           {r.error
                             ? <span className="text-[10px] text-slate-400">—</span>
-                            : <span className="font-black" style={{ color: disc.total > 0 ? '#059669' : '#1D4ED8' }}>฿{disc.final}</span>}
+                            : <span className="font-black" style={{ color: disc.total > 0 ? '#059669' : '#A16207' }}>฿{disc.final}</span>}
                         </td>
                       )}
                       <td className="px-3 py-2.5 text-slate-300">
@@ -1082,7 +1082,7 @@ function ExcelTester({ overnightCfg, discounts }: { overnightCfg: OvernightConfi
                                 ) : (
                                   <tr style={{ background: '#F0F2F8', borderTop: '2px solid #E8ECF4' }}>
                                     <td colSpan={3} className="px-3 py-2 font-black text-slate-600 text-[10px]">รวม</td>
-                                    <td className="px-3 py-2 text-right font-black text-sm" style={{ color: '#1D4ED8' }}>฿{r.calculatedFee}</td>
+                                    <td className="px-3 py-2 text-right font-black text-sm" style={{ color: '#A16207' }}>฿{r.calculatedFee}</td>
                                   </tr>
                                 )}
                               </tfoot>

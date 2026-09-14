@@ -13,6 +13,7 @@ import { buildShiftStartSlip } from '@/lib/escpos'
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}))
   const openingFloat: number = Number(body.openingFloat ?? 0)
+  const openingBreakdown: Record<string, number> = body.openingBreakdown ?? {}
 
   const jar     = await cookies()
   const token   = jar.get(COOKIE_NAME)?.value
@@ -41,6 +42,7 @@ export async function POST(req: NextRequest) {
     startTime:    new Date(),
     status:       'active',
     openingFloat,
+    openingBreakdown,
     carryoverCars,
   })
 

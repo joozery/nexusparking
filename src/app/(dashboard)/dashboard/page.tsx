@@ -2,11 +2,23 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { Pie, PieChart, Cell } from 'recharts'
 import {
   LayoutDashboard, Car, Bike, Moon, BadgeDollarSign, TrendingUp,
   RefreshCw, Clock, ArrowDownLeft, ArrowUpRight, AlertTriangle,
   CircleParking, CreditCard, History, BarChart2, DoorOpen, Settings,
+  Banknote, Smartphone, Wallet,
 } from 'lucide-react'
+import {
+  ChartContainer, ChartTooltip, ChartTooltipContent,
+  type ChartConfig,
+} from '@/components/ui/chart'
+
+interface LotStats {
+  active:    number
+  capacity:  number
+  available: number
+}
 
 interface Stats {
   activeCars: number
@@ -14,6 +26,10 @@ interface Stats {
   totalCapacity: number
   todayEntries: number
   todayRevenue: number
+  car: LotStats
+  motorcycle: LotStats
+  todayRevenueByMethod: { cash: number; qr: number; other: number }
+  todayEntriesByType: { car: number; motorcycle: number; overnightCar: number; overnightMotorcycle: number }
 }
 
 interface Session {
@@ -29,12 +45,25 @@ const TYPE_ICON: Record<string, typeof Car> = { car: Car, motorcycle: Bike, over
 const TYPE_LABEL: Record<string, string>   = { car: 'รถยนต์', motorcycle: 'รถจักรยานยนต์', overnight: 'ค้างคืน' }
 
 const QUICK_LINKS = [
-  { href: '/gate',    icon: DoorOpen,       label: 'เกท / เช็คอิน',  sub: 'รับรถเข้า-ออก',    color: '#1D4ED8', bg: 'rgba(29,78,216,0.08)'  },
+  { href: '/gate',    icon: DoorOpen,       label: 'เกท / เช็คอิน',  sub: 'รับรถเข้า-ออก',    color: '#A16207', bg: 'rgba(161,98,7,0.08)'  },
   { href: '/cards',   icon: CreditCard,     label: 'จัดการบัตร',     sub: 'เพิ่ม / ปิดใช้งาน', color: '#0891B2', bg: 'rgba(8,145,178,0.08)'  },
   { href: '/history', icon: History,        label: 'ประวัติ',         sub: 'ค้นหา-ลบ session',  color: '#7C3AED', bg: 'rgba(124,58,237,0.08)' },
   { href: '/reports', icon: BarChart2,      label: 'รายงาน',          sub: 'รายได้รายวัน/เดือน', color: '#059669', bg: 'rgba(5,150,105,0.08)'  },
   { href: '/settings',icon: Settings,       label: 'ตั้งค่า',         sub: 'ฮาร์ดแวร์ / ระบบ',  color: '#D97706', bg: 'rgba(217,119,6,0.08)'  },
 ]
+
+const REVENUE_METHOD_META = {
+  cash:  { label: 'เงินสด',  icon: Banknote,    color: '#A16207' },
+  qr:    { label: 'เงินโอน', icon: Smartphone,  color: '#0891B2' },
+  other: { label: 'อื่นๆ',   icon: Wallet,      color: '#94A3B8' },
+} as const
+
+const entryTypeChartConfig = {
+  car:                 { label: 'รถยนต์',            color: '#A16207' },
+  motorcycle:          { label: 'มอเตอร์ไซค์',        color: '#0891B2' },
+  overnightCar:        { label: 'ค้างคืนรถยนต์',      color: '#CA8A04' },
+  overnightMotorcycle: { label: 'ค้างคืนมอเตอร์ไซค์', color: '#7C3AED' },
+} satisfies ChartConfig
 
 function fmtTime(iso: string) {
   return new Date(iso).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })
@@ -89,6 +118,11 @@ export default function DashboardPage() {
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
   })
 
+  const entryTypeData = (Object.keys(entryTypeChartConfig) as (keyof typeof entryTypeChartConfig)[])
+    .map(key => ({ key, value: stats?.todayEntriesByType[key] ?? 0 }))
+    .filter(d => d.value > 0)
+  const totalEntriesToday = entryTypeData.reduce((sum, d) => sum + d.value, 0)
+
   return (
     <>
       {/* ── HEADER ── */}
@@ -96,8 +130,8 @@ export default function DashboardPage() {
         <div className="flex items-center justify-between px-6 h-14">
           <div className="flex items-center gap-3">
             <div className="size-7 rounded-lg flex items-center justify-center"
-              style={{ background: 'rgba(29,78,216,0.08)' }}>
-              <LayoutDashboard className="size-3.5" style={{ color: '#1D4ED8' }} />
+              style={{ background: 'rgba(161,98,7,0.08)' }}>
+              <LayoutDashboard className="size-3.5" style={{ color: '#A16207' }} />
             </div>
             <div>
               <h1 className="text-sm font-bold text-slate-900 leading-none">ภาพรวมระบบ</h1>
@@ -161,6 +195,11 @@ export default function DashboardPage() {
                 <p className="text-sm opacity-70 mt-2">
                   ที่จอดว่างเหลือ <strong className="text-white font-bold">{stats?.availableSlots ?? '—'} ช่อง</strong>
                 </p>
+                {stats && (
+                  <p className="text-xs opacity-60 mt-1">
+                    รถยนต์ {stats.car.available}/{stats.car.capacity} · มอเตอร์ไซค์ {stats.motorcycle.available}/{stats.motorcycle.capacity}
+                  </p>
+                )}
 
                 {/* progress bar */}
                 <div className="mt-3 h-2 rounded-full overflow-hidden"
@@ -190,8 +229,8 @@ export default function DashboardPage() {
                 value: stats ? `฿${stats.todayRevenue.toLocaleString('th-TH')}` : '—',
                 sub:   'บาท ยอดสะสม',
                 icon:  BadgeDollarSign,
-                grad:  'linear-gradient(135deg,#1E3A8A,#1D4ED8)',
-                glow:  'rgba(29,78,216,0.2)',
+                grad:  'linear-gradient(135deg,#713F12,#A16207)',
+                glow:  'rgba(161,98,7,0.2)',
               },
               {
                 label: 'รถเข้าวันนี้',
@@ -204,7 +243,7 @@ export default function DashboardPage() {
               {
                 label: 'ที่จอดว่าง',
                 value: stats?.availableSlots ?? '—',
-                sub:   `จาก ${stats?.totalCapacity ?? '—'} ช่อง`,
+                sub:   stats ? `รถ ${stats.car.available} · มอไซค์ ${stats.motorcycle.available}` : '—',
                 icon:  CircleParking,
                 grad:  occupancyPct >= 85
                   ? 'linear-gradient(135deg,#7F1D1D,#DC2626)'
@@ -231,6 +270,84 @@ export default function DashboardPage() {
                 </div>
               )
             })}
+          </div>
+
+          {/* ── BREAKDOWN ROW ── */}
+          <div className="grid grid-cols-2 gap-4">
+
+            {/* Revenue by payment method */}
+            <div className="bg-white rounded-xl overflow-hidden" style={{ border: '1px solid #E8ECF4' }}>
+              <div className="px-4 py-3" style={{ borderBottom: '1px solid #E8ECF4', background: '#FAFBFF' }}>
+                <p className="text-xs font-bold text-slate-700">สัดส่วนรายได้วันนี้</p>
+              </div>
+              <div className="p-4 space-y-3">
+                {(Object.keys(REVENUE_METHOD_META) as (keyof typeof REVENUE_METHOD_META)[]).map(key => {
+                  const meta   = REVENUE_METHOD_META[key]
+                  const Icon   = meta.icon
+                  const amount = stats?.todayRevenueByMethod[key] ?? 0
+                  const total  = stats?.todayRevenue ?? 0
+                  const pct    = total > 0 ? Math.round((amount / total) * 100) : 0
+                  return (
+                    <div key={key}>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs font-semibold text-slate-600 flex items-center gap-1.5">
+                          <Icon className="size-3.5" style={{ color: meta.color }} /> {meta.label}
+                        </span>
+                        <span className="text-xs font-bold text-slate-800">
+                          ฿{amount.toLocaleString('th-TH')} <span className="text-slate-400 font-normal">({pct}%)</span>
+                        </span>
+                      </div>
+                      <div className="h-1.5 rounded-full overflow-hidden" style={{ background: '#F1F5F9' }}>
+                        <div className="h-full rounded-full"
+                          style={{ width: `${pct}%`, background: meta.color, transition: 'width 0.6s ease' }} />
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* Today's entries by type */}
+            <div className="bg-white rounded-xl overflow-hidden" style={{ border: '1px solid #E8ECF4' }}>
+              <div className="px-4 py-3" style={{ borderBottom: '1px solid #E8ECF4', background: '#FAFBFF' }}>
+                <p className="text-xs font-bold text-slate-700">รถเข้าวันนี้แยกประเภท</p>
+              </div>
+              {totalEntriesToday === 0 ? (
+                <div className="flex items-center justify-center py-10">
+                  <p className="text-xs text-slate-300">ยังไม่มีรถเข้าวันนี้</p>
+                </div>
+              ) : (
+                <div className="p-4 flex items-center gap-4">
+                  <ChartContainer config={entryTypeChartConfig} className="h-[130px] w-[130px] shrink-0 aspect-square">
+                    <PieChart>
+                      <ChartTooltip content={<ChartTooltipContent hideLabel />} />
+                      <Pie data={entryTypeData} dataKey="value" nameKey="key"
+                        innerRadius={34} outerRadius={58} paddingAngle={2} strokeWidth={2}>
+                        {entryTypeData.map(d => (
+                          <Cell key={d.key} fill={`var(--color-${d.key})`} />
+                        ))}
+                      </Pie>
+                    </PieChart>
+                  </ChartContainer>
+                  <div className="flex-1 space-y-2 min-w-0">
+                    {entryTypeData.map(d => {
+                      const pct = Math.round((d.value / totalEntriesToday) * 100)
+                      return (
+                        <div key={d.key} className="flex items-center justify-between gap-2">
+                          <span className="text-[11px] font-semibold text-slate-600 flex items-center gap-1.5 min-w-0">
+                            <span className="size-2 rounded-full shrink-0" style={{ background: entryTypeChartConfig[d.key].color }} />
+                            <span className="truncate">{entryTypeChartConfig[d.key].label}</span>
+                          </span>
+                          <span className="text-[11px] font-bold text-slate-800 shrink-0">
+                            {d.value} <span className="text-slate-400 font-normal">({pct}%)</span>
+                          </span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* ── LOWER ROW ── */}
@@ -273,7 +390,7 @@ export default function DashboardPage() {
                 style={{ borderBottom: '1px solid #E8ECF4', background: '#FAFBFF' }}>
                 <p className="text-xs font-bold text-slate-700">กิจกรรมล่าสุด</p>
                 <Link href="/history" className="text-[10px] font-bold flex items-center gap-1 hover:underline"
-                  style={{ color: '#1D4ED8' }}>
+                  style={{ color: '#A16207' }}>
                   ดูทั้งหมด <ArrowUpRight className="size-3" />
                 </Link>
               </div>
@@ -292,8 +409,8 @@ export default function DashboardPage() {
                     const isActive    = s.status === 'active'
                     const isLost      = s.status === 'lost'
                     const TypeIcon    = TYPE_ICON[s.cardType] ?? Car
-                    const statusColor = isLost ? '#D97706' : isActive ? '#059669' : '#1D4ED8'
-                    const statusBg    = isLost ? 'rgba(217,119,6,0.08)' : isActive ? 'rgba(5,150,105,0.08)' : 'rgba(29,78,216,0.07)'
+                    const statusColor = isLost ? '#D97706' : isActive ? '#059669' : '#A16207'
+                    const statusBg    = isLost ? 'rgba(217,119,6,0.08)' : isActive ? 'rgba(5,150,105,0.08)' : 'rgba(161,98,7,0.07)'
                     const statusLabel = isLost ? 'บัตรหาย' : isActive ? 'จอดอยู่' : 'เสร็จสิ้น'
                     return (
                       <div key={s._id}

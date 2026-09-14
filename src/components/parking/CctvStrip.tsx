@@ -8,7 +8,7 @@ type CameraUrls = Record<CamId, string>
 type Status = 'idle' | 'loading' | 'online' | 'offline'
 
 const ENTRY_CAMS = [
-  { id: 'plate' as CamId, label: 'ป้ายทะเบียน', num: 'CAM-01', accent: '#1D4ED8' },
+  { id: 'plate' as CamId, label: 'ป้ายทะเบียน', num: 'CAM-01', accent: '#A16207' },
   { id: 'face'  as CamId, label: 'หน้าคนขับ',   num: 'CAM-02', accent: '#059669' },
   { id: 'rear'  as CamId, label: 'Rear',         num: 'CAM-03', accent: '#7C3AED' },
   { id: 'exit'  as CamId, label: 'ขาออก',        num: 'CAM-04', accent: '#EA580C' },
@@ -17,6 +17,15 @@ const EXIT_CAMS = [
   { id: 'plateOut' as CamId, label: 'ป้ายทะเบียน ขาออก', num: 'CAM-05', accent: '#DC2626' },
   { id: 'faceOut'  as CamId, label: 'หน้าคนขับ ขาออก',   num: 'CAM-06', accent: '#0891B2' },
 ]
+
+const DEFAULT_CCTV_PLACEHOLDERS: Record<CamId, string> = {
+  plate:    '/cctv/cam_plate.jpg',
+  face:     '/cctv/cam_face.jpg',
+  rear:     '/cctv/cam_rear.jpg',
+  exit:     '/cctv/cam_exit.jpg',
+  plateOut: '/cctv/cam_plate_out.jpg',
+  faceOut:  '/cctv/cam_face_out.jpg',
+}
 
 type CamDef = typeof ENTRY_CAMS[0]
 
@@ -28,6 +37,8 @@ function MiniCam({ cam, url, onExpand }: { cam: CamDef; url: string; onExpand: (
 
   const isMjpeg = url.includes('stream.mjpeg') || url.includes('.mjpg') || url.includes('mjpeg')
   const isRtsp  = url.startsWith('rtsp://')
+  const isMock  = !url
+  const placeholder = DEFAULT_CCTV_PLACEHOLDERS[cam.id]
 
   useEffect(() => {
     if (timerRef.current) clearInterval(timerRef.current)
@@ -42,7 +53,7 @@ function MiniCam({ cam, url, onExpand }: { cam: CamDef; url: string; onExpand: (
 
   const src = isRtsp ? ''
     : isMjpeg ? url
-    : url ? `${url}${url.includes('?') ? '&' : '?'}_t=${ticker}` : ''
+    : url ? `${url}${url.includes('?') ? '&' : '?'}_t=${ticker}` : placeholder
 
   return (
     <div
@@ -50,18 +61,18 @@ function MiniCam({ cam, url, onExpand }: { cam: CamDef; url: string; onExpand: (
       onClick={onExpand}
       style={{ minHeight: 0 }}
     >
-      {url && !isRtsp ? (
-        <img src={src} alt={cam.label}
-          className="absolute inset-0 w-full h-full object-cover"
-          onLoad={() => setStatus('online')}
-          onError={() => setStatus('offline')} />
-      ) : (
+      {isRtsp ? (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 select-none">
           <Camera className="size-5" style={{ color: 'rgba(255,255,255,0.1)' }} />
           <span className="text-[9px]" style={{ color: 'rgba(255,255,255,0.1)' }}>
-            {isRtsp ? 'RTSP — ต้องผ่าน go2rtc' : 'ยังไม่ได้ตั้งค่า URL'}
+            RTSP — ต้องผ่าน go2rtc
           </span>
         </div>
+      ) : (
+        <img src={src} alt={cam.label}
+          className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+          onLoad={() => { if (url) setStatus('online') }}
+          onError={() => { if (url) setStatus('offline') }} />
       )}
 
       {/* LIVE badge */}
@@ -70,6 +81,15 @@ function MiniCam({ cam, url, onExpand }: { cam: CamDef; url: string; onExpand: (
           style={{ background: 'rgba(220,38,38,0.85)' }}>
           <span className="size-1 rounded-full bg-red-200 animate-pulse" />
           <span className="text-white font-bold tracking-widest" style={{ fontSize: '8px' }}>LIVE</span>
+        </div>
+      )}
+
+      {/* Mock badge */}
+      {isMock && !isRtsp && (
+        <div className="absolute top-2 left-2 flex items-center gap-1 px-1.5 py-0.5 rounded-full pointer-events-none"
+          style={{ background: 'rgba(15,23,42,0.8)', backdropFilter: 'blur(4px)', border: '1px solid rgba(251,191,36,0.25)' }}>
+          <span className="size-1 rounded-full bg-amber-400" />
+          <span className="text-amber-300 font-bold" style={{ fontSize: '8px' }}>จำลอง</span>
         </div>
       )}
 
@@ -90,21 +110,22 @@ function MiniCam({ cam, url, onExpand }: { cam: CamDef; url: string; onExpand: (
           </span>
           <span className="text-[10px] font-semibold" style={{ color: 'rgba(255,255,255,0.8)' }}>{cam.label}</span>
         </div>
-        <span className="text-[8px] font-mono truncate" title={url || 'ยังไม่ได้ตั้งค่า path'}
+        <span className="text-[8px] font-mono truncate" title={url || 'ภาพจำลองระบบ'}
           style={{ color: 'rgba(255,255,255,0.4)' }}>
-          {url || 'ยังไม่ได้ตั้งค่า path'}
+          {url || 'ภาพจำลองระบบ'}
         </span>
       </div>
     </div>
   )
 }
 
-/* ── fullscreen overlay ── */
+/* ── fullscreen modal ── */
 function FullscreenCam({ cam, url, onClose }: { cam: CamDef; url: string; onClose: () => void }) {
   const [ticker, setTicker] = useState(Date.now())
   const [status, setStatus] = useState<Status>(url ? 'loading' : 'idle')
+  const placeholder = DEFAULT_CCTV_PLACEHOLDERS[cam.id]
   const isMjpeg = url.includes('stream.mjpeg') || url.includes('.mjpg') || url.includes('mjpeg')
-  const src = isMjpeg ? url : url ? `${url}${url.includes('?') ? '&' : '?'}_t=${ticker}` : ''
+  const src = isMjpeg ? url : url ? `${url}${url.includes('?') ? '&' : '?'}_t=${ticker}` : placeholder
 
   useEffect(() => {
     if (!url || isMjpeg) return
@@ -127,7 +148,7 @@ function FullscreenCam({ cam, url, onClose }: { cam: CamDef; url: string; onClos
           <span className="text-white text-sm font-bold">{cam.label}</span>
           <span className="text-xs" style={{ color: 'rgba(255,255,255,0.35)' }}>{cam.num}</span>
           <span className="text-xs font-mono truncate max-w-[420px]" style={{ color: 'rgba(255,255,255,0.3)' }}>
-            {url || 'ยังไม่ได้ตั้งค่า path'}
+            {url || 'ภาพจำลอง (Simulation Feed)'}
           </span>
           {status === 'online' && (
             <div className="flex items-center gap-1 px-2 py-0.5 rounded-full ml-1"
@@ -135,6 +156,11 @@ function FullscreenCam({ cam, url, onClose }: { cam: CamDef; url: string; onClos
               <span className="size-1.5 rounded-full bg-red-200 animate-pulse" />
               <span className="text-white font-bold tracking-widest" style={{ fontSize: '9px' }}>LIVE</span>
             </div>
+          )}
+          {!url && (
+            <span className="text-amber-300 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-950/70 border border-amber-500/30 ml-1">
+              ภาพจำลอง
+            </span>
           )}
         </div>
         <button onClick={onClose}
@@ -146,15 +172,15 @@ function FullscreenCam({ cam, url, onClose }: { cam: CamDef; url: string; onClos
         </button>
       </div>
       <div className="flex-1 relative flex items-center justify-center bg-black overflow-hidden">
-        {url ? (
-          <img src={src} alt={cam.label}
-            className="max-w-full max-h-full object-contain"
-            onLoad={() => setStatus('online')}
-            onError={() => setStatus('offline')} />
-        ) : (
-          <div className="flex flex-col items-center gap-3">
-            <Camera className="size-16 text-slate-700" />
-            <p className="text-slate-500 text-sm">ยังไม่ได้ตั้งค่า URL กล้อง</p>
+        <img src={src} alt={cam.label}
+          className="max-w-full max-h-full object-contain"
+          onLoad={() => { if (url) setStatus('online') }}
+          onError={() => { if (url) setStatus('offline') }} />
+        {!url && (
+          <div className="absolute top-4 left-4 flex items-center gap-2 px-3 py-1.5 rounded-full pointer-events-none"
+            style={{ background: 'rgba(15,23,42,0.85)', backdropFilter: 'blur(4px)', border: '1px solid rgba(251,191,36,0.3)' }}>
+            <span className="size-2 rounded-full bg-amber-400" />
+            <span className="text-amber-300 text-xs font-bold">ภาพจำลองระบบกล้อง (Simulation Feed)</span>
           </div>
         )}
       </div>
@@ -164,7 +190,7 @@ function FullscreenCam({ cam, url, onClose }: { cam: CamDef; url: string; onClos
 
 /* ── entry-capture thumbnail (static photo taken at checkin, replayed at checkout) ── */
 const ENTRY_CAPTURE_CAMS = [
-  { camType: 'cam-plate' as const, label: 'ป้ายทะเบียน', accent: '#1D4ED8' },
+  { camType: 'cam-plate' as const, label: 'ป้ายทะเบียน', accent: '#A16207' },
   { camType: 'cam-face'  as const, label: 'หน้าคนขับ',   accent: '#059669' },
   { camType: 'cam-rear'  as const, label: 'Rear',         accent: '#7C3AED' },
   { camType: 'cam-exit'  as const, label: 'ขาออก',        accent: '#EA580C' },
@@ -274,7 +300,7 @@ export function CctvStrip({ isExit, onToggleExit, entrySessionId, entryPlate }: 
           <div className="justify-self-center flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold"
             style={isExit
               ? { background: 'rgba(234,88,12,0.1)', color: '#EA580C', border: '1px solid rgba(234,88,12,0.2)' }
-              : { background: 'rgba(29,78,216,0.1)', color: '#1D4ED8', border: '1px solid rgba(29,78,216,0.2)' }}>
+              : { background: 'rgba(161,98,7,0.1)', color: '#A16207', border: '1px solid rgba(161,98,7,0.2)' }}>
             {isExit
               ? <><LogOut className="size-3" /> ขาออก</>
               : <><LogIn  className="size-3" /> ขาเข้า</>}

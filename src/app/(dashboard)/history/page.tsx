@@ -29,14 +29,14 @@ interface Session {
 }
 
 const TYPE_META: Record<CardType, { label: string; icon: typeof Car; color: string; bg: string }> = {
-  car:        { label: 'รถยนต์',       icon: Car,  color: '#1D4ED8', bg: 'rgba(29,78,216,0.08)'  },
+  car:        { label: 'รถยนต์',       icon: Car,  color: '#A16207', bg: 'rgba(161,98,7,0.08)'  },
   motorcycle: { label: 'รถจักรยานยนต์', icon: Bike, color: '#0891B2', bg: 'rgba(8,145,178,0.08)'  },
   overnight:  { label: 'ค้างคืน',     icon: Moon, color: '#7C3AED', bg: 'rgba(124,58,237,0.08)' },
 }
 
 const STATUS_META: Record<SessionStatus, { label: string; color: string; bg: string; dot: string }> = {
   active:    { label: 'จอดอยู่',   color: '#059669', bg: 'rgba(5,150,105,0.08)',   dot: '#22C55E' },
-  completed: { label: 'เสร็จสิ้น', color: '#1D4ED8', bg: 'rgba(29,78,216,0.07)',   dot: '#3B82F6' },
+  completed: { label: 'เสร็จสิ้น', color: '#A16207', bg: 'rgba(161,98,7,0.07)',   dot: '#EAB308' },
   lost:      { label: 'บัตรหาย',   color: '#D97706', bg: 'rgba(245,158,11,0.08)',  dot: '#F59E0B' },
 }
 
@@ -121,8 +121,8 @@ export default function HistoryPage() {
         <div className="flex items-center justify-between px-6 h-14">
           <div className="flex items-center gap-3">
             <div className="flex size-7 items-center justify-center rounded-lg"
-              style={{ background: 'rgba(29,78,216,0.08)' }}>
-              <History className="size-3.5" style={{ color: '#1D4ED8' }} />
+              style={{ background: 'rgba(161,98,7,0.08)' }}>
+              <History className="size-3.5" style={{ color: '#A16207' }} />
             </div>
             <div>
               <h1 className="text-sm font-bold text-slate-900 leading-none">ประวัติการจอด</h1>
@@ -146,7 +146,7 @@ export default function HistoryPage() {
               placeholder="ค้นหาทะเบียน..."
               className="h-8 pl-8 pr-3 rounded-lg text-xs text-slate-700 outline-none w-44"
               style={{ background: '#F8FAFF', border: '1px solid #E8ECF4' }}
-              onFocus={e => e.currentTarget.style.borderColor = '#1D4ED8'}
+              onFocus={e => e.currentTarget.style.borderColor = '#A16207'}
               onBlur={e => e.currentTarget.style.borderColor = '#E8ECF4'}
             />
           </div>
@@ -158,7 +158,7 @@ export default function HistoryPage() {
                 onClick={() => { setStatus(t.key); setPage(1) }}
                 className="h-7 px-3 rounded-md text-[11px] font-semibold transition-all"
                 style={status === t.key
-                  ? { background: 'white', color: '#1D4ED8', boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }
+                  ? { background: 'white', color: '#A16207', boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }
                   : { color: '#94A3B8' }}>
                 {t.label}
               </button>
@@ -170,7 +170,7 @@ export default function HistoryPage() {
             onClick={() => setShowDate(v => !v)}
             className="h-8 px-3 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors"
             style={showDate || dateFrom || dateTo
-              ? { background: 'rgba(29,78,216,0.08)', color: '#1D4ED8', border: '1px solid rgba(29,78,216,0.2)' }
+              ? { background: 'rgba(161,98,7,0.08)', color: '#A16207', border: '1px solid rgba(161,98,7,0.2)' }
               : { background: '#F8FAFF', color: '#94A3B8', border: '1px solid #E8ECF4' }}>
             <Filter className="size-3" />
             {dateFrom && dateTo ? `${dateFrom} – ${dateTo}` : 'ช่วงวันที่'}
@@ -206,7 +206,7 @@ export default function HistoryPage() {
         <div className="shrink-0 grid grid-cols-4 gap-3 px-5 pt-4 pb-3">
           {[
             { label: 'ในลานตอนนี้', value: countActive,    icon: CircleParking,   color: '#059669', bg: 'rgba(5,150,105,0.08)'  },
-            { label: 'เสร็จสิ้น',   value: countCompleted, icon: ArrowUpRight,    color: '#1D4ED8', bg: 'rgba(29,78,216,0.08)'  },
+            { label: 'เสร็จสิ้น',   value: countCompleted, icon: ArrowUpRight,    color: '#A16207', bg: 'rgba(161,98,7,0.08)'  },
             { label: 'บัตรหาย',     value: countLost,      icon: AlertTriangle,   color: '#D97706', bg: 'rgba(245,158,11,0.08)' },
             { label: 'รายได้ (หน้านี้)', value: `฿${totalRevenue.toLocaleString('th-TH')}`, icon: BadgeDollarSign, color: '#7C3AED', bg: 'rgba(124,58,237,0.08)' },
           ].map(({ label, value, icon: Icon, color, bg }) => (
@@ -393,7 +393,7 @@ export default function HistoryPage() {
                     <button key={p} onClick={() => setPage(p)}
                       className="size-8 rounded-lg flex items-center justify-center text-xs font-semibold transition-all"
                       style={p === page
-                        ? { background: '#1D4ED8', color: 'white', border: '1px solid #1D4ED8' }
+                        ? { background: '#EAB308', color: 'black', border: '1px solid #EAB308' }
                         : { background: 'white', color: '#64748B', border: '1px solid #E8ECF4' }}>
                       {p}
                     </button>

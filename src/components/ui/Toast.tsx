@@ -65,10 +65,10 @@ const META: Record<ToastType, {
   },
   info: {
     icon: Info,
-    accent: '#1D4ED8',
-    bg: 'rgba(29,78,216,0.07)',
-    iconColor: '#1D4ED8',
-    bar: '#3B82F6',
+    accent: '#A16207',
+    bg: 'rgba(161,98,7,0.07)',
+    iconColor: '#A16207',
+    bar: '#EAB308',
   },
 }
 

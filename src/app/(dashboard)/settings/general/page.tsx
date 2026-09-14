@@ -79,8 +79,8 @@ export default function GeneralSettingsPage() {
       {/* Save button */}
       <div className="flex justify-end">
         <button onClick={handleSave} disabled={saving}
-          className="h-8 px-4 rounded-lg text-white text-xs font-bold flex items-center gap-1.5 hover:opacity-90 disabled:opacity-60"
-          style={{ background: '#1D4ED8', boxShadow: '0 1px 8px rgba(29,78,216,0.35)' }}>
+          className="h-8 px-4 rounded-lg text-black text-xs font-bold flex items-center gap-1.5 hover:opacity-90 disabled:opacity-60"
+          style={{ background: '#EAB308', boxShadow: '0 1px 8px rgba(161,98,7,0.35)' }}>
           {saving ? <RefreshCw className="size-3.5 animate-spin" /> : <Save className="size-3.5" />}
           {saving ? 'กำลังบันทึก...' : 'บันทึกการตั้งค่า'}
         </button>
@@ -89,8 +89,8 @@ export default function GeneralSettingsPage() {
       {/* Business Hours */}
       <div className="bg-white rounded-xl overflow-hidden" style={{ border: '1px solid #E8ECF4' }}>
         <div className="px-5 py-4 flex items-center gap-3" style={{ borderBottom: '1px solid #E8ECF4', background: '#FAFBFF' }}>
-          <div className="size-8 rounded-lg flex items-center justify-center" style={{ background: 'rgba(29,78,216,0.08)' }}>
-            <Clock className="size-4" style={{ color: '#1D4ED8' }} />
+          <div className="size-8 rounded-lg flex items-center justify-center" style={{ background: 'rgba(161,98,7,0.08)' }}>
+            <Clock className="size-4" style={{ color: '#A16207' }} />
           </div>
           <div>
             <p className="text-sm font-black text-slate-900">เวลาทำการ</p>
@@ -106,7 +106,7 @@ export default function GeneralSettingsPage() {
                   onChange={e => setSettings(s => s ? ({ ...s, businessHours: { ...s.businessHours, [key]: e.target.value } }) : s)}
                   className="w-full h-10 px-3 rounded-lg text-sm text-slate-800 outline-none"
                   style={{ border: '1.5px solid #E8ECF4', background: '#FAFBFF' }}
-                  onFocus={e => e.currentTarget.style.borderColor = '#1D4ED8'}
+                  onFocus={e => e.currentTarget.style.borderColor = '#A16207'}
                   onBlur={e => e.currentTarget.style.borderColor = '#E8ECF4'} />
               </div>
             ))}
@@ -158,9 +158,9 @@ export default function GeneralSettingsPage() {
         </div>
         <div className="p-5 space-y-3">
           {/* Car */}
-          <div className="rounded-lg p-4" style={{ background: '#F8FAFF', border: '1px solid rgba(29,78,216,0.1)' }}>
+          <div className="rounded-lg p-4" style={{ background: '#F8FAFF', border: '1px solid rgba(161,98,7,0.1)' }}>
             <div className="flex items-center gap-2 mb-3">
-              <Car className="size-4" style={{ color: '#1D4ED8' }} />
+              <Car className="size-4" style={{ color: '#A16207' }} />
               <p className="text-xs font-black text-slate-800">รถยนต์ (Car)</p>
             </div>
             <div className="grid grid-cols-2 gap-3 max-w-xs">

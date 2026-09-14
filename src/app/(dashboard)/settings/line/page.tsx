@@ -120,8 +120,8 @@ export default function LineSettingsPage() {
       {/* Save button */}
       <div className="flex justify-end">
         <button onClick={handleSave} disabled={saving}
-          className="h-8 px-4 rounded-lg text-white text-xs font-bold flex items-center gap-1.5 hover:opacity-90 disabled:opacity-60"
-          style={{ background: '#1D4ED8', boxShadow: '0 1px 8px rgba(29,78,216,0.35)' }}>
+          className="h-8 px-4 rounded-lg text-black text-xs font-bold flex items-center gap-1.5 hover:opacity-90 disabled:opacity-60"
+          style={{ background: '#EAB308', boxShadow: '0 1px 8px rgba(161,98,7,0.35)' }}>
           {saving ? <RefreshCw className="size-3.5 animate-spin" /> : <Save className="size-3.5" />}
           {saving ? 'กำลังบันทึก...' : 'บันทึกการตั้งค่า'}
         </button>
@@ -239,7 +239,7 @@ export default function LineSettingsPage() {
               </button>
             )}
             <button onClick={fetchDiscovered} disabled={scanning}
-              className="h-7 px-3 rounded-lg text-[10px] font-bold flex items-center gap-1.5 text-white disabled:opacity-60"
+              className="h-7 px-3 rounded-lg text-[10px] font-bold flex items-center gap-1.5 text-black disabled:opacity-60"
               style={{ background: '#CA8A04' }}>
               {scanning ? <RefreshCw className="size-3 animate-spin" /> : <Radar className="size-3" />}
               {scanning ? 'กำลังสแกน...' : 'สแกน'}
@@ -261,7 +261,7 @@ export default function LineSettingsPage() {
               <div className="text-[10px] text-slate-400 space-y-0.5">
                 <p>1. ตั้งค่า Webhook URL ใน LINE Developers Console เป็น</p>
                 <code className="px-2 py-0.5 rounded text-[10px] font-mono"
-                  style={{ background: '#F0F2F8', color: '#1D4ED8' }}>
+                  style={{ background: '#F0F2F8', color: '#A16207' }}>
                   https://your-domain.com/api/line/webhook
                 </code>
                 <p>2. พิมพ์ข้อความอะไรก็ได้ในกลุ่มหรือแชทที่ต้องการ</p>
@@ -279,8 +279,8 @@ export default function LineSettingsPage() {
                     style={{ background: '#FAFBFF', border: '1px solid #E8ECF4' }}>
                     <span className="shrink-0 text-[9px] font-black px-1.5 py-0.5 rounded"
                       style={{
-                        background: isGroup ? 'rgba(29,78,216,0.08)' : isUser ? 'rgba(5,150,105,0.08)' : 'rgba(99,102,241,0.08)',
-                        color: isGroup ? '#1D4ED8' : isUser ? '#059669' : '#6366F1',
+                        background: isGroup ? 'rgba(161,98,7,0.08)' : isUser ? 'rgba(5,150,105,0.08)' : 'rgba(99,102,241,0.08)',
+                        color: isGroup ? '#A16207' : isUser ? '#059669' : '#6366F1',
                       }}>
                       {isGroup ? 'GROUP' : isUser ? 'USER' : 'ID'}
                     </span>
@@ -307,7 +307,7 @@ export default function LineSettingsPage() {
 
       {/* Info */}
       <div className="rounded-xl p-4 text-[11px] text-slate-600 space-y-1.5"
-        style={{ background: '#F8FAFF', border: '1px solid rgba(29,78,216,0.1)' }}>
+        style={{ background: '#F8FAFF', border: '1px solid rgba(161,98,7,0.1)' }}>
         <p className="font-black text-slate-800 mb-2">สิ่งที่ระบบจะแจ้งเตือน</p>
         <p>🟢 <span className="font-bold">เปิดกะ</span> — ชื่อพนักงาน, เวลาเข้ากะ, รถค้างในลาน</p>
         <p>🔴 <span className="font-bold">ปิดกะ</span> — สรุปยอด Check-in/out, รายรับเงินสด, QR, รวม, รถค้าง</p>

@@ -24,14 +24,7 @@ export async function POST(req: NextRequest) {
 
   await connectDB()
 
-  const [settings, activeSessions] = await Promise.all([
-    getSettings(),
-    ParkingSession.countDocuments({ status: 'active' }),
-  ])
-  const totalCapacity = settings.capacity.car + settings.capacity.motorcycle
-  if (activeSessions >= totalCapacity) {
-    return NextResponse.json({ error: 'ลานจอดเต็มแล้ว กรุณาใช้ระบบคิวรอ' }, { status: 409 })
-  }
+  const settings = await getSettings()
 
   const now = customEntryTime ? new Date(customEntryTime) : new Date()
 
@@ -60,6 +53,17 @@ export async function POST(req: NextRequest) {
   } else {
     resolvedUid  = `WALKIN-${Date.now()}`
     resolvedType = manualType as 'car' | 'motorcycle' | 'overnight'
+  }
+
+  // Car and motorcycle parking are separate lots — 'overnight' is physically a car.
+  const isCarBucket   = resolvedType !== 'motorcycle'
+  const bucketTypes   = isCarBucket ? (['car', 'overnight'] as const) : (['motorcycle'] as const)
+  const bucketCapacity = isCarBucket ? settings.capacity.car : settings.capacity.motorcycle
+  const bucketActive   = await ParkingSession.countDocuments({ cardType: { $in: bucketTypes }, status: 'active' })
+  if (bucketActive >= bucketCapacity) {
+    return NextResponse.json({
+      error: isCarBucket ? 'ลานจอดรถยนต์เต็มแล้ว กรุณาใช้ระบบคิวรอ' : 'ลานจอดรถจักรยานยนต์เต็มแล้ว กรุณาใช้ระบบคิวรอ',
+    }, { status: 409 })
   }
 
   // Find active shift and increment checkin count

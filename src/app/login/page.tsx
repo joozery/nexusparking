@@ -59,7 +59,7 @@ export default function LoginPage() {
       {/* ── Background image ── */}
       <div className="absolute inset-0">
         <Image
-          src="/coverlogin.png"
+          src="/logo/bg.png"
           alt="background"
           fill
           style={{ objectFit: 'cover', objectPosition: 'center' }}
@@ -119,16 +119,16 @@ export default function LoginPage() {
 
           {/* Top accent bar */}
           <div className="h-1 w-full"
-            style={{ background: 'linear-gradient(90deg, #1E3A8A, #3B82F6, #6366F1)' }} />
+            style={{ background: 'linear-gradient(90deg, #713F12, #EAB308, #6366F1)' }} />
 
           <div className="px-8 pt-8 pb-8">
 
             {/* ── Logo ── */}
             <div className="flex justify-center mb-6 fade-up">
               <img
-                src="/logo/logonext.svg"
-                alt="NexusParking Logo"
-                className="h-12 w-auto object-contain"
+                src="/logo/logoa20.png"
+                alt="A20 Park Logo"
+                className="h-12 w-auto object-contain rounded-lg"
               />
             </div>
 
@@ -171,7 +171,7 @@ export default function LoginPage() {
                     required
                     className="w-full h-11 px-4 rounded-xl text-sm text-slate-800 outline-none transition-all"
                     style={{ border: '2px solid #E8ECF4', background: '#F8FAFF' }}
-                    onFocus={e => { e.currentTarget.style.borderColor = '#3B82F6'; e.currentTarget.style.background = 'white' }}
+                    onFocus={e => { e.currentTarget.style.borderColor = '#EAB308'; e.currentTarget.style.background = 'white' }}
                     onBlur={e => { e.currentTarget.style.borderColor = '#E8ECF4'; e.currentTarget.style.background = '#F8FAFF' }}
                   />
                 </div>
@@ -184,8 +184,8 @@ export default function LoginPage() {
                 </label>
                 <div className="relative">
                   <div className="absolute left-3.5 top-1/2 -translate-y-1/2 size-7 flex items-center justify-center rounded-lg"
-                    style={{ background: 'rgba(59,130,246,0.1)' }}>
-                    <User className="size-3.5" style={{ color: '#3B82F6' }} />
+                    style={{ background: 'rgba(234,179,8,0.1)' }}>
+                    <User className="size-3.5" style={{ color: '#EAB308' }} />
                   </div>
                   <input
                     value={username}
@@ -195,7 +195,7 @@ export default function LoginPage() {
                     required
                     className="w-full h-11 pl-12 pr-4 rounded-xl text-sm text-slate-800 outline-none transition-all font-mono"
                     style={{ border: '2px solid #E8ECF4', background: '#F8FAFF' }}
-                    onFocus={e => { e.currentTarget.style.borderColor = '#3B82F6'; e.currentTarget.style.background = 'white' }}
+                    onFocus={e => { e.currentTarget.style.borderColor = '#EAB308'; e.currentTarget.style.background = 'white' }}
                     onBlur={e => { e.currentTarget.style.borderColor = '#E8ECF4'; e.currentTarget.style.background = '#F8FAFF' }}
                   />
                 </div>
@@ -208,8 +208,8 @@ export default function LoginPage() {
                 </label>
                 <div className="relative">
                   <div className="absolute left-3.5 top-1/2 -translate-y-1/2 size-7 flex items-center justify-center rounded-lg"
-                    style={{ background: 'rgba(59,130,246,0.1)' }}>
-                    <Lock className="size-3.5" style={{ color: '#3B82F6' }} />
+                    style={{ background: 'rgba(234,179,8,0.1)' }}>
+                    <Lock className="size-3.5" style={{ color: '#EAB308' }} />
                   </div>
                   <input
                     type={showPwd ? 'text' : 'password'}
@@ -220,7 +220,7 @@ export default function LoginPage() {
                     required
                     className="w-full h-11 pl-12 pr-12 rounded-xl text-sm text-slate-800 outline-none transition-all"
                     style={{ border: '2px solid #E8ECF4', background: '#F8FAFF' }}
-                    onFocus={e => { e.currentTarget.style.borderColor = '#3B82F6'; e.currentTarget.style.background = 'white' }}
+                    onFocus={e => { e.currentTarget.style.borderColor = '#EAB308'; e.currentTarget.style.background = 'white' }}
                     onBlur={e => { e.currentTarget.style.borderColor = '#E8ECF4'; e.currentTarget.style.background = '#F8FAFF' }}
                   />
                   <button
@@ -245,26 +245,26 @@ export default function LoginPage() {
               <button
                 type="submit"
                 disabled={loading || !username || !password || (needsSetup && !setupName)}
-                className="w-full h-12 rounded-xl text-white text-sm font-black flex items-center justify-center gap-2 transition-all mt-2 group"
+                className="w-full h-12 rounded-xl text-black text-sm font-black flex items-center justify-center gap-2 transition-all mt-2 group"
                 style={{
                   background: loading || !username || !password
                     ? 'linear-gradient(135deg, #94a3b8, #94a3b8)'
-                    : 'linear-gradient(135deg, #1E3A8A 0%, #2563EB 60%, #3B82F6 100%)',
+                    : 'linear-gradient(135deg, #713F12 0%, #CA8A04 60%, #EAB308 100%)',
                   boxShadow: loading || !username || !password
                     ? 'none'
-                    : '0 6px 24px rgba(37,99,235,0.45)',
+                    : '0 6px 24px rgba(202,138,4,0.45)',
                   transform: 'translateY(0)',
                   transition: 'all 0.2s ease',
                 }}
                 onMouseEnter={e => {
                   if (!e.currentTarget.disabled) {
                     e.currentTarget.style.transform = 'translateY(-1px)'
-                    e.currentTarget.style.boxShadow = '0 10px 32px rgba(37,99,235,0.5)'
+                    e.currentTarget.style.boxShadow = '0 10px 32px rgba(202,138,4,0.5)'
                   }
                 }}
                 onMouseLeave={e => {
                   e.currentTarget.style.transform = 'translateY(0)'
-                  e.currentTarget.style.boxShadow = '0 6px 24px rgba(37,99,235,0.45)'
+                  e.currentTarget.style.boxShadow = '0 6px 24px rgba(202,138,4,0.45)'
                 }}>
                 {loading
                   ? <><RefreshCw className="size-4 animate-spin" /> กำลังดำเนินการ...</>
@@ -291,7 +291,7 @@ export default function LoginPage() {
         {/* Card bottom glow */}
         <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 w-3/4 h-12 pointer-events-none"
           style={{
-            background: 'radial-gradient(ellipse, rgba(59,130,246,0.25) 0%, transparent 70%)',
+            background: 'radial-gradient(ellipse, rgba(234,179,8,0.25) 0%, transparent 70%)',
             filter: 'blur(8px)',
           }} />
 

@@ -38,10 +38,18 @@ interface Session {
   status: 'active' | 'completed' | 'lost'
 }
 
+interface LotStats {
+  active:    number
+  capacity:  number
+  available: number
+}
+
 interface Stats {
   activeCars: number
   availableSlots: number
   totalCapacity: number
+  car: LotStats
+  motorcycle: LotStats
 }
 
 interface QueueEntry {
@@ -80,6 +88,54 @@ function fmtTime(iso: string) {
   return new Date(iso).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })
 }
 
+const DENOMINATIONS = [1000, 500, 100, 50, 20, 10, 5, 2, 1] as const
+type DenomCounts = Partial<Record<typeof DENOMINATIONS[number], string>>
+
+function denomTotal(counts: DenomCounts): number {
+  return DENOMINATIONS.reduce((sum, d) => sum + d * (Number(counts[d]) || 0), 0)
+}
+
+// จำนวนแบงก์/เหรียญที่นับได้จริง (ตัด denomination ที่ไม่ได้กรอก/เป็น 0 ทิ้ง) — ไว้ส่งเก็บเป็นประวัติ
+function denomBreakdown(counts: DenomCounts): Record<string, number> {
+  const out: Record<string, number> = {}
+  for (const d of DENOMINATIONS) {
+    const n = Number(counts[d]) || 0
+    if (n > 0) out[d] = n
+  }
+  return out
+}
+
+function DenomCounter({ counts, onChange, accent }: {
+  counts: DenomCounts
+  onChange: (counts: DenomCounts) => void
+  accent: string
+}) {
+  return (
+    <div className="space-y-2">
+      <div className="grid grid-cols-3 gap-1.5">
+        {DENOMINATIONS.map(d => (
+          <div key={d} className="flex flex-col items-center gap-1 rounded-lg px-1.5 py-1.5"
+            style={{ background: '#FAFBFF', border: '1px solid #E2E8F0' }}>
+            <span className="text-[10px] font-black text-slate-500">฿{d.toLocaleString()}</span>
+            <input
+              type="text" inputMode="numeric" placeholder="0"
+              value={counts[d] ?? ''}
+              onChange={e => onChange({ ...counts, [d]: toAsciiNumber(e.target.value).replace(/[^0-9]/g, '') })}
+              className="w-full h-7 rounded-md px-1 text-xs font-bold text-slate-800 outline-none text-center"
+              style={{ border: '1px solid #E2E8F0', background: 'white' }}
+            />
+          </div>
+        ))}
+      </div>
+      <div className="flex items-center justify-between rounded-lg px-3 py-2"
+        style={{ background: `${accent}12` }}>
+        <span className="text-[11px] font-bold" style={{ color: accent }}>รวมทั้งหมด</span>
+        <span className="text-base font-black" style={{ color: accent }}>฿{denomTotal(counts).toLocaleString()}</span>
+      </div>
+    </div>
+  )
+}
+
 export default function OperatorPage() {
   const { success, error: toastError, warning } = useToast()
 
@@ -95,8 +151,8 @@ export default function OperatorPage() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [shiftEnding, setShiftEnding] = useState(false)
-  const [openingFloat, setOpeningFloat] = useState('')
-  const [closingFloat, setClosingFloat] = useState('')
+  const [openingCounts, setOpeningCounts] = useState<DenomCounts>({})
+  const [closingCounts, setClosingCounts] = useState<DenomCounts>({})
   const [nowTick, setNowTick] = useState(() => Date.now())
 
   useEffect(() => {
@@ -304,8 +360,11 @@ export default function OperatorPage() {
       if (!stRes.ok || !qRes.ok) return
       const st = await stRes.json() as Stats | null
       const qs = await qRes.json() as QueueEntry[]
-      const next = Array.isArray(qs) ? qs[0] : undefined
-      if (!st || st.availableSlots <= 0 || !next) return
+      // Car and motorcycle lots are separate — only promote a queue entry whose own lot has a free slot.
+      const next = st && Array.isArray(qs)
+        ? qs.find(q => (q.cardType === 'motorcycle' ? st.motorcycle : st.car).available > 0)
+        : undefined
+      if (!st || !next) return
       const res = await fetch(`/api/queue/${next._id}/enter`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -325,10 +384,10 @@ export default function OperatorPage() {
     const res = await fetch('/api/shifts/start', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ openingFloat: Number(openingFloat) || 0 }),
+      body: JSON.stringify({ openingFloat: denomTotal(openingCounts), openingBreakdown: denomBreakdown(openingCounts) }),
     })
     if (res.ok) {
-      setOpeningFloat('')
+      setOpeningCounts({})
       await fetchShift()
       success('เริ่มกะแล้ว', 'ระบบเริ่มนับยอดเงินและรถสำหรับกะนี้')
     } else {
@@ -341,11 +400,11 @@ export default function OperatorPage() {
     const res = await fetch('/api/shifts/end', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ closingFloat: Number(closingFloat) || 0 }),
+      body: JSON.stringify({ closingFloat: denomTotal(closingCounts), closingBreakdown: denomBreakdown(closingCounts) }),
     })
     if (res.ok) {
       setShiftEnding(false)
-      setClosingFloat('')
+      setClosingCounts({})
       success('ปิดกะแล้ว', 'บันทึกยอดเรียบร้อย — กำลังออกจากระบบ...')
       setTimeout(handleLogout, 1500)
     } else {
@@ -390,8 +449,8 @@ export default function OperatorPage() {
 
     const err = await res.json()
 
-    // Lot full → same popup, but fall back to the queue instead of failing outright
-    if (res.status === 409 && err.error === 'ลานจอดเต็มแล้ว กรุณาใช้ระบบคิวรอ') {
+    // Lot full (car or motorcycle lot, checked separately server-side) → same popup, but fall back to the queue instead of failing outright
+    if (res.status === 409 && typeof err.error === 'string' && err.error.includes('เต็มแล้ว')) {
       if (ciType === 'overnight') {
         toastError('เข้าคิวไม่ได้', 'ลานเต็ม และบัตรค้างคืนไม่รองรับระบบคิวรอ')
         return
@@ -648,18 +707,21 @@ export default function OperatorPage() {
         style={{ borderBottom: '1px solid #E8ECF4', boxShadow: '0 1px 6px rgba(0,0,0,0.05)' }}
       >
         <div className="flex items-center gap-3">
-          <img src="/logo/logonext.svg" alt="NexusParking" className="h-7 w-auto object-contain" />
+          <img src="/logo/logoa20.png" alt="A20 Park" className="h-7 w-auto object-contain rounded-md" />
           <div className="w-px h-5 bg-slate-200" />
           <p className="text-xs font-semibold text-slate-400 tracking-wide">OPERATOR</p>
         </div>
 
         <div className="flex items-center gap-3">
           {stats && (
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg"
+            <div className="flex items-center gap-3 px-3 py-1.5 rounded-lg"
               style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.18)' }}>
               <span className="size-2 rounded-full animate-pulse inline-block" style={{ background: '#10B981' }} />
-              <span className="text-xs font-bold" style={{ color: '#065F46' }}>
-                ที่ว่าง {stats.availableSlots}/{stats.totalCapacity}
+              <span className="text-xs font-bold flex items-center gap-1" style={{ color: '#065F46' }}>
+                <Car className="size-3.5" /> {stats.car.available}/{stats.car.capacity}
+              </span>
+              <span className="text-xs font-bold flex items-center gap-1" style={{ color: '#065F46' }}>
+                <Bike className="size-3.5" /> {stats.motorcycle.available}/{stats.motorcycle.capacity}
               </span>
             </div>
           )}
@@ -694,7 +756,7 @@ export default function OperatorPage() {
             </div>
           )}
           <button
-            onClick={handleLogout}
+            onClick={() => shift ? setShiftEnding(true) : handleLogout()}
             className="h-8 px-3 rounded-lg text-xs font-bold"
             style={{ background: '#FEF2F2', color: '#991B1B', border: '1px solid rgba(239,68,68,0.18)' }}
             onMouseEnter={e => { e.currentTarget.style.background = '#FEE2E2' }}
@@ -745,8 +807,8 @@ export default function OperatorPage() {
               <button
                 type="submit"
                 disabled={plateQuick.length !== 4}
-                className="shrink-0 h-11 px-4 rounded-lg text-sm font-black text-white transition-all active:scale-[0.97] hover:brightness-110 disabled:opacity-40"
-                style={{ background: 'linear-gradient(135deg,#1E3A8A,#2563EB)', boxShadow: '0 4px 16px rgba(29,78,216,0.38)' }}
+                className="shrink-0 h-11 px-4 rounded-lg text-sm font-black text-black transition-all active:scale-[0.97] hover:brightness-110 disabled:opacity-40"
+                style={{ background: 'linear-gradient(135deg,#713F12,#EAB308)', boxShadow: '0 4px 16px rgba(161,98,7,0.38)' }}
               >
                 ยืนยัน
               </button>
@@ -775,7 +837,7 @@ export default function OperatorPage() {
             <Car className="size-3.5 text-slate-400 shrink-0" />
             <span className="text-xs font-black text-slate-700">รถในลาน</span>
             <span className="text-[10px] font-bold px-1.5 py-px rounded-full"
-              style={{ background: 'rgba(29,78,216,0.1)', color: '#1D4ED8' }}>
+              style={{ background: 'rgba(161,98,7,0.1)', color: '#A16207' }}>
               {activeSessions.length} คัน
             </span>
             {stats && <span className="text-[10px] text-slate-400">/ {stats.totalCapacity} ที่จอด</span>}
@@ -832,12 +894,12 @@ export default function OperatorPage() {
                             onClick={() => checkoutFromQueue(q)}
                             disabled={!!qLoading}
                             className="flex items-center justify-center size-4 rounded transition-all disabled:opacity-40 shrink-0"
-                            style={{ background: 'rgba(29,78,216,0.1)' }}
+                            style={{ background: 'rgba(161,98,7,0.1)' }}
                             title="ไม่รอแล้ว — เช็คเอาต์เลย"
                           >
                             {qLoading === q._id
-                              ? <RefreshCw className="size-2.5 text-blue-600 animate-spin" />
-                              : <LogOut className="size-2.5" style={{ color: '#1D4ED8' }} />}
+                              ? <RefreshCw className="size-2.5 text-yellow-700 animate-spin" />
+                              : <LogOut className="size-2.5" style={{ color: '#A16207' }} />}
                           </button>
                         </div>
                         <span className="text-[8px] text-slate-400">{Math.floor((nowTick - new Date(q.joinedAt).getTime()) / 60000)}น.</span>
@@ -862,8 +924,8 @@ export default function OperatorPage() {
             {/* Header */}
             <div className="px-8 pt-8 pb-5 text-center">
               <div className="size-20 rounded-3xl mx-auto mb-5 flex items-center justify-center"
-                style={{ background: 'linear-gradient(145deg, #1E3A8A 0%, #2563EB 100%)', boxShadow: '0 8px 32px rgba(29,78,216,0.4)' }}>
-                <Play className="size-10 text-white fill-white" />
+                style={{ background: 'linear-gradient(145deg, #713F12 0%, #EAB308 100%)', boxShadow: '0 8px 32px rgba(161,98,7,0.4)' }}>
+                <Play className="size-10 text-black fill-black" />
               </div>
               <h2 className="text-2xl font-black text-slate-900">เริ่มกะทำงาน</h2>
               <p className="text-xs text-slate-400 mt-1">กรุณากรอกข้อมูลก่อนเริ่มกะ</p>
@@ -871,9 +933,9 @@ export default function OperatorPage() {
 
             {/* Info cards */}
             <div className="px-6 pb-4 flex gap-3">
-              <div className="flex-1 rounded-2xl p-3.5 text-center" style={{ background: '#F0F7FF', border: '1px solid rgba(29,78,216,0.12)' }}>
+              <div className="flex-1 rounded-2xl p-3.5 text-center" style={{ background: '#F0F7FF', border: '1px solid rgba(161,98,7,0.12)' }}>
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">รถในลานขณะนี้</p>
-                <p className="text-3xl font-black mt-1" style={{ color: '#1D4ED8' }}>
+                <p className="text-3xl font-black mt-1" style={{ color: '#A16207' }}>
                   {stats?.activeCars ?? 0}
                 </p>
                 <p className="text-[10px] text-slate-400 mt-0.5">คัน (รถค้างจากกะก่อน)</p>
@@ -887,24 +949,13 @@ export default function OperatorPage() {
                   เงินต้นกะ (รับจาก till)
                   <span className="text-slate-400 font-normal ml-1">— ไม่บังคับ</span>
                 </label>
-                <div className="relative">
-                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-black text-slate-400">฿</span>
-                  <input
-                    type="text" inputMode="numeric" placeholder="0"
-                    value={openingFloat}
-                    onChange={e => setOpeningFloat(toAsciiNumber(e.target.value))}
-                    className="w-full h-12 rounded-xl pl-8 pr-4 text-lg font-black text-slate-800 outline-none"
-                    style={{ border: '2px solid #E2E8F0', background: '#FAFBFF' }}
-                    onFocus={e => { e.currentTarget.style.borderColor = '#1D4ED8' }}
-                    onBlur={e => { e.currentTarget.style.borderColor = '#E2E8F0' }}
-                  />
-                </div>
+                <DenomCounter counts={openingCounts} onChange={setOpeningCounts} accent="#A16207" />
               </div>
 
               <button
                 onClick={startShift}
-                className="w-full h-14 rounded-2xl text-white font-black text-lg tracking-wide transition-all active:scale-[0.97]"
-                style={{ background: 'linear-gradient(145deg, #1E3A8A 0%, #2563EB 100%)', boxShadow: '0 4px 20px rgba(29,78,216,0.45)' }}
+                className="w-full h-14 rounded-2xl text-black font-black text-lg tracking-wide transition-all active:scale-[0.97]"
+                style={{ background: 'linear-gradient(145deg, #713F12 0%, #EAB308 100%)', boxShadow: '0 4px 20px rgba(161,98,7,0.45)' }}
               >
                 เริ่มกะ
               </button>
@@ -928,12 +979,12 @@ export default function OperatorPage() {
 
             {/* Header */}
             <div className="px-6 py-5 flex items-center justify-between"
-              style={{ background: 'linear-gradient(135deg, #1E293B 0%, #334155 100%)' }}>
+              style={{ background: 'linear-gradient(135deg, #171717 0%, #262626 100%)' }}>
               <div>
                 <p className="text-white font-black text-lg">ปิดกะทำงาน</p>
                 <p className="text-slate-400 text-xs mt-0.5">กะเริ่ม {fmtTime(shift.startTime)}</p>
               </div>
-              <button onClick={() => { setShiftEnding(false); setClosingFloat('') }}
+              <button onClick={() => { setShiftEnding(false); setClosingCounts({}) }}
                 className="size-8 rounded-lg flex items-center justify-center"
                 style={{ background: 'rgba(255,255,255,0.1)' }}>
                 <X className="size-4 text-white" />
@@ -944,7 +995,7 @@ export default function OperatorPage() {
             <div className="p-5 space-y-3">
               <div className="grid grid-cols-3 gap-2">
                 {[
-                  { label: 'รถเข้ากะนี้',   value: shift.checkinsCount,  color: '#1D4ED8', icon: LogIn },
+                  { label: 'รถเข้ากะนี้',   value: shift.checkinsCount,  color: '#A16207', icon: LogIn },
                   { label: 'รถออกกะนี้',    value: shift.checkoutsCount, color: '#059669', icon: LogOut },
                   { label: 'รถค้างในลาน',   value: stats?.activeCars ?? 0, color: '#D97706', icon: Car },
                 ].map(({ label, value, color, icon: Icon }) => (
@@ -963,18 +1014,7 @@ export default function OperatorPage() {
                   เงินส่ง till
                   <span className="text-slate-400 font-normal ml-1">— จำนวนที่จะส่งคืน</span>
                 </label>
-                <div className="relative">
-                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-black text-slate-400">฿</span>
-                  <input
-                    type="text" inputMode="numeric" placeholder="0"
-                    value={closingFloat}
-                    onChange={e => setClosingFloat(toAsciiNumber(e.target.value))}
-                    className="w-full h-12 rounded-xl pl-8 pr-4 text-lg font-black text-slate-800 outline-none"
-                    style={{ border: '2px solid #E2E8F0', background: '#FAFBFF' }}
-                    onFocus={e => { e.currentTarget.style.borderColor = '#DC2626' }}
-                    onBlur={e => { e.currentTarget.style.borderColor = '#E2E8F0' }}
-                  />
-                </div>
+                <DenomCounter counts={closingCounts} onChange={setClosingCounts} accent="#DC2626" />
               </div>
 
               <p className="text-[10px] text-slate-400 text-center">
@@ -983,7 +1023,7 @@ export default function OperatorPage() {
             </div>
 
             <div className="px-5 pb-5 flex gap-3">
-              <button onClick={() => { setShiftEnding(false); setClosingFloat('') }}
+              <button onClick={() => { setShiftEnding(false); setClosingCounts({}) }}
                 className="flex-1 h-11 rounded-xl text-sm font-bold text-slate-600"
                 style={{ background: '#F1F5F9', border: '1px solid #E2E8F0' }}>
                 ยังไม่ปิด
@@ -1014,7 +1054,7 @@ export default function OperatorPage() {
       <CheckOutDialog
         open={checkOutOpen}
         onOpenChange={o => { setCheckOutOpen(o); if (!o) resetCO() }}
-        step={coStep} cardType={coType} hours={coHours} fee={coFee}
+        step={coStep} plate={coPlate} cardType={coType} hours={coHours} fee={coFee}
         paidAmount={coPaidAmount}
         printing={coPrinting}
         lostCardFine={lostCardFine}

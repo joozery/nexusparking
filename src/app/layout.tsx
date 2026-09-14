@@ -8,8 +8,13 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "ParkSmart — ระบบจัดการที่จอดรถ",
+  title: "A20 Park — ระบบจัดการที่จอดรถ",
   description: "ระบบบริหารจัดการที่จอดรถอัจฉริยะ",
+  icons: {
+    icon: "/logo/logoicon.png",
+    shortcut: "/logo/logoicon.png",
+    apple: "/logo/logoicon.png",
+  },
 };
 
 export default function RootLayout({

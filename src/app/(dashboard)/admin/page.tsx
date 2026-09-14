@@ -21,7 +21,7 @@ interface Me { sub: string; name: string; role: string }
 
 const ROLE_META = {
   superadmin: { label: 'Super Admin', color: '#F59E0B', bg: 'rgba(245,158,11,0.1)',  icon: Crown },
-  admin:      { label: 'Admin',       color: '#1D4ED8', bg: 'rgba(29,78,216,0.08)',  icon: Shield },
+  admin:      { label: 'Admin',       color: '#A16207', bg: 'rgba(161,98,7,0.08)',  icon: Shield },
   operator:   { label: 'Operator',    color: '#64748B', bg: 'rgba(100,116,139,0.08)', icon: User   },
 }
 
@@ -180,8 +180,8 @@ export default function AdminPage() {
                 ยกเลิก
               </button>
               <button onClick={handleSaveEdit} disabled={saving}
-                className="flex-1 h-9 rounded-lg text-xs font-bold text-white flex items-center justify-center gap-1.5 disabled:opacity-60"
-                style={{ background: '#1D4ED8', boxShadow: '0 1px 8px rgba(29,78,216,0.3)' }}>
+                className="flex-1 h-9 rounded-lg text-xs font-bold text-black flex items-center justify-center gap-1.5 disabled:opacity-60"
+                style={{ background: '#EAB308', boxShadow: '0 1px 8px rgba(161,98,7,0.3)' }}>
                 {saving ? <RefreshCw className="size-3.5 animate-spin" /> : <CheckCircle2 className="size-3.5" />}
                 บันทึก
               </button>
@@ -204,8 +204,8 @@ export default function AdminPage() {
         </div>
         {isSuperadmin && (
           <button onClick={() => setShowCreate(s => !s)}
-            className="h-8 px-3 rounded-lg text-xs font-bold flex items-center gap-1.5 text-white transition-opacity hover:opacity-90"
-            style={{ background: '#1D4ED8', boxShadow: '0 1px 8px rgba(29,78,216,0.35)' }}>
+            className="h-8 px-3 rounded-lg text-xs font-bold flex items-center gap-1.5 text-black transition-opacity hover:opacity-90"
+            style={{ background: '#EAB308', boxShadow: '0 1px 8px rgba(161,98,7,0.35)' }}>
             {showCreate ? <X className="size-3.5" /> : <UserPlus className="size-3.5" />}
             {showCreate ? 'ยกเลิก' : 'เพิ่มแอดมิน'}
           </button>
@@ -216,7 +216,7 @@ export default function AdminPage() {
 
         {/* Create form */}
         {showCreate && isSuperadmin && (
-          <div className="bg-white rounded-xl p-5" style={{ border: '1px solid rgba(29,78,216,0.2)', boxShadow: '0 2px 12px rgba(29,78,216,0.06)' }}>
+          <div className="bg-white rounded-xl p-5" style={{ border: '1px solid rgba(161,98,7,0.2)', boxShadow: '0 2px 12px rgba(161,98,7,0.06)' }}>
             <p className="text-xs font-black text-slate-900 mb-4">สร้างบัญชีใหม่</p>
             <form onSubmit={handleCreate}>
               <div className="grid grid-cols-2 gap-3 mb-3">
@@ -259,8 +259,8 @@ export default function AdminPage() {
               </div>
               <div className="flex justify-end">
                 <button type="submit" disabled={creating}
-                  className="h-8 px-4 rounded-lg text-xs font-bold text-white flex items-center gap-1.5 disabled:opacity-60"
-                  style={{ background: '#1D4ED8' }}>
+                  className="h-8 px-4 rounded-lg text-xs font-bold text-black flex items-center gap-1.5 disabled:opacity-60"
+                  style={{ background: '#EAB308' }}>
                   {creating ? <RefreshCw className="size-3.5 animate-spin" /> : <UserPlus className="size-3.5" />}
                   สร้างบัญชี
                 </button>
@@ -272,9 +272,9 @@ export default function AdminPage() {
         {/* Current user card */}
         {me && (
           <div className="flex items-center gap-3 px-4 py-3 rounded-xl"
-            style={{ background: 'rgba(29,78,216,0.04)', border: '1px solid rgba(29,78,216,0.12)' }}>
-            <div className="size-7 flex items-center justify-center rounded-lg text-[10px] font-black text-white"
-              style={{ background: 'linear-gradient(135deg, #1D4ED8, #3B82F6)' }}>
+            style={{ background: 'rgba(161,98,7,0.04)', border: '1px solid rgba(161,98,7,0.12)' }}>
+            <div className="size-7 flex items-center justify-center rounded-lg text-[10px] font-black text-black"
+              style={{ background: 'linear-gradient(135deg, #A16207, #EAB308)' }}>
               {me.name.charAt(0).toUpperCase()}
             </div>
             <div className="flex-1">
@@ -282,7 +282,7 @@ export default function AdminPage() {
               <p className="text-[10px] text-slate-400">เซสชันปัจจุบัน · {ROLE_META[me.role as keyof typeof ROLE_META]?.label ?? me.role}</p>
             </div>
             <span className="text-[10px] font-bold px-2 py-0.5 rounded-full"
-              style={{ background: 'rgba(29,78,216,0.1)', color: '#1D4ED8' }}>
+              style={{ background: 'rgba(161,98,7,0.1)', color: '#A16207' }}>
               You
             </span>
           </div>
@@ -302,7 +302,7 @@ export default function AdminPage() {
               return (
                 <div key={admin._id}
                   className="bg-white rounded-xl px-4 py-3.5 flex items-center gap-3"
-                  style={{ border: `1px solid ${isMe ? 'rgba(29,78,216,0.15)' : '#E8ECF4'}`, opacity: admin.isActive ? 1 : 0.55 }}>
+                  style={{ border: `1px solid ${isMe ? 'rgba(161,98,7,0.15)' : '#E8ECF4'}`, opacity: admin.isActive ? 1 : 0.55 }}>
 
                   {/* Avatar */}
                   <div className="size-9 rounded-lg flex items-center justify-center text-sm font-black text-white shrink-0"
@@ -315,7 +315,7 @@ export default function AdminPage() {
                     <div className="flex items-center gap-2">
                       <p className="text-xs font-black text-slate-800 truncate">{admin.name}</p>
                       {isMe && <span className="text-[9px] font-black px-1.5 py-0.5 rounded-md"
-                        style={{ background: 'rgba(29,78,216,0.1)', color: '#1D4ED8' }}>YOU</span>}
+                        style={{ background: 'rgba(161,98,7,0.1)', color: '#A16207' }}>YOU</span>}
                       {!admin.isActive && <span className="text-[9px] font-black px-1.5 py-0.5 rounded-md"
                         style={{ background: '#F1F5F9', color: '#94A3B8' }}>INACTIVE</span>}
                     </div>
@@ -339,8 +339,8 @@ export default function AdminPage() {
                   {isSuperadmin && !isMe && (
                     <div className="flex items-center gap-1 shrink-0">
                       <button onClick={() => { setEditTarget(admin); setEditPwd('') }}
-                        className="size-7 flex items-center justify-center rounded-lg transition-colors hover:bg-blue-50"
-                        style={{ color: '#1D4ED8' }}>
+                        className="size-7 flex items-center justify-center rounded-lg transition-colors hover:bg-yellow-50"
+                        style={{ color: '#A16207' }}>
                         <Edit2 className="size-3.5" />
                       </button>
                       <button onClick={() => handleToggleActive(admin)}

@@ -11,10 +11,12 @@ export interface IShift extends Document {
   cashAmount:      number
   qrAmount:        number
   totalAmount:     number
-  openingFloat:    number   // เงินต้นกะ (รับจาก till ตอนเริ่ม)
-  closingFloat:    number   // เงินส่ง till ตอนปิดกะ
-  carryoverCars:   number   // รถค้างในลานตอนเริ่มกะ
-  closingCarCount: number   // รถค้างในลานตอนปิดกะ
+  openingFloat:      number   // เงินต้นกะ (รับจาก till ตอนเริ่ม)
+  closingFloat:      number   // เงินส่ง till ตอนปิดกะ
+  openingBreakdown:  Map<string, number>  // จำนวนแบงก์/เหรียญที่นับตอนเริ่มกะ — key คือชนิดเงิน เช่น "1000","500",...,"1"
+  closingBreakdown:  Map<string, number>  // จำนวนแบงก์/เหรียญที่นับตอนปิดกะ
+  carryoverCars:     number   // รถค้างในลานตอนเริ่มกะ
+  closingCarCount:   number   // รถค้างในลานตอนปิดกะ
 }
 
 const ShiftSchema = new Schema<IShift>({
@@ -28,10 +30,12 @@ const ShiftSchema = new Schema<IShift>({
   cashAmount:      { type: Number, default: 0 },
   qrAmount:        { type: Number, default: 0 },
   totalAmount:     { type: Number, default: 0 },
-  openingFloat:    { type: Number, default: 0 },
-  closingFloat:    { type: Number, default: 0 },
-  carryoverCars:   { type: Number, default: 0 },
-  closingCarCount: { type: Number, default: 0 },
+  openingFloat:     { type: Number, default: 0 },
+  closingFloat:     { type: Number, default: 0 },
+  openingBreakdown: { type: Map, of: Number, default: {} },
+  closingBreakdown: { type: Map, of: Number, default: {} },
+  carryoverCars:    { type: Number, default: 0 },
+  closingCarCount:  { type: Number, default: 0 },
 }, { timestamps: true })
 
 ShiftSchema.index({ operatorId: 1, status: 1 })

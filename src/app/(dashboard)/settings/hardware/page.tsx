@@ -85,8 +85,8 @@ export default function HardwareSettingsPage() {
       {/* Save button */}
       <div className="flex justify-end">
         <button onClick={handleSave} disabled={saving}
-          className="h-8 px-4 rounded-lg text-white text-xs font-bold flex items-center gap-1.5 hover:opacity-90 disabled:opacity-60"
-          style={{ background: '#1D4ED8', boxShadow: '0 1px 8px rgba(29,78,216,0.35)' }}>
+          className="h-8 px-4 rounded-lg text-black text-xs font-bold flex items-center gap-1.5 hover:opacity-90 disabled:opacity-60"
+          style={{ background: '#EAB308', boxShadow: '0 1px 8px rgba(161,98,7,0.35)' }}>
           {saving ? <RefreshCw className="size-3.5 animate-spin" /> : <Save className="size-3.5" />}
           {saving ? 'กำลังบันทึก...' : 'บันทึกการตั้งค่า'}
         </button>
@@ -134,7 +134,7 @@ export default function HardwareSettingsPage() {
                     )}
                     <button onClick={() => updateHW(key, 'enabled', !device.enabled)}
                       className="w-9 h-5 rounded-full relative transition-colors"
-                      style={{ background: device.enabled ? '#1D4ED8' : '#E2E8F0' }}>
+                      style={{ background: device.enabled ? '#EAB308' : '#E2E8F0' }}>
                       <span className="absolute top-0.5 size-4 rounded-full bg-white shadow transition-transform"
                         style={{ transform: device.enabled ? 'translateX(20px)' : 'translateX(2px)' }} />
                     </button>

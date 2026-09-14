@@ -12,6 +12,7 @@ import { buildShiftEndSlip } from '@/lib/escpos'
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}))
   const closingFloat: number = Number(body.closingFloat ?? 0)
+  const closingBreakdown: Record<string, number> = body.closingBreakdown ?? {}
 
   const jar     = await cookies()
   const token   = jar.get(COOKIE_NAME)?.value
@@ -26,10 +27,11 @@ export async function POST(req: NextRequest) {
   // นับรถที่ยังค้างอยู่ตอนปิดกะ
   const closingCarCount = await ParkingSession.countDocuments({ status: 'active' })
 
-  shift.status          = 'closed'
-  shift.endTime         = new Date()
-  shift.closingFloat    = closingFloat
-  shift.closingCarCount = closingCarCount
+  shift.status           = 'closed'
+  shift.endTime          = new Date()
+  shift.closingFloat     = closingFloat
+  shift.closingBreakdown = new Map(Object.entries(closingBreakdown))
+  shift.closingCarCount  = closingCarCount
   await shift.save()
 
   const cfg = await getSettings()

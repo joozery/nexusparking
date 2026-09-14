@@ -29,7 +29,7 @@ interface SessionRow {
 
 const STATUS_META: Record<SessionRow['status'], { label: string; color: string; bg: string }> = {
   active:    { label: 'อยู่ในลาน', color: '#059669', bg: 'rgba(5,150,105,0.1)' },
-  completed: { label: 'เสร็จสิ้น', color: '#1D4ED8', bg: 'rgba(29,78,216,0.1)' },
+  completed: { label: 'เสร็จสิ้น', color: '#A16207', bg: 'rgba(161,98,7,0.1)' },
   lost:      { label: 'บัตรหาย',   color: '#DC2626', bg: 'rgba(220,38,38,0.1)' },
 }
 
@@ -100,8 +100,8 @@ export function SessionHistory() {
             style={{ border: '1.5px solid #E8ECF4', background: '#FAFBFF' }} />
         </div>
         <button onClick={() => fetchRows(1)}
-          className="h-9 px-4 rounded-lg text-xs font-bold text-white flex items-center gap-1.5 hover:opacity-90"
-          style={{ background: '#1D4ED8' }}>
+          className="h-9 px-4 rounded-lg text-xs font-bold text-black flex items-center gap-1.5 hover:opacity-90"
+          style={{ background: '#EAB308' }}>
           <Search className="size-3.5" /> ค้นหา
         </button>
       </div>
@@ -122,13 +122,13 @@ export function SessionHistory() {
                 const st = STATUS_META[r.status]
                 return (
                   <tr key={r._id} onClick={() => setSelected(r)}
-                    className="cursor-pointer hover:bg-blue-50/50 transition-colors"
+                    className="cursor-pointer hover:bg-yellow-50/50 transition-colors"
                     style={{ background: i % 2 === 0 ? 'white' : '#FAFBFF', borderBottom: '1px solid #F1F5F9' }}>
                     <td className="px-4 py-2.5 text-xs text-slate-600 whitespace-nowrap">{fmtDT(r.entryTime)}</td>
                     <td className="px-4 py-2.5 text-xs font-bold text-slate-800 whitespace-nowrap">{r.plate}</td>
                     <td className="px-4 py-2.5 text-xs text-slate-600 whitespace-nowrap">{CARD_TYPE_LABEL[r.cardType]}</td>
                     <td className="px-4 py-2.5 text-xs text-slate-600 whitespace-nowrap">{fmtDT(r.exitTime)}</td>
-                    <td className="px-4 py-2.5 text-xs font-bold whitespace-nowrap" style={{ color: '#1D4ED8' }}>{baht(r.totalFee)}</td>
+                    <td className="px-4 py-2.5 text-xs font-bold whitespace-nowrap" style={{ color: '#A16207' }}>{baht(r.totalFee)}</td>
                     <td className="px-4 py-2.5">
                       <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ color: st.color, background: st.bg }}>{st.label}</span>
                     </td>

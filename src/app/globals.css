@@ -57,35 +57,35 @@
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.13 0.01 240);
 
-  /* Blue primary — for check-in actions */
-  --primary: oklch(0.55 0.22 255);
-  --primary-foreground: oklch(0.98 0 0);
+  /* Yellow/black primary — for check-in actions */
+  --primary: oklch(0.55 0.18 90);
+  --primary-foreground: oklch(0.13 0.01 240);
 
   --secondary: oklch(0.95 0.004 240);
   --secondary-foreground: oklch(0.13 0.01 240);
   --muted: oklch(0.95 0.004 240);
   --muted-foreground: oklch(0.50 0.01 240);
-  --accent: oklch(0.95 0.01 255);
-  --accent-foreground: oklch(0.55 0.22 255);
+  --accent: oklch(0.95 0.03 90);
+  --accent-foreground: oklch(0.55 0.18 90);
   --destructive: oklch(0.577 0.245 27.325);
   --border: oklch(0.90 0.006 240);
   --input: oklch(0.90 0.006 240);
-  --ring: oklch(0.55 0.22 255);
+  --ring: oklch(0.55 0.18 90);
 
-  --chart-1: oklch(0.55 0.22 255);
+  --chart-1: oklch(0.55 0.18 90);
   --chart-2: oklch(0.55 0.18 155);
   --chart-3: oklch(0.65 0.18 85);
   --chart-4: oklch(0.55 0.22 24);
   --chart-5: oklch(0.65 0.18 300);
 
-  --sidebar: oklch(0.14 0.02 258);
+  --sidebar: oklch(0.14 0.01 90);
   --sidebar-foreground: oklch(0.80 0 0);
-  --sidebar-primary: oklch(0.55 0.22 255);
-  --sidebar-primary-foreground: oklch(0.98 0 0);
-  --sidebar-accent: oklch(0.20 0.02 258);
+  --sidebar-primary: oklch(0.55 0.18 90);
+  --sidebar-primary-foreground: oklch(0.13 0.01 240);
+  --sidebar-accent: oklch(0.20 0.01 90);
   --sidebar-accent-foreground: oklch(0.95 0 0);
-  --sidebar-border: oklch(0.24 0.02 258);
-  --sidebar-ring: oklch(0.55 0.22 255);
+  --sidebar-border: oklch(0.24 0.01 90);
+  --sidebar-ring: oklch(0.55 0.18 90);
 }
 
 .dark {
@@ -114,7 +114,7 @@
   --chart-5: oklch(0.269 0 0);
   --sidebar: oklch(0.205 0 0);
   --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary: oklch(0.55 0.18 90);
   --sidebar-primary-foreground: oklch(0.985 0 0);
   --sidebar-accent: oklch(0.269 0 0);
   --sidebar-accent-foreground: oklch(0.985 0 0);

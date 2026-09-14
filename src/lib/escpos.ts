@@ -44,7 +44,7 @@ const CARD_TYPE_LABEL: Record<string, string> = {
 /** Build a full ESC/POS receipt for the EPSON TM-T82II (58/80mm thermal). */
 export function buildReceipt(r: ReceiptData): Buffer {
   const parts: Buffer[] = [INIT, THAI_CODEPAGE, ALIGN_CENTER, BOLD_ON]
-  parts.push(thaiLine('ใบเสร็จรับเงิน\n'), thaiLine('NexusParking\n'), BOLD_OFF, NL)
+  parts.push(thaiLine('ใบเสร็จรับเงิน\n'), thaiLine('A20 Park\n'), BOLD_OFF, NL)
   parts.push(ALIGN_LEFT, DIVIDER)
   parts.push(thaiLine(`ทะเบียน   : ${r.plate}\n`))
   parts.push(thaiLine(`ประเภท    : ${CARD_TYPE_LABEL[r.cardType] ?? r.cardType}\n`))

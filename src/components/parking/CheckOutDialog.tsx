@@ -27,6 +27,7 @@ interface Props {
   open: boolean
   onOpenChange: (open: boolean) => void
   step: 'scan' | 'payment' | 'done'
+  plate?: string
   cardType: CardType
   hours: number
   fee: number
@@ -65,7 +66,7 @@ function fmtDuration(entryTime: Date | null | undefined, exitTime: Date | null |
 }
 
 export function CheckOutDialog({
-  open, onOpenChange, step, cardType, hours, fee, paidAmount, printing, lostCardFine = 300, defaultLostCard,
+  open, onOpenChange, step, plate, cardType, hours, fee, paidAmount, printing, lostCardFine = 300, defaultLostCard,
   entryTime, customExitTime, overnightCfg, afterHoursCfg, onCustomExitTimeChange,
   onSimulateScan, onBack, onConfirm, onPrintReceipt, onDone,
 }: Props) {
@@ -113,6 +114,19 @@ export function CheckOutDialog({
         .catch(() => {})
     }
   }, [open])
+
+  // ทะเบียนนี้เคยมีประวัติบัตรหายไหม — เตือน operator ก่อนปล่อยรถออก
+  const [lostHistory, setLostHistory] = useState<{ _id: string; exitTime?: string; totalFee: number }[]>([])
+  useEffect(() => {
+    if (open && plate) {
+      fetch(`/api/sessions?plate=${encodeURIComponent(plate)}&status=lost&limit=5`)
+        .then(r => r.ok ? r.json() : null)
+        .then(d => setLostHistory(d?.sessions ?? []))
+        .catch(() => setLostHistory([]))
+    } else {
+      setLostHistory([])
+    }
+  }, [open, plate])
 
   function handleClose(o: boolean) {
     if (!o) { setPaymentMethod('cash'); setSelectedId(''); setDailySelectedId(''); setCashReceived(''); setIsLostCard(false) }
@@ -166,7 +180,28 @@ export function CheckOutDialog({
             </div>
           ) : (
             /* ── Payment step — 2-panel layout ── */
-            <div className="grid grid-cols-[1.15fr_1fr] gap-3">
+            <div className="space-y-2">
+
+              {/* ทะเบียนนี้เคยมีประวัติบัตรหาย — โชว์บัตรทั้ง 2 ใบให้ operator เช็คก่อนปล่อยรถ */}
+              {lostHistory.length > 0 && (
+                <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2">
+                  <p className="text-xs font-bold text-amber-800 flex items-center gap-1.5">
+                    <AlertTriangle className="size-3.5" /> ทะเบียนนี้เคยมีประวัติบัตรหาย {lostHistory.length} ครั้ง
+                  </p>
+                  <div className="mt-1 space-y-0.5">
+                    {lostHistory.map(h => (
+                      <p key={h._id} className="text-[11px] text-amber-700 tabular-nums">
+                        {h.exitTime
+                          ? new Date(h.exitTime).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: '2-digit' })
+                          : '—'}
+                        {' '}· ปรับ ฿{h.totalFee}
+                      </p>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-[1.15fr_1fr] gap-3">
 
               {/* ═══ LEFT PANEL — info + breakdown ═══ */}
               <div className="space-y-2">
@@ -177,14 +212,14 @@ export function CheckOutDialog({
                     <span className="text-[10px] text-slate-400 font-medium">บัตร</span>
                     <CardBadge type={cardType} />
                   </div>
-                  <div className="flex flex-col justify-center px-2.5 py-2 rounded-lg bg-blue-50 border border-blue-200">
-                    <span className="text-[10px] text-blue-400 flex items-center gap-1"><Clock className="size-3" /> ขาเข้า</span>
+                  <div className="flex flex-col justify-center px-2.5 py-2 rounded-lg bg-yellow-50 border border-yellow-200">
+                    <span className="text-[10px] text-yellow-400 flex items-center gap-1"><Clock className="size-3" /> ขาเข้า</span>
                     {entryTime ? (
-                      <span className="text-[11px] font-black text-blue-800 tabular-nums leading-tight">
+                      <span className="text-[11px] font-black text-yellow-800 tabular-nums leading-tight">
                         {entryTime.toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: '2-digit' })}
                         {' '}{entryTime.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                       </span>
-                    ) : <span className="text-[11px] text-blue-300">—</span>}
+                    ) : <span className="text-[11px] text-yellow-300">—</span>}
                   </div>
                 </div>
 
@@ -426,6 +461,7 @@ export function CheckOutDialog({
                   </div>
                 )}
               </div>
+            </div>
             </div>
           )}
         </DialogBody>

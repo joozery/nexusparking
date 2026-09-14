@@ -34,17 +34,25 @@ interface Session {
   status: 'active' | 'completed' | 'lost'
 }
 
+interface LotStats {
+  active:    number
+  capacity:  number
+  available: number
+}
+
 interface Stats {
   activeCars: number
   availableSlots: number
   totalCapacity: number
   todayEntries: number
   todayRevenue: number
+  car: LotStats
+  motorcycle: LotStats
 }
 
 const TYPE_META: Record<CardType, { label: string; icon: typeof Car; color: string; bg: string }> = {
-  car:        { label: 'รถยนต์',       icon: Car,  color: '#1D4ED8', bg: 'rgba(29,78,216,0.08)'  },
-  motorcycle: { label: 'รถจักรยานยนต์', icon: Bike, color: '#3B82F6', bg: 'rgba(59,130,246,0.08)' },
+  car:        { label: 'รถยนต์',       icon: Car,  color: '#A16207', bg: 'rgba(161,98,7,0.08)'  },
+  motorcycle: { label: 'รถจักรยานยนต์', icon: Bike, color: '#EAB308', bg: 'rgba(234,179,8,0.08)' },
   overnight:  { label: 'ค้างคืน',     icon: Moon, color: '#F59E0B', bg: 'rgba(245,158,11,0.08)' },
 }
 
@@ -249,7 +257,7 @@ export default function GatePage() {
 </style>
 </head>
 <body>
-<div class="center bold lg" style="letter-spacing:1px">NEXUS PARKING</div>
+<div class="center bold lg" style="letter-spacing:1px">A20 PARK</div>
 <div class="center sm" style="margin-top:2px">ระบบจัดการลานจอดรถ</div>
 <div class="dash"></div>
 
@@ -330,8 +338,8 @@ ${lostFine > 0 ? `<div class="row lost-row"><span>ค่าปรับบัต
         style={{ borderBottom: '1px solid #E8ECF4' }}>
         <div className="flex items-center gap-3">
           <div className="flex size-7 items-center justify-center rounded-lg"
-            style={{ background: 'rgba(29,78,216,0.08)' }}>
-            <ArrowDownLeft className="size-3.5" style={{ color: '#1D4ED8' }} />
+            style={{ background: 'rgba(161,98,7,0.08)' }}>
+            <ArrowDownLeft className="size-3.5" style={{ color: '#A16207' }} />
           </div>
           <div>
             <h1 className="text-sm font-black text-slate-900 leading-none">ประตูเข้า-ออก</h1>
@@ -362,8 +370,8 @@ ${lostFine > 0 ? `<div class="row lost-row"><span>ค่าปรับบัต
             <AlertTriangle className="size-3" /> บัตรหาย
           </button>
           <button onClick={() => { resetCI(); setCheckInOpen(true) }}
-            className="h-8 px-4 rounded-lg text-white text-xs font-bold flex items-center gap-1.5 transition-opacity hover:opacity-90"
-            style={{ background: '#1D4ED8', boxShadow: '0 1px 8px rgba(29,78,216,0.35)' }}>
+            className="h-8 px-4 rounded-lg text-black text-xs font-bold flex items-center gap-1.5 transition-opacity hover:opacity-90"
+            style={{ background: '#EAB308', boxShadow: '0 1px 8px rgba(161,98,7,0.35)' }}>
             <LogIn className="size-3.5" /> ขาเข้า
           </button>
         </div>
@@ -375,8 +383,8 @@ ${lostFine > 0 ? `<div class="row lost-row"><span>ค่าปรับบัต
         {/* Stats */}
         <div className="shrink-0 grid grid-cols-4 gap-3">
           {[
-            { label: 'รถในลาน',      value: stats?.activeCars,     sub: `จาก ${stats?.totalCapacity ?? 200} คัน`, icon: CircleParking,   iconBg: 'rgba(29,78,216,0.1)',  iconColor: '#1D4ED8', bar: true },
-            { label: 'ที่จอดว่าง',   value: stats?.availableSlots, sub: 'ที่ว่าง',                               icon: Car,             iconBg: 'rgba(16,185,129,0.1)', iconColor: '#10B981', bar: false },
+            { label: 'รถในลาน',      value: stats?.activeCars,     sub: stats ? `รถ ${stats.car.active} · มอไซค์ ${stats.motorcycle.active}` : `จาก 200 คัน`, icon: CircleParking,   iconBg: 'rgba(161,98,7,0.1)',  iconColor: '#A16207', bar: true },
+            { label: 'ที่จอดว่าง',   value: stats?.availableSlots, sub: stats ? `รถ ${stats.car.available} · มอไซค์ ${stats.motorcycle.available}` : 'ที่ว่าง', icon: Car,             iconBg: 'rgba(16,185,129,0.1)', iconColor: '#10B981', bar: false },
             { label: 'รายได้วันนี้', value: stats ? `฿${stats.todayRevenue.toLocaleString()}` : undefined, sub: 'วันนี้', icon: BadgeDollarSign, iconBg: 'rgba(16,185,129,0.1)', iconColor: '#10B981', bar: false },
             { label: 'แจ้งเตือน',   value: sessions.filter(s => s.status === 'lost' || !s.status).length || undefined, sub: 'รายการผิดปกติ', icon: ShieldAlert, iconBg: 'rgba(245,158,11,0.1)', iconColor: '#F59E0B', bar: false },
           ].map(({ label, value, sub, icon: Icon, iconBg, iconColor, bar }) => (
@@ -410,7 +418,7 @@ ${lostFine > 0 ? `<div class="row lost-row"><span>ค่าปรับบัต
               <div className="flex items-center justify-between mb-3">
                 <span className="text-sm font-black text-slate-900">รถในลาน</span>
                 <span className="text-[10px] font-black px-2 py-0.5 rounded-full"
-                  style={{ background: 'rgba(29,78,216,0.08)', color: '#1D4ED8' }}>
+                  style={{ background: 'rgba(161,98,7,0.08)', color: '#A16207' }}>
                   {sessions.filter(s => s.status === 'active').length} คัน
                 </span>
               </div>
@@ -434,7 +442,7 @@ ${lostFine > 0 ? `<div class="row lost-row"><span>ค่าปรับบัต
                 <button key={key} onClick={() => setActiveTab(key)}
                   className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg text-[10px] font-bold transition-all"
                   style={activeTab === key
-                    ? { background: '#1D4ED8', color: 'white' }
+                    ? { background: '#EAB308', color: 'black' }
                     : { background: '#F8FAFF', color: '#94A3B8' }
                   }>
                   {label}<span className="opacity-60">({count})</span>
@@ -460,23 +468,23 @@ ${lostFine > 0 ? `<div class="row lost-row"><span>ค่าปรับบัต
                 return (
                   <div key={s._id} onClick={() => setActiveId(s._id)}
                     className="flex items-center gap-3 px-4 py-3 cursor-pointer transition-all relative"
-                    style={on ? { background: 'rgba(29,78,216,0.05)' } : {}}
+                    style={on ? { background: 'rgba(161,98,7,0.05)' } : {}}
                     onMouseEnter={e => { if (!on) e.currentTarget.style.background = '#F8FAFF' }}
                     onMouseLeave={e => { if (!on) e.currentTarget.style.background = 'transparent' }}>
-                    {on && <span className="absolute left-0 top-3 bottom-3 w-[3px] rounded-full" style={{ background: '#1D4ED8' }} />}
+                    {on && <span className="absolute left-0 top-3 bottom-3 w-[3px] rounded-full" style={{ background: '#EAB308' }} />}
                     <div className="size-8 rounded-lg flex items-center justify-center shrink-0"
-                      style={on ? { background: '#1D4ED8' } : { background: m.bg }}>
-                      <VIcon className="size-3.5" style={{ color: on ? 'white' : m.color }} strokeWidth={1.75} />
+                      style={on ? { background: '#EAB308' } : { background: m.bg }}>
+                      <VIcon className="size-3.5" style={{ color: on ? 'black' : m.color }} strokeWidth={1.75} />
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5">
-                        <span className="text-sm font-black tracking-wide" style={{ color: on ? '#1D4ED8' : '#1E293B' }}>
+                        <span className="text-sm font-black tracking-wide" style={{ color: on ? '#A16207' : '#1E293B' }}>
                           {s.plate}
                         </span>
                         <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full"
                           style={s.status === 'active'
                             ? { background: 'rgba(16,185,129,0.08)', color: '#059669' }
-                            : { background: 'rgba(29,78,216,0.07)', color: '#1D4ED8' }
+                            : { background: 'rgba(161,98,7,0.07)', color: '#A16207' }
                           }>
                           {s.status === 'active' ? 'จอดอยู่' : 'เสร็จ'}
                         </span>
@@ -489,7 +497,7 @@ ${lostFine > 0 ? `<div class="row lost-row"><span>ค่าปรับบัต
                       </div>
                     </div>
                     <div className="shrink-0 text-right">
-                      <p className="text-sm font-black" style={{ color: on ? '#1D4ED8' : '#334155' }}>
+                      <p className="text-sm font-black" style={{ color: on ? '#A16207' : '#334155' }}>
                         ฿{s.status === 'active' ? calcFee(s.cardType, Math.ceil(Math.max(1, (Date.now() - new Date(s.entryTime).getTime()) / 3600000))) : s.totalFee}
                       </p>
                       <p className="text-[9px] text-slate-400 font-mono">{s.cardUid.slice(0, 8)}</p>
@@ -513,38 +521,40 @@ ${lostFine > 0 ? `<div class="row lost-row"><span>ค่าปรับบัต
             <div className="flex-1 flex flex-col bg-white rounded-xl overflow-hidden"
               style={{ border: '1px solid #E8ECF4' }}>
 
-              {/* Blue header */}
+              {/* Yellow header */}
               <div className="shrink-0 relative overflow-hidden px-6 py-5"
-                style={{ background: 'linear-gradient(135deg, #1E3A8A 0%, #1D4ED8 60%, #2563EB 100%)' }}>
+                style={{ background: 'linear-gradient(135deg, #FFE119 0%, #FACC15 55%, #EAB308 100%)' }}>
                 <div className="absolute -top-8 -right-8 size-32 rounded-full pointer-events-none"
-                  style={{ background: 'rgba(255,255,255,0.06)' }} />
+                  style={{ background: 'rgba(255,255,255,0.35)' }} />
                 <div className="relative z-10 flex items-center justify-between">
                   <div className="flex items-center gap-4">
                     <div className="size-12 rounded-xl flex items-center justify-center shrink-0"
-                      style={{ background: 'rgba(255,255,255,0.18)' }}>
-                      <TypeIcon className="size-6 text-white" strokeWidth={1.75} />
+                      style={{ background: 'rgba(15,23,42,0.08)', border: '1px solid rgba(15,23,42,0.12)' }}>
+                      <TypeIcon className="size-6 text-slate-900" strokeWidth={2} />
                     </div>
                     <div>
                       <div className="flex items-center gap-3">
-                        <h2 className="text-2xl font-black text-white tracking-wider">{active.plate}</h2>
-                        <span className="text-[10px] font-black px-2 py-1 rounded-full"
+                        <h2 className="text-2xl font-black text-slate-900 tracking-wider">{active.plate}</h2>
+                        <span className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-full shadow-xs"
                           style={active.status === 'active'
-                            ? { background: 'rgba(16,185,129,0.22)', color: '#6EE7B7' }
-                            : { background: 'rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.8)' }
+                            ? { background: '#0F172A', color: '#34D399', border: '1px solid rgba(52,211,153,0.3)' }
+                            : { background: 'rgba(15,23,42,0.12)', color: '#0F172A', border: '1px solid rgba(15,23,42,0.2)' }
                           }>
+                          {active.status === 'active' && <span className="size-1.5 rounded-full bg-emerald-400" />}
                           {active.status === 'active' ? 'จอดอยู่' : 'เสร็จสิ้น'}
                         </span>
                       </div>
-                      <p className="text-white/60 text-xs mt-1">
+                      <p className="text-slate-800 text-xs font-semibold mt-1">
                         {tm?.label} · {active.status === 'active' ? 'จอดมาแล้ว' : 'จอดไป'} {fmtDur(active.entryTime, active.exitTime)}
                       </p>
                     </div>
                   </div>
                   <button
                     onClick={() => printReceipt(active, liveFee)}
-                    className="size-8 rounded-lg flex items-center justify-center hover:bg-white/10 transition-colors"
-                    style={{ border: '1px solid rgba(255,255,255,0.2)' }}>
-                    <Printer className="size-3.5 text-white/60" />
+                    className="size-9 rounded-lg flex items-center justify-center bg-black/10 hover:bg-black/20 text-slate-900 transition-colors"
+                    style={{ border: '1px solid rgba(15,23,42,0.15)' }}
+                    title="พิมพ์ใบเสร็จ">
+                    <Printer className="size-4 text-slate-900" />
                   </button>
                 </div>
               </div>
@@ -553,8 +563,8 @@ ${lostFine > 0 ? `<div class="row lost-row"><span>ค่าปรับบัต
               <div className="shrink-0 grid grid-cols-3"
                 style={{ borderBottom: '1px solid #E8ECF4' }}>
                 {[
-                  { icon: ArrowDownLeft, label: 'เวลาเข้า',    value: new Date(active.entryTime).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }), iconColor: '#1D4ED8', iconBg: 'rgba(29,78,216,0.08)' },
-                  { icon: Clock,         label: 'ระยะเวลา',    value: fmtDur(active.entryTime, active.exitTime), iconColor: '#3B82F6', iconBg: 'rgba(59,130,246,0.08)' },
+                  { icon: ArrowDownLeft, label: 'เวลาเข้า',    value: new Date(active.entryTime).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }), iconColor: '#A16207', iconBg: 'rgba(161,98,7,0.08)' },
+                  { icon: Clock,         label: 'ระยะเวลา',    value: fmtDur(active.entryTime, active.exitTime), iconColor: '#EAB308', iconBg: 'rgba(234,179,8,0.08)' },
                   { icon: Hash,          label: 'ประเภทอัตรา', value: active.cardType === 'overnight' ? 'Overnight' : 'Daytime', iconColor: '#F59E0B', iconBg: 'rgba(245,158,11,0.08)' },
                 ].map(({ icon: Icon, label, value, iconColor, iconBg }, i) => (
                   <div key={label} className="flex items-center gap-3 px-5 py-3"
@@ -580,8 +590,8 @@ ${lostFine > 0 ? `<div class="row lost-row"><span>ค่าปรับบัต
                         style={{ background: '#F8FAFF', border: '1px solid #E8ECF4' }}>
                         <div className="flex items-center gap-3">
                           <div className="size-6 rounded-lg flex items-center justify-center"
-                            style={{ background: 'rgba(29,78,216,0.08)' }}>
-                            <span className="text-[9px] font-black" style={{ color: '#1D4ED8' }}>1</span>
+                            style={{ background: 'rgba(161,98,7,0.08)' }}>
+                            <span className="text-[9px] font-black" style={{ color: '#A16207' }}>1</span>
                           </div>
                           <div>
                             <p className="text-xs font-semibold text-slate-700">ชั่วโมงแรก (Base rate)</p>
@@ -595,8 +605,8 @@ ${lostFine > 0 ? `<div class="row lost-row"><span>ค่าปรับบัต
                           style={{ background: '#F8FAFF', border: '1px solid #E8ECF4' }}>
                           <div className="flex items-center gap-3">
                             <div className="size-6 rounded-lg flex items-center justify-center"
-                              style={{ background: 'rgba(59,130,246,0.08)' }}>
-                              <span className="text-[9px] font-black" style={{ color: '#3B82F6' }}>+{extraHrs}</span>
+                              style={{ background: 'rgba(234,179,8,0.08)' }}>
+                              <span className="text-[9px] font-black" style={{ color: '#EAB308' }}>+{extraHrs}</span>
                             </div>
                             <div>
                               <p className="text-xs font-semibold text-slate-700">{extraHrs} ชั่วโมงถัดไป</p>
@@ -626,14 +636,14 @@ ${lostFine > 0 ? `<div class="row lost-row"><span>ค่าปรับบัต
                 </div>
 
                 <div className="mt-4 flex items-center justify-between px-4 py-3.5 rounded-lg"
-                  style={{ background: 'rgba(29,78,216,0.05)', border: '1.5px solid rgba(29,78,216,0.15)' }}>
+                  style={{ background: 'rgba(161,98,7,0.05)', border: '1.5px solid rgba(161,98,7,0.15)' }}>
                   <div>
                     <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">ยอดชำระทั้งสิ้น</p>
                     <p className="text-[10px] text-slate-400 mt-0.5">
                       {isActiveSession ? 'ณ เวลาปัจจุบัน' : 'ยอดที่ชำระแล้ว'}
                     </p>
                   </div>
-                  <span className="text-2xl font-black" style={{ color: '#1D4ED8' }}>฿{liveFee}</span>
+                  <span className="text-2xl font-black" style={{ color: '#A16207' }}>฿{liveFee}</span>
                 </div>
               </div>
 
@@ -658,8 +668,8 @@ ${lostFine > 0 ? `<div class="row lost-row"><span>ค่าปรับบัต
                 <button
                   onClick={() => active.status === 'active' ? openCheckoutFromList(active) : null}
                   disabled={active.status !== 'active'}
-                  className="flex-1 h-10 rounded-lg text-sm font-black text-white flex items-center justify-center gap-2 transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-40"
-                  style={{ background: '#1D4ED8', boxShadow: '0 2px 12px rgba(29,78,216,0.35)' }}>
+                  className="flex-1 h-10 rounded-lg text-sm font-black text-black flex items-center justify-center gap-2 transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-40"
+                  style={{ background: '#EAB308', boxShadow: '0 2px 12px rgba(161,98,7,0.35)' }}>
                   <ArrowUpRight className="size-4" />
                   Process Payment — ฿{liveFee}
                   <ChevronRight className="size-4 opacity-60" />
@@ -684,7 +694,7 @@ ${lostFine > 0 ? `<div class="row lost-row"><span>ค่าปรับบัต
       <CheckOutDialog
         open={checkOutOpen}
         onOpenChange={o => { setCheckOutOpen(o); if (!o) resetCO() }}
-        step={coStep} cardType={coType} hours={coHours} fee={coFee}
+        step={coStep} plate={active?.plate} cardType={coType} hours={coHours} fee={coFee}
         onSimulateScan={simulateCOScan}
         onBack={() => setCoStep('scan')}
         onConfirm={handleCheckout}

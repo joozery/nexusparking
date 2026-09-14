@@ -2,7 +2,7 @@ import { Car, BadgeDollarSign, LayoutDashboard, ShieldAlert } from 'lucide-react
 import { Card, CardContent } from '@/components/ui/card'
 
 const STATS = [
-  { label: 'รถที่จอดอยู่',    value: '142',    sub: 'จาก 200 คัน',       icon: Car,             color: 'text-blue-600   bg-blue-50   border-blue-200'   },
+  { label: 'รถที่จอดอยู่',    value: '142',    sub: 'จาก 200 คัน',       icon: Car,             color: 'text-yellow-700   bg-yellow-50   border-yellow-200'   },
   { label: 'รายได้วันนี้',    value: '฿4,850', sub: '+12% เมื่อวาน',     icon: BadgeDollarSign, color: 'text-emerald-600 bg-emerald-50 border-emerald-200' },
   { label: 'ที่จอดว่าง',      value: '58',     sub: '29% ว่างอยู่',      icon: LayoutDashboard, color: 'text-violet-600  bg-violet-50  border-violet-200'  },
   { label: 'แจ้งเตือนวันนี้', value: '2',      sub: 'บัตรหาย 1 รายการ', icon: ShieldAlert,     color: 'text-amber-600  bg-amber-50   border-amber-200'   },

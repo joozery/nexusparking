@@ -49,9 +49,9 @@ const WEATHER: { temp: number; feels: number; condition: WeatherCondition; label
 
 const WEATHER_ICON = {
   sunny:          { icon: Sun,      color: '#F59E0B', bg: 'rgba(251,191,36,0.1)'  },
-  'partly-cloudy':{ icon: CloudSun, color: '#3B82F6', bg: 'rgba(59,130,246,0.1)' },
+  'partly-cloudy':{ icon: CloudSun, color: '#EAB308', bg: 'rgba(234,179,8,0.1)' },
   cloudy:         { icon: Cloud,    color: '#64748B', bg: 'rgba(100,116,139,0.1)' },
-  rainy:          { icon: CloudRain,color: '#2563EB', bg: 'rgba(37,99,235,0.1)'   },
+  rainy:          { icon: CloudRain,color: '#CA8A04', bg: 'rgba(202,138,4,0.1)'   },
 } as const
 
 const TH_DAYS   = ['อาทิตย์','จันทร์','อังคาร','พุธ','พฤหัส','ศุกร์','เสาร์']
@@ -106,7 +106,7 @@ function WeatherClock() {
         </div>
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-1">
-            <Droplets className="size-3" style={{ color: '#3B82F6' }} />
+            <Droplets className="size-3" style={{ color: '#EAB308' }} />
             <span className="text-[10px] font-semibold text-slate-500">{WEATHER.humidity}%</span>
           </div>
           <div className="flex items-center gap-1">
@@ -154,36 +154,36 @@ export function ParkingSidebar({ isOpen, activeNav }: Props) {
 
       {/* ══ HEADER BANNER ══ */}
       <div className="relative overflow-hidden px-5 pt-5 pb-4 shrink-0"
-        style={{ background: 'linear-gradient(135deg, #1E3A8A 0%, #1D4ED8 60%, #3B82F6 100%)' }}>
+        style={{ background: '#FDDD09' }}>
         <div className="absolute -top-6 -right-6 w-24 h-24 rounded-full pointer-events-none"
-          style={{ background: 'rgba(255,255,255,0.07)' }} />
+          style={{ background: 'rgba(0,0,0,0.06)' }} />
         <div className="absolute -bottom-4 -left-4 w-16 h-16 rounded-full pointer-events-none"
-          style={{ background: 'rgba(255,255,255,0.05)' }} />
+          style={{ background: 'rgba(0,0,0,0.05)' }} />
 
         <div className="relative z-10 flex items-center justify-between mb-4">
           <img
-            src="/logo/logonext.svg"
-            alt="Logo"
-            className="h-8 w-auto object-contain brightness-0 invert"
+            src="/logo/logoa20.png"
+            alt="A20 Park"
+            className="h-9 w-auto object-contain"
           />
           <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-md"
-            style={{ background: 'rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.9)', border: '1px solid rgba(255,255,255,0.2)' }}>
+            style={{ background: 'rgba(0,0,0,0.12)', color: 'rgba(0,0,0,0.75)', border: '1px solid rgba(0,0,0,0.15)' }}>
             v2.4
           </span>
         </div>
 
         <div className="relative z-10 flex items-center gap-2 px-3 py-1.5 rounded-lg"
-          style={{ background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.18)' }}>
+          style={{ background: 'rgba(0,0,0,0.1)', border: '1px solid rgba(0,0,0,0.12)' }}>
           <span className="relative flex size-2 shrink-0">
             {isOpen && <span className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-60"
-              style={{ background: '#86EFAC' }} />}
+              style={{ background: '#166534' }} />}
             <span className="relative size-2 rounded-full"
-              style={{ background: isOpen ? '#4ADE80' : '#F87171' }} />
+              style={{ background: isOpen ? '#16A34A' : '#DC2626' }} />
           </span>
-          <span className="text-[11px] font-semibold text-white/90">
+          <span className="text-[11px] font-semibold text-black/80">
             {isOpen ? 'เปิดให้บริการ' : 'ปิดให้บริการ'}
           </span>
-          <div className="ml-auto flex items-center gap-1 text-white/50">
+          <div className="ml-auto flex items-center gap-1 text-black/50">
             <Clock className="size-3" />
             <span className="text-[10px]">{bizHours.open}–{bizHours.close}</span>
           </div>
@@ -218,24 +218,24 @@ export function ParkingSidebar({ isOpen, activeNav }: Props) {
               return (
                 <Link key={key} href={href}
                   className="relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold transition-all duration-150 group"
-                  style={{ background: active ? 'rgba(29,78,216,0.07)' : 'transparent', color: active ? '#1D4ED8' : '#64748B' }}
+                  style={{ background: active ? 'rgba(161,98,7,0.07)' : 'transparent', color: active ? '#A16207' : '#64748B' }}
                   onMouseEnter={e => { if (!active) { e.currentTarget.style.background = '#F8FAFF'; e.currentTarget.style.color = '#334155' } }}
                   onMouseLeave={e => { if (!active) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#64748B' } }}
                 >
-                  {active && <span className="absolute left-0 top-2 bottom-2 w-[3px] rounded-full" style={{ background: '#1D4ED8' }} />}
+                  {active && <span className="absolute left-0 top-2 bottom-2 w-[3px] rounded-full" style={{ background: '#EAB308' }} />}
                   <div className="flex size-7 items-center justify-center rounded-lg shrink-0"
-                    style={active ? { background: 'rgba(29,78,216,0.1)', boxShadow: '0 0 0 3px rgba(29,78,216,0.06)' } : {}}>
-                    <Icon className="size-4" style={{ color: active ? '#1D4ED8' : '#94A3B8' }} strokeWidth={active ? 2.2 : 1.75} />
+                    style={active ? { background: 'rgba(161,98,7,0.1)', boxShadow: '0 0 0 3px rgba(161,98,7,0.06)' } : {}}>
+                    <Icon className="size-4" style={{ color: active ? '#A16207' : '#94A3B8' }} strokeWidth={active ? 2.2 : 1.75} />
                   </div>
                   <span className="flex-1 truncate">{label}</span>
                   {badge && (
                     <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
-                      style={active ? { background: '#1D4ED8', color: 'white' } : { background: '#F1F5F9', color: '#94A3B8' }}>
+                      style={active ? { background: '#EAB308', color: 'black' } : { background: '#F1F5F9', color: '#94A3B8' }}>
                       {badge}
                     </span>
                   )}
                   {active
-                    ? <ChevronRight className="size-3.5 shrink-0" style={{ color: '#1D4ED8', opacity: 0.5 }} />
+                    ? <ChevronRight className="size-3.5 shrink-0" style={{ color: '#A16207', opacity: 0.5 }} />
                     : <ChevronRight className="size-3.5 shrink-0 opacity-0 group-hover:opacity-30 transition-opacity" style={{ color: '#94A3B8' }} />
                   }
                 </Link>
@@ -255,14 +255,14 @@ export function ParkingSidebar({ isOpen, activeNav }: Props) {
               return (
                 <Link key={key} href={href}
                   className="relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold transition-all duration-150"
-                  style={{ background: active ? 'rgba(29,78,216,0.07)' : 'transparent', color: active ? '#1D4ED8' : '#64748B' }}
+                  style={{ background: active ? 'rgba(161,98,7,0.07)' : 'transparent', color: active ? '#A16207' : '#64748B' }}
                   onMouseEnter={e => { if (!active) { e.currentTarget.style.background = '#F8FAFF'; e.currentTarget.style.color = '#334155' } }}
                   onMouseLeave={e => { if (!active) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#64748B' } }}
                 >
-                  {active && <span className="absolute left-0 top-2 bottom-2 w-[3px] rounded-full" style={{ background: '#1D4ED8' }} />}
+                  {active && <span className="absolute left-0 top-2 bottom-2 w-[3px] rounded-full" style={{ background: '#EAB308' }} />}
                   <div className="flex size-7 items-center justify-center rounded-lg shrink-0"
-                    style={active ? { background: 'rgba(29,78,216,0.1)', boxShadow: '0 0 0 3px rgba(29,78,216,0.06)' } : {}}>
-                    <Icon className="size-4" style={{ color: active ? '#1D4ED8' : '#94A3B8' }} strokeWidth={1.75} />
+                    style={active ? { background: 'rgba(161,98,7,0.1)', boxShadow: '0 0 0 3px rgba(161,98,7,0.06)' } : {}}>
+                    <Icon className="size-4" style={{ color: active ? '#A16207' : '#94A3B8' }} strokeWidth={1.75} />
                   </div>
                   <span className="flex-1">{label}</span>
                 </Link>
@@ -280,8 +280,8 @@ export function ParkingSidebar({ isOpen, activeNav }: Props) {
         <button onClick={handleLogout}
           className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer group transition-colors hover:bg-red-50 text-left">
           <div className="relative shrink-0">
-            <div className="flex size-8 items-center justify-center rounded-lg text-[10px] font-bold text-white"
-              style={{ background: 'linear-gradient(135deg, #1D4ED8, #3B82F6)', boxShadow: '0 2px 6px rgba(29,78,216,0.35)' }}>
+            <div className="flex size-8 items-center justify-center rounded-lg text-[10px] font-bold text-black"
+              style={{ background: 'linear-gradient(135deg, #A16207, #EAB308)', boxShadow: '0 2px 6px rgba(161,98,7,0.35)' }}>
               {me ? me.name.charAt(0).toUpperCase() : 'OP'}
             </div>
             <span className="absolute -bottom-0.5 -right-0.5 size-2 rounded-full border-2 border-white"
