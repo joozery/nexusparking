@@ -76,6 +76,35 @@ export function CheckOutDialog({
   entryTime, customExitTime, overnightCfg, onCustomExitTimeChange,
   onSimulateScan, onBack, onConfirm, onPrintReceipt, onDone,
 }: Props) {
+  // รถยนต์ = เขียว (emerald), จักรยานยนต์ = ส้ม (orange) — ธีมสีของ popup ขาออกทั้งหมด
+  const isMoto = cardType === 'motorcycle'
+  const theme = {
+    headerGrad:  isMoto ? 'from-orange-600 to-orange-500' : 'from-emerald-600 to-emerald-500',
+    headerDesc:  isMoto ? 'text-orange-100' : 'text-emerald-100',
+    doneBg:      isMoto ? 'bg-orange-100' : 'bg-emerald-100',
+    doneIcon:    isMoto ? 'text-orange-600' : 'text-emerald-600',
+    doneTitle:   isMoto ? 'text-orange-800' : 'text-emerald-800',
+    scanBorder:  isMoto ? 'border-orange-200' : 'border-emerald-200',
+    scanBg:      isMoto ? 'bg-orange-50' : 'bg-emerald-50',
+    scanHoverBg: isMoto ? 'hover:bg-orange-100' : 'hover:bg-emerald-100',
+    scanHoverBd: isMoto ? 'hover:border-orange-400' : 'hover:border-emerald-400',
+    scanIconBg:  isMoto ? 'bg-orange-600' : 'bg-emerald-600',
+    scanIconSh:  isMoto ? 'shadow-orange-500/30' : 'shadow-emerald-500/30',
+    scanTitle:   isMoto ? 'text-orange-800' : 'text-emerald-800',
+    scanSub:     isMoto ? 'text-orange-500' : 'text-emerald-500',
+    scanHint:    isMoto ? 'text-orange-400' : 'text-emerald-400',
+    scanHintBd:  isMoto ? 'border-orange-200' : 'border-emerald-200',
+    panelBorder: isMoto ? 'border-orange-200' : 'border-emerald-200',
+    panelHeadBg: isMoto ? 'bg-orange-50' : 'bg-emerald-50',
+    panelIcon:   isMoto ? 'text-orange-500' : 'text-emerald-500',
+    panelDur:    isMoto ? 'text-orange-700' : 'text-emerald-700',
+    panelDivider: isMoto ? 'border-orange-100' : 'border-emerald-100',
+    totalLabel:  isMoto ? 'text-orange-100' : 'text-emerald-100',
+    strike:      isMoto ? 'text-orange-300' : 'text-emerald-300',
+    hex600: isMoto ? '#EA580C' : '#059669',
+    hex500: isMoto ? '#F97316' : '#10B981',
+    rgb600: isMoto ? '234,88,12' : '5,150,105',
+  }
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash')
   const [discounts, setDiscounts] = useState<DiscountOption[]>([])
   const [selectedId, setSelectedId] = useState<string>('')
@@ -152,14 +181,14 @@ export function CheckOutDialog({
       <DialogContent className="sm:max-w-xl" showCloseButton>
 
         {/* Header */}
-        <DialogHeader className="bg-gradient-to-r from-emerald-600 to-emerald-500">
+        <DialogHeader className={`bg-gradient-to-r ${theme.headerGrad}`}>
           <div className="flex items-center gap-3 px-4 py-2.5">
             <div className="flex size-7 items-center justify-center rounded-lg bg-white/20 shrink-0">
               <LogOut className="size-3.5 text-white" />
             </div>
             <div>
               <DialogTitle className="text-white text-sm">ขาออก</DialogTitle>
-              <DialogDescription className="text-emerald-100 text-xs mt-0">คำนวณค่าบริการและรับชำระเงิน</DialogDescription>
+              <DialogDescription className={`${theme.headerDesc} text-xs mt-0`}>คำนวณค่าบริการและรับชำระเงิน</DialogDescription>
             </div>
           </div>
         </DialogHeader>
@@ -168,11 +197,11 @@ export function CheckOutDialog({
           {step === 'done' ? (
             /* ── Done step — payment confirmed, offer optional receipt print ── */
             <div className="flex flex-col items-center gap-3 py-6">
-              <div className="flex size-14 items-center justify-center rounded-full bg-emerald-100">
-                <CheckCircle2 className="size-8 text-emerald-600" />
+              <div className={`flex size-14 items-center justify-center rounded-full ${theme.doneBg}`}>
+                <CheckCircle2 className={`size-8 ${theme.doneIcon}`} />
               </div>
               <div className="text-center">
-                <p className="text-sm font-bold text-emerald-800">รับชำระเงินเรียบร้อย</p>
+                <p className={`text-sm font-bold ${theme.doneTitle}`}>รับชำระเงินเรียบร้อย</p>
                 <p className="text-2xl font-black text-slate-800 tabular-nums mt-1">฿{paidAmount ?? fee}</p>
                 <p className="text-xs text-slate-400 mt-1">ลิ้นชักเปิดแล้ว — พิมพ์ใบเสร็จเฉพาะถ้าลูกค้าต้องการ</p>
               </div>
@@ -181,15 +210,15 @@ export function CheckOutDialog({
             /* ── Scan step ── */
             <div
               onClick={onSimulateScan}
-              className="w-full cursor-pointer flex flex-col items-center gap-2 p-8 rounded-lg border-2 border-dashed border-emerald-200 bg-emerald-50 hover:bg-emerald-100 hover:border-emerald-400 transition-all active:scale-[0.98]"
+              className={`w-full cursor-pointer flex flex-col items-center gap-2 p-8 rounded-lg border-2 border-dashed ${theme.scanBorder} ${theme.scanBg} ${theme.scanHoverBg} ${theme.scanHoverBd} transition-all active:scale-[0.98]`}
             >
-              <div className="flex size-14 items-center justify-center rounded-xl bg-emerald-600 shadow-md shadow-emerald-500/30 animate-pulse">
+              <div className={`flex size-14 items-center justify-center rounded-xl ${theme.scanIconBg} shadow-md ${theme.scanIconSh} animate-pulse`}>
                 <CreditCard className="size-7 text-white" />
               </div>
               <div className="text-center">
-                <p className="text-sm font-bold text-emerald-800">รอการสแกนบัตร...</p>
-                <p className="text-xs text-emerald-500 mt-0.5">รับบัตรจากลูกค้าแล้วแตะที่เครื่องอ่านบัตร</p>
-                <p className="text-[10px] text-emerald-400 mt-2 border border-emerald-200 px-2 py-0.5 rounded-full bg-white/60 inline-block">คลิกจำลองการสแกน</p>
+                <p className={`text-sm font-bold ${theme.scanTitle}`}>รอการสแกนบัตร...</p>
+                <p className={`text-xs ${theme.scanSub} mt-0.5`}>รับบัตรจากลูกค้าแล้วแตะที่เครื่องอ่านบัตร</p>
+                <p className={`text-[10px] ${theme.scanHint} mt-2 border ${theme.scanHintBd} px-2 py-0.5 rounded-full bg-white/60 inline-block`}>คลิกจำลองการสแกน</p>
               </div>
             </div>
           ) : (
@@ -244,12 +273,12 @@ export function CheckOutDialog({
                     <p className="text-xs font-bold text-slate-400">กรุณากำหนดเวลาออก</p>
                   </div>
                 ) : (
-                  <div className="rounded-lg border border-emerald-200 overflow-hidden">
-                    <div className="bg-emerald-50 px-2.5 py-1.5 flex items-center gap-1.5">
-                      <Clock className="size-3 text-emerald-500" />
-                      <span className="text-[11px] font-semibold text-emerald-700">{durationStr}</span>
+                  <div className={`rounded-lg border ${theme.panelBorder} overflow-hidden`}>
+                    <div className={`${theme.panelHeadBg} px-2.5 py-1.5 flex items-center gap-1.5`}>
+                      <Clock className={`size-3 ${theme.panelIcon}`} />
+                      <span className={`text-[11px] font-semibold ${theme.panelDur}`}>{durationStr}</span>
                     </div>
-                    <div className="px-2.5 py-2 space-y-1 border-t border-emerald-100 max-h-[160px] overflow-y-auto">
+                    <div className={`px-2.5 py-2 space-y-1 border-t ${theme.panelDivider} max-h-[160px] overflow-y-auto`}>
                       {isOvernightSession && breakdown ? (
                         breakdown.segments.map((seg, i) => (
                           <div key={i} className="flex justify-between text-xs">
@@ -305,11 +334,11 @@ export function CheckOutDialog({
                       )}
                     </div>
                     <div className="px-2.5 py-2 flex items-center justify-between"
-                      style={{ background: totalDiscountAmount > 0 || fineAmount > 0 || isLostCard ? 'linear-gradient(135deg,#059669,#10B981)' : '#059669' }}>
+                      style={{ background: totalDiscountAmount > 0 || fineAmount > 0 || isLostCard ? `linear-gradient(135deg,${theme.hex600},${theme.hex500})` : theme.hex600 }}>
                       <div>
-                        <span className="text-emerald-100 text-[11px] font-semibold">ยอดชำระ</span>
+                        <span className={`${theme.totalLabel} text-[11px] font-semibold`}>ยอดชำระ</span>
                         {totalDiscountAmount > 0 && (
-                          <p className="text-emerald-300 text-[10px] line-through tabular-nums">฿{fee}</p>
+                          <p className={`${theme.strike} text-[10px] line-through tabular-nums`}>฿{fee}</p>
                         )}
                       </div>
                       <span className="text-2xl font-black text-white tabular-nums">฿{finalFee}</span>
@@ -378,7 +407,7 @@ export function CheckOutDialog({
                     <button type="button" onClick={() => { setPaymentMethod('cash'); setCashReceived('') }}
                       className="flex flex-col items-center justify-center gap-1 h-14 rounded-xl text-xs font-bold transition-all"
                       style={paymentMethod === 'cash'
-                        ? { background: '#059669', color: 'white', boxShadow: '0 2px 8px rgba(5,150,105,0.35)' }
+                        ? { background: theme.hex600, color: 'white', boxShadow: `0 2px 8px rgba(${theme.rgb600},0.35)` }
                         : { background: '#F1F5F9', color: '#64748B', border: '1.5px solid #E2E8F0' }}>
                       <Banknote className="size-5" />
                       เงินสด
@@ -406,7 +435,7 @@ export function CheckOutDialog({
                       onChange={e => setCashReceived(toAsciiNumber(e.target.value))}
                       className="w-full h-10 px-3 rounded-lg text-xl font-black text-slate-800 outline-none tabular-nums"
                       style={{ border: '1.5px solid #E2E8F0', background: 'white' }}
-                      onFocus={e => e.currentTarget.style.borderColor = '#059669'}
+                      onFocus={e => e.currentTarget.style.borderColor = theme.hex600}
                       onBlur={e => e.currentTarget.style.borderColor = '#E2E8F0'}
                     />
                     {cashReceived !== '' && (
@@ -508,7 +537,7 @@ export function CheckOutDialog({
               <Button variant="outline" size="sm" className="flex-1" disabled={printing} onClick={onPrintReceipt}>
                 <Printer className="size-3.5" /> {printing ? 'กำลังพิมพ์...' : 'พิมพ์ใบเสร็จ'}
               </Button>
-              <Button size="sm" className="flex-1 text-white font-bold" style={{ background: '#059669' }} onClick={onDone}>
+              <Button size="sm" className="flex-1 text-white font-bold" style={{ background: theme.hex600 }} onClick={onDone}>
                 เสร็จสิ้น
               </Button>
             </>
@@ -524,7 +553,7 @@ export function CheckOutDialog({
                   (!!onCustomExitTimeChange && !customExitTime) ||
                   (paymentMethod === 'cash' && cashReceived !== '' && change < 0)
                 }
-                style={paymentMethod === 'qr' ? { background: '#7C3AED' } : { background: '#059669' }}
+                style={paymentMethod === 'qr' ? { background: '#7C3AED' } : { background: theme.hex600 }}
                 onClick={() => onConfirm(paymentMethod, selectedId || undefined, dailySelectedId || undefined, isLostCard, selectedFineId || undefined)}
               >
                 {paymentMethod === 'cash'
