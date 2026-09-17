@@ -39,15 +39,10 @@ export async function GET() {
   // "รถเข้าวันนี้" split into 4 buckets: car/motorcycle × normal/overnight billing mode.
   // Billing mode is worked out from the session's actual fee breakdown (crossing the
   // overnight window), not the stored cardType — a motorcycle can be billed overnight too.
-  const afterHoursCfg = {
-    start: settings.businessHours.close,
-    end:   settings.businessHours.open,
-    fine:  settings.afterHoursFine,
-  }
   let carNormal = 0, carOvernight = 0, motoNormal = 0, motoOvernight = 0
   for (const s of todayEntrySessions) {
     const isCar = (CAR_TYPES as readonly string[]).includes(s.cardType)
-    const breakdown = calcFeeBreakdown(s.cardType, s.entryTime, s.exitTime ?? now, settings.rates.overnight, afterHoursCfg)
+    const breakdown = calcFeeBreakdown(s.cardType, s.entryTime, s.exitTime ?? now, settings.rates.overnight)
     const isOvernight = breakdown.segments.some(seg => seg.kind === 'overnight')
     if (isCar && isOvernight)       carOvernight++
     else if (isCar)                 carNormal++

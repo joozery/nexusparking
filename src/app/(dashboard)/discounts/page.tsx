@@ -16,7 +16,6 @@ interface Discount {
 interface Fine {
   _id: string
   name: string
-  fineType: 'after_hours'
   amount: number
   isActive: boolean
   description?: string
@@ -143,7 +142,6 @@ export default function DiscountsPage() {
     setSavingFine(true)
     const body = {
       name: fineForm.name,
-      fineType: 'after_hours' as const,
       amount: Number(fineForm.amount),
       description: fineForm.description || undefined,
       isActive: fineForm.isActive,
@@ -284,7 +282,7 @@ export default function DiscountsPage() {
           </div>
           <div>
             <h1 className="text-sm font-black text-slate-900">จัดการส่วนลด / ค่าปรับ</h1>
-            <p className="text-[10px] text-slate-400 mt-0.5">ร้านค้าพาร์ทเนอร์ ส่วนลดรายคืนสำหรับโรงแรม และค่าปรับนอกเวลา</p>
+            <p className="text-[10px] text-slate-400 mt-0.5">ร้านค้าพาร์ทเนอร์ ส่วนลดรายคืนสำหรับโรงแรม และค่าปรับ</p>
           </div>
         </div>
       </header>
@@ -364,7 +362,7 @@ export default function DiscountsPage() {
           </>
         )}
 
-        {/* ── ค่าปรับนอกเวลา ── */}
+        {/* ── ค่าปรับ ── */}
         <div>
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
@@ -373,8 +371,8 @@ export default function DiscountsPage() {
                 <AlertOctagon className="size-3.5" style={{ color: '#DC2626' }} />
               </div>
               <div>
-                <p className="text-sm font-black text-slate-800">ค่าปรับนอกเวลา</p>
-                <p className="text-[10px] text-slate-400">คิดเพิ่มจากค่าจอดปกติ เมื่อรับรถออกนอกเวลาทำการ — ใช้ได้ครั้งละ 1 รายการเท่านั้น</p>
+                <p className="text-sm font-black text-slate-800">ค่าปรับ</p>
+                <p className="text-[10px] text-slate-400">คิดเพิ่มจากค่าจอดปกติ — operator เลือกได้ตอนคิดเงินขาออก (เลือกได้ครั้งละ 1 รายการ)</p>
               </div>
             </div>
             <button onClick={openCreateFine}
@@ -392,7 +390,7 @@ export default function DiscountsPage() {
             <div className="flex flex-col items-center justify-center h-28 gap-2 rounded-2xl"
               style={{ border: '1.5px dashed #E8ECF4' }}>
               <AlertOctagon className="size-8 text-slate-200" />
-              <p className="text-xs text-slate-400">ยังไม่มีค่าปรับนอกเวลา</p>
+              <p className="text-xs text-slate-400">ยังไม่มีค่าปรับ</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-3 max-w-2xl">
@@ -559,7 +557,7 @@ export default function DiscountsPage() {
 
             <div className="px-6 py-5 flex items-center justify-between"
               style={{ background: 'linear-gradient(135deg,#991B1B,#DC2626)' }}>
-              <p className="text-white font-black">{editingFine ? 'แก้ไขค่าปรับ' : 'เพิ่มค่าปรับนอกเวลา'}</p>
+              <p className="text-white font-black">{editingFine ? 'แก้ไขค่าปรับ' : 'เพิ่มค่าปรับ'}</p>
               <button onClick={() => setShowFineForm(false)}
                 className="size-8 rounded-lg flex items-center justify-center"
                 style={{ background: 'rgba(255,255,255,0.15)' }}>
@@ -598,12 +596,6 @@ export default function DiscountsPage() {
                   onFocus={e => { e.currentTarget.style.borderColor = '#DC2626' }}
                   onBlur={e => { e.currentTarget.style.borderColor = '#E2E8F0' }} />
               </div>
-
-              {fineForm.isActive && (
-                <p className="text-[10px] text-slate-400 flex items-center gap-1">
-                  <AlertOctagon className="size-3" /> บันทึกแล้วจะใช้งานทันที และปิดค่าปรับนอกเวลาอันอื่นให้อัตโนมัติ
-                </p>
-              )}
 
               <div className="flex gap-2 pt-1">
                 <button onClick={() => setShowFineForm(false)}

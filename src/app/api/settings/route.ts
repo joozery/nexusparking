@@ -54,7 +54,6 @@ export async function PUT(req: NextRequest) {
     }
   }
   if (body.lostCardFine   !== undefined) $set['lostCardFine']   = body.lostCardFine
-  if (body.afterHoursFine !== undefined) $set['afterHoursFine'] = body.afterHoursFine
   if (body.monthlyDeposit !== undefined) $set['monthlyDeposit'] = body.monthlyDeposit
   if (body.monthlyFee     !== undefined) $set['monthlyFee']     = body.monthlyFee
   const updated = await SystemSettings.findOneAndUpdate(

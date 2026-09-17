@@ -18,7 +18,6 @@ export interface ISystemSettings extends Document {
     cameraExit:   { ip: string; port: number; user: string; pass: string; enabled: boolean }
   }
   lostCardFine:    number
-  afterHoursFine:  number
   monthlyDeposit:  number
   monthlyFee:      number
   cctvUrls: { plate: string; face: string; rear: string; exit: string; plateOut: string; faceOut: string }
@@ -65,7 +64,6 @@ const SystemSettingsSchema = new Schema<ISystemSettings>({
     cameraExit:  captureCameraDevice,
   },
   lostCardFine:   { type: Number, default: 300 },
-  afterHoursFine: { type: Number, default: 300 },
   monthlyDeposit: { type: Number, default: 500 },
   monthlyFee:     { type: Number, default: 300 },
   cctvUrls: {

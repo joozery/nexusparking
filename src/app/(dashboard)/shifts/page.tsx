@@ -6,7 +6,7 @@ import {
   ChevronDown, ChevronUp, Car, Bike, Moon,
   RefreshCw, CalendarDays, User, Tag,
 } from 'lucide-react'
-import { calcFeeBreakdown, type OvernightConfig, type AfterHoursConfig } from '@/lib/calcFee'
+import { calcFeeBreakdown, type OvernightConfig } from '@/lib/calcFee'
 
 const ENTRY_TYPE_META = {
   car:                 { label: 'รถยนต์',            icon: Car,  color: '#A16207' },
@@ -93,15 +93,12 @@ function shiftDuration(start: string, end?: string) {
 function ShiftSessionTable({ shift }: { shift: Shift }) {
   const [sessions, setSessions] = useState<Session[]>([])
   const [loading, setLoading] = useState(true)
-  const [feeConfig, setFeeConfig] = useState<{ overnight: OvernightConfig; afterHours: AfterHoursConfig } | null>(null)
+  const [feeConfig, setFeeConfig] = useState<{ overnight: OvernightConfig } | null>(null)
 
   useEffect(() => {
     fetch('/api/settings').then(r => r.ok ? r.json() : null).then(d => {
       if (!d) return
-      setFeeConfig({
-        overnight:  d.rates.overnight,
-        afterHours: { start: d.businessHours.close, end: d.businessHours.open, fine: d.afterHoursFine },
-      })
+      setFeeConfig({ overnight: d.rates.overnight })
     })
   }, [])
 
@@ -147,7 +144,7 @@ function ShiftSessionTable({ shift }: { shift: Shift }) {
       const isCar = s.cardType !== 'motorcycle'
       const breakdown = calcFeeBreakdown(
         s.cardType, new Date(s.entryTime), s.exitTime ? new Date(s.exitTime) : new Date(),
-        feeConfig.overnight, feeConfig.afterHours,
+        feeConfig.overnight,
       )
       const isOvernight = breakdown.segments.some(seg => seg.kind === 'overnight')
       const key: EntryTypeKey = isCar

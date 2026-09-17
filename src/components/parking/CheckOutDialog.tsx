@@ -9,7 +9,7 @@ import {
 } from '@/components/ui/dialog'
 import { CardBadge } from './CardBadge'
 import { type CardType } from './types'
-import { calcFeeBreakdown, type OvernightConfig, type AfterHoursConfig } from '@/lib/calcFee'
+import { calcFeeBreakdown, type OvernightConfig } from '@/lib/calcFee'
 import { toAsciiNumber } from '@/lib/thaiInput'
 
 export type PaymentMethod = 'cash' | 'qr'
@@ -20,6 +20,13 @@ interface DiscountOption {
   discountType: 'fixed' | 'percent' | 'per_day'
   discountValue: number
   maxDiscount?: number
+  description?: string
+}
+
+interface FineOption {
+  _id: string
+  name: string
+  amount: number
   description?: string
 }
 
@@ -35,14 +42,13 @@ interface Props {
   entryTime?: Date | null
   customExitTime?: string
   overnightCfg?: OvernightConfig
-  afterHoursCfg?: AfterHoursConfig
   printing?: boolean
   lostCardFine?: number
   defaultLostCard?: boolean
   onCustomExitTimeChange?: (v: string) => void
   onSimulateScan: () => void
   onBack: () => void
-  onConfirm: (paymentMethod: PaymentMethod, discountId?: string, dailyDiscountId?: string, isLostCard?: boolean) => void
+  onConfirm: (paymentMethod: PaymentMethod, discountId?: string, dailyDiscountId?: string, isLostCard?: boolean, fineId?: string) => void
   onPrintReceipt?: () => void
   onDone?: () => void
 }
@@ -67,13 +73,15 @@ function fmtDuration(entryTime: Date | null | undefined, exitTime: Date | null |
 
 export function CheckOutDialog({
   open, onOpenChange, step, plate, cardType, hours, fee, paidAmount, printing, lostCardFine = 300, defaultLostCard,
-  entryTime, customExitTime, overnightCfg, afterHoursCfg, onCustomExitTimeChange,
+  entryTime, customExitTime, overnightCfg, onCustomExitTimeChange,
   onSimulateScan, onBack, onConfirm, onPrintReceipt, onDone,
 }: Props) {
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash')
   const [discounts, setDiscounts] = useState<DiscountOption[]>([])
   const [selectedId, setSelectedId] = useState<string>('')
   const [dailySelectedId, setDailySelectedId] = useState<string>('')
+  const [fines, setFines] = useState<FineOption[]>([])
+  const [selectedFineId, setSelectedFineId] = useState<string>('')
   const [cashReceived, setCashReceived] = useState('')
   const [isLostCard, setIsLostCard] = useState(false)
 
@@ -90,17 +98,19 @@ export function CheckOutDialog({
   const exitTimeDate = customExitTime ? new Date(customExitTime) : null
   const exitForCalc = exitTimeDate ?? new Date()
   const breakdown = entryTime
-    ? calcFeeBreakdown(cardType, entryTime, exitForCalc, overnightCfg, afterHoursCfg)
+    ? calcFeeBreakdown(cardType, entryTime, exitForCalc, overnightCfg)
     : null
   const isOvernightSession = breakdown?.segments.some(s => s.kind === 'overnight') ?? false
-  const hasAfterHours = breakdown?.segments.some(s => s.kind === 'after-hours') ?? false
   const nights = breakdown?.segments.filter(s => s.kind === 'overnight').length ?? 0
 
   const selectedDailyDiscount = dailyDiscounts.find(d => d._id === dailySelectedId) ?? null
   const dailyDiscountAmount = selectedDailyDiscount ? selectedDailyDiscount.discountValue * nights : 0
 
+  const selectedFine = fines.find(f => f._id === selectedFineId) ?? null
+  const fineAmount = selectedFine?.amount ?? 0
+
   const totalDiscountAmount = discountAmount + dailyDiscountAmount
-  const finalFee = Math.max(0, fee - totalDiscountAmount) + (isLostCard ? lostCardFine : 0)
+  const finalFee = Math.max(0, fee - totalDiscountAmount) + fineAmount + (isLostCard ? lostCardFine : 0)
   const cashNum = parseFloat(cashReceived) || 0
   const change = cashNum - finalFee
 
@@ -111,6 +121,10 @@ export function CheckOutDialog({
       fetch('/api/discounts?active=1')
         .then(r => r.json())
         .then(d => setDiscounts(Array.isArray(d) ? d : []))
+        .catch(() => {})
+      fetch('/api/fines?active=1')
+        .then(r => r.json())
+        .then(f => setFines(Array.isArray(f) ? f : []))
         .catch(() => {})
     }
   }, [open])
@@ -129,7 +143,7 @@ export function CheckOutDialog({
   }, [open, plate])
 
   function handleClose(o: boolean) {
-    if (!o) { setPaymentMethod('cash'); setSelectedId(''); setDailySelectedId(''); setCashReceived(''); setIsLostCard(false) }
+    if (!o) { setPaymentMethod('cash'); setSelectedId(''); setDailySelectedId(''); setSelectedFineId(''); setCashReceived(''); setIsLostCard(false) }
     onOpenChange(o)
   }
 
@@ -236,21 +250,13 @@ export function CheckOutDialog({
                       <span className="text-[11px] font-semibold text-emerald-700">{durationStr}</span>
                     </div>
                     <div className="px-2.5 py-2 space-y-1 border-t border-emerald-100 max-h-[160px] overflow-y-auto">
-                      {(isOvernightSession || hasAfterHours) && breakdown ? (
+                      {isOvernightSession && breakdown ? (
                         breakdown.segments.map((seg, i) => (
                           <div key={i} className="flex justify-between text-xs">
-                            <span style={{
-                              color: seg.kind === 'overnight' ? '#7C3AED'
-                                   : seg.kind === 'after-hours' ? '#DC2626'
-                                   : '#64748B',
-                            }}>
-                              {seg.kind === 'overnight' ? '🌙 ' : seg.kind === 'after-hours' ? '⚠️ ' : ''}{seg.rateLabel}
+                            <span style={{ color: seg.kind === 'overnight' ? '#7C3AED' : '#64748B' }}>
+                              {seg.kind === 'overnight' ? '🌙 ' : ''}{seg.rateLabel}
                             </span>
-                            <span className="font-bold tabular-nums" style={{
-                              color: seg.kind === 'overnight' ? '#7C3AED'
-                                   : seg.kind === 'after-hours' ? '#DC2626'
-                                   : '#334155',
-                            }}>
+                            <span className="font-bold tabular-nums" style={{ color: seg.kind === 'overnight' ? '#7C3AED' : '#334155' }}>
                               ฿{seg.fee}
                             </span>
                           </div>
@@ -285,6 +291,12 @@ export function CheckOutDialog({
                           <span className="tabular-nums">-฿{dailyDiscountAmount}</span>
                         </div>
                       )}
+                      {fineAmount > 0 && (
+                        <div className="flex justify-between text-xs font-semibold pt-0.5 border-t border-dashed border-slate-100" style={{ color: '#DC2626' }}>
+                          <span className="flex items-center gap-1"><AlertTriangle className="size-3" />{selectedFine?.name}</span>
+                          <span className="tabular-nums">+฿{fineAmount}</span>
+                        </div>
+                      )}
                       {isLostCard && (
                         <div className="flex justify-between text-xs font-semibold pt-0.5 border-t border-dashed border-slate-100" style={{ color: '#B45309' }}>
                           <span className="flex items-center gap-1"><AlertTriangle className="size-3" />ค่าปรับบัตรหาย</span>
@@ -293,7 +305,7 @@ export function CheckOutDialog({
                       )}
                     </div>
                     <div className="px-2.5 py-2 flex items-center justify-between"
-                      style={{ background: totalDiscountAmount > 0 || isLostCard ? 'linear-gradient(135deg,#059669,#10B981)' : '#059669' }}>
+                      style={{ background: totalDiscountAmount > 0 || fineAmount > 0 || isLostCard ? 'linear-gradient(135deg,#059669,#10B981)' : '#059669' }}>
                       <div>
                         <span className="text-emerald-100 text-[11px] font-semibold">ยอดชำระ</span>
                         {totalDiscountAmount > 0 && (
@@ -460,6 +472,30 @@ export function CheckOutDialog({
                     </div>
                   </div>
                 )}
+
+                {fines.length > 0 && (
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-widest mb-1 flex items-center gap-1" style={{ color: '#DC2626' }}>
+                      <AlertTriangle className="size-3" /> ค่าปรับ
+                    </p>
+                    <div className="relative">
+                      <select
+                        value={selectedFineId}
+                        onChange={e => setSelectedFineId(e.target.value)}
+                        className="w-full h-9 rounded-lg pl-2.5 pr-7 text-xs font-semibold text-slate-700 outline-none appearance-none cursor-pointer"
+                        style={{ border: selectedFineId ? '2px solid #DC2626' : '1.5px solid #E2E8F0', background: selectedFineId ? 'rgba(220,38,38,0.04)' : '#F8FAFF' }}
+                      >
+                        <option value="">— ไม่มีค่าปรับ —</option>
+                        {fines.map(f => (
+                          <option key={f._id} value={f._id}>
+                            {f.name} (+฿{f.amount})
+                          </option>
+                        ))}
+                      </select>
+                      <ChevronDown className="size-3.5 text-slate-400 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
             </div>
@@ -489,7 +525,7 @@ export function CheckOutDialog({
                   (paymentMethod === 'cash' && cashReceived !== '' && change < 0)
                 }
                 style={paymentMethod === 'qr' ? { background: '#7C3AED' } : { background: '#059669' }}
-                onClick={() => onConfirm(paymentMethod, selectedId || undefined, dailySelectedId || undefined, isLostCard)}
+                onClick={() => onConfirm(paymentMethod, selectedId || undefined, dailySelectedId || undefined, isLostCard, selectedFineId || undefined)}
               >
                 {paymentMethod === 'cash'
                   ? <><Banknote className="size-4" /> รับเงินสด ฿{finalFee}</>

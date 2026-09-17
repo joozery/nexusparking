@@ -8,18 +8,12 @@ export interface OvernightConfig {
   extraHour:      number
 }
 
-export interface AfterHoursConfig {
-  start: string  // 'HH:MM' - เวลาปิดทำการ (เช่น '22:00')
-  end:   string  // 'HH:MM' - เวลาเปิดทำการ (เช่น '06:30')
-  fine:  number  // ค่าบริการนอกเวลา (เช่น 300)
-}
-
 export interface FeeSegment {
-  kind:      'normal' | 'overnight' | 'outside' | 'after-hours'
+  kind:      'normal' | 'overnight' | 'outside'
   from:      Date
   to:        Date
   minutes:   number
-  hours:     number   // ceiled hours (0 for overnight flat / after-hours)
+  hours:     number   // ceiled hours (0 for overnight flat)
   fee:       number
   rateLabel: string
 }
@@ -95,41 +89,24 @@ function overnightWindowsIn(entry: Date, exit: Date, cfg: OvernightConfig) {
   return windows
 }
 
-function isInAfterHours(exitTime: Date, cfg: AfterHoursConfig): boolean {
-  const exitMin  = exitTime.getHours() * 60 + exitTime.getMinutes()
-  const startMin = toMin(cfg.start)
-  const endMin   = toMin(cfg.end)
-  return exitMin >= startMin || exitMin < endMin
-}
-
 // คำนวณ breakdown แยกแต่ละช่วง — ใช้แสดงผลใน simulator และ checkout
 export function calcFeeBreakdown(
   cardType:    CardType,
   entryTime:   Date,
   exitTime:    Date,
   overnight?:  OvernightConfig,
-  afterHours?: AfterHoursConfig,
 ): { segments: FeeSegment[]; total: number } {
   const cfg = overnight ?? DEFAULT_OVERNIGHT
 
   // Grace period: จอดไม่ถึง 1 นาที (นับแบบ floor เหมือน totalMin ด้านล่าง) → ไม่คิดค่าจอดเลย
-  // ใช้กับทุกประเภทบัตรรวมถึง overnight แต่ไม่กระทบค่าบริการนอกเวลา (after-hours) ซึ่งยังคิดตามปกติ
+  // ใช้กับทุกประเภทบัตรรวมถึง overnight
   const graceMin = Math.floor((exitTime.getTime() - entryTime.getTime()) / 60000)
   if (graceMin < 1) {
     const segs: FeeSegment[] = [{
       kind: 'normal', from: entryTime, to: exitTime,
       minutes: graceMin, hours: 0, fee: 0, rateLabel: 'ฟรี (จอดไม่ถึง 1 นาที)',
     }]
-    if (afterHours && isInAfterHours(exitTime, afterHours)) {
-      segs.push({
-        kind: 'after-hours',
-        from: exitTime, to: exitTime,
-        minutes: 0, hours: 0,
-        fee: afterHours.fine,
-        rateLabel: `ค่าบริการนอกเวลา (${afterHours.start}–${afterHours.end})`,
-      })
-    }
-    return { segments: segs, total: segs.reduce((s, seg) => s + seg.fee, 0) }
+    return { segments: segs, total: 0 }
   }
 
   // คำนวณ windows ก่อน — overnight mode จะ active ก็ต่อเมื่อมี window ที่ถึง flatRateStart จริง
@@ -160,18 +137,9 @@ export function calcFeeBreakdown(
 
   if (!isOvernight) {
     const segs: FeeSegment[] = [{
-      kind: 'normal', from: entryTime, to: exitTime, 
+      kind: 'normal', from: entryTime, to: exitTime,
       minutes: totalMin, hours: totalH, fee: normalFee, rateLabel: normalRateLabel
     }]
-    if (afterHours && isInAfterHours(exitTime, afterHours)) {
-      segs.push({
-        kind: 'after-hours',
-        from: exitTime, to: exitTime,
-        minutes: 0, hours: 0,
-        fee: afterHours.fine,
-        rateLabel: `ค่าบริการนอกเวลา (${afterHours.start}–${afterHours.end})`,
-      })
-    }
     return { segments: segs, total: segs.reduce((s, seg) => s + seg.fee, 0) }
   }
 
@@ -228,17 +196,6 @@ export function calcFeeBreakdown(
     })
   }
 
-  // ค่าบริการนอกเวลาทำการ — ถ้าเวลาออกตกในช่วง after-hours
-  if (afterHours && isInAfterHours(exitTime, afterHours)) {
-    segments.push({
-      kind: 'after-hours',
-      from: exitTime, to: exitTime,
-      minutes: 0, hours: 0,
-      fee: afterHours.fine,
-      rateLabel: `ค่าบริการนอกเวลา (${afterHours.start}–${afterHours.end})`,
-    })
-  }
-
   const total = segments.reduce((s, seg) => s + seg.fee, 0)
   return { segments, total }
 }
@@ -249,7 +206,6 @@ export function calcFeeFromMinutes(
   entryTime?:  Date,
   exitTime?:   Date,
   overnight?:  OvernightConfig,
-  afterHours?: AfterHoursConfig,
 ): number {
   const cfg = overnight ?? DEFAULT_OVERNIGHT
   const isOvernight =
@@ -258,12 +214,12 @@ export function calcFeeFromMinutes(
 
   if (isOvernight) {
     if (!entryTime || !exitTime) return cfg.flatRate
-    return calcFeeBreakdown(type, entryTime, exitTime, cfg, afterHours).total
+    return calcFeeBreakdown(type, entryTime, exitTime, cfg).total
   }
 
-  // เมื่อมีเวลาออกจริง ให้ใช้ breakdown เพื่อรวม after-hours ได้ถูกต้อง
+  // เมื่อมีเวลาออกจริง ให้ใช้ breakdown เพื่อความสอดคล้องกับ checkout
   if (entryTime && exitTime) {
-    return calcFeeBreakdown(type, entryTime, exitTime, cfg, afterHours).total
+    return calcFeeBreakdown(type, entryTime, exitTime, cfg).total
   }
 
   if (type === 'car')        return ceilHours(minutes) <= 1 ? 30 : 30 + (ceilHours(minutes) - 1) * 20

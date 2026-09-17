@@ -16,7 +16,7 @@ import { CctvStrip } from '@/components/parking/CctvStrip'
 import { FleetStatusBar, type FleetStats } from '@/components/parking/FleetStatusBar'
 import { CarsInLotDialog } from '@/components/parking/CarsInLotDialog'
 import { type CardType } from '@/components/parking/types'
-import { calcFeeFromMinutes, type OvernightConfig, type AfterHoursConfig } from '@/lib/calcFee'
+import { calcFeeFromMinutes, type OvernightConfig } from '@/lib/calcFee'
 import { useToast } from '@/components/ui/Toast'
 import { triggerBarrierClient } from '@/lib/barrierClient'
 import { convertThaiToEn, normalizeUid, toAsciiNumber, toAsciiPlate } from '@/lib/thaiInput'
@@ -140,7 +140,6 @@ export default function OperatorPage() {
   const { success, error: toastError, warning } = useToast()
 
   const [overnightCfg,   setOvernightCfg]   = useState<OvernightConfig | undefined>(undefined)
-  const [afterHoursCfg,  setAfterHoursCfg]  = useState<AfterHoursConfig | undefined>(undefined)
   const [monthlyDeposit, setMonthlyDeposit] = useState(500)
   const [monthlyFee,     setMonthlyFee]     = useState(300)
   const [lostCardFine,   setLostCardFine]   = useState(300)
@@ -257,13 +256,6 @@ export default function OperatorPage() {
       .then(r => r.json())
       .then(s => {
         if (s?.rates?.overnight) setOvernightCfg(s.rates.overnight)
-        if (s?.businessHours) {
-          setAfterHoursCfg({
-            start: s.businessHours.close ?? '22:00',
-            end:   s.businessHours.open  ?? '06:30',
-            fine:  s.afterHoursFine      ?? 300,
-          })
-        }
         if (s?.monthlyDeposit !== undefined) setMonthlyDeposit(s.monthlyDeposit)
         if (s?.monthlyFee     !== undefined) setMonthlyFee(s.monthlyFee)
         if (s?.lostCardFine   !== undefined) setLostCardFine(s.lostCardFine)
@@ -483,7 +475,7 @@ export default function OperatorPage() {
     const durationMin = Math.max(1, Math.floor((exit.getTime() - coEntryTime.getTime()) / 60000))
     const hours = Math.ceil(durationMin / 60)
     setCoHours(hours)
-    setCoFee(calcFeeFromMinutes(coType, durationMin, coEntryTime, exit, overnightCfg, afterHoursCfg))
+    setCoFee(calcFeeFromMinutes(coType, durationMin, coEntryTime, exit, overnightCfg))
   }
 
   // Check Out (scan dialog)
@@ -513,7 +505,7 @@ export default function OperatorPage() {
     const hours = Math.ceil(durationMin / 60)
     setCoType(s.cardType)
     setCoHours(hours)
-    setCoFee(calcFeeFromMinutes(s.cardType, durationMin, entry, now, overnightCfg, afterHoursCfg))
+    setCoFee(calcFeeFromMinutes(s.cardType, durationMin, entry, now, overnightCfg))
     setCoSessionId(s._id); setCoPlate(s.plate); setCoEntryTime(entry); setCoStep('payment'); setCheckOutOpen(true)
     setLastExitSessionId(s._id); setLastExitPlate(s.plate)
     setCoAssumeLostCard(assumeLostCard)
@@ -541,8 +533,8 @@ export default function OperatorPage() {
     setPlateQuick('')
   }
 
-  async function handleCheckout(paymentMethod: PaymentMethod, discountId?: string, dailyDiscountId?: string, isLostCard?: boolean) {
-    const body: Record<string, unknown> = { sessionId: coSessionId || undefined, paymentMethod, discountId, dailyDiscountId, lostCard: isLostCard }
+  async function handleCheckout(paymentMethod: PaymentMethod, discountId?: string, dailyDiscountId?: string, isLostCard?: boolean, fineId?: string) {
+    const body: Record<string, unknown> = { sessionId: coSessionId || undefined, paymentMethod, discountId, dailyDiscountId, lostCard: isLostCard, fineId }
     if (coCustomTime) body.exitTime = new Date(coCustomTime).toISOString()
     const res = await fetch('/api/sessions/checkout', {
       method: 'POST',
@@ -1061,7 +1053,6 @@ export default function OperatorPage() {
         defaultLostCard={coAssumeLostCard}
         entryTime={coEntryTime}
         overnightCfg={overnightCfg}
-        afterHoursCfg={afterHoursCfg}
         onSimulateScan={simulateCOScan}
         onBack={() => setCoStep('scan')}
         onConfirm={handleCheckout}

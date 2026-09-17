@@ -18,11 +18,6 @@ export async function GET() {
   const todayStart = getTodayStartTH()
 
   const settings = await getSettings()
-  const afterHoursCfg = {
-    start: settings.businessHours.close,
-    end:   settings.businessHours.open,
-    fine:  settings.afterHoursFine,
-  }
 
   const [carActive, motoActive, carLost, motoLost, carCards, motoCards, carQueueWaiting, motoQueueWaiting] = await Promise.all([
     ParkingSession.find({ cardType: { $in: CAR_TYPES }, status: 'active' }).lean(),
@@ -53,7 +48,7 @@ export async function GET() {
   function splitByBillingMode(sessions: IParkingSession[]) {
     let overnight = 0
     for (const s of sessions) {
-      const breakdown = calcFeeBreakdown(s.cardType, s.entryTime, now, settings.rates.overnight, afterHoursCfg)
+      const breakdown = calcFeeBreakdown(s.cardType, s.entryTime, now, settings.rates.overnight)
       if (breakdown.segments.some(seg => seg.kind === 'overnight')) overnight++
     }
     return { normal: sessions.length - overnight, overnight }

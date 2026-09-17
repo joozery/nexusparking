@@ -5,6 +5,7 @@ import { connectDB } from '@/lib/mongodb'
 import { ParkingSession } from '@/models/ParkingSession'
 import { Shift } from '@/models/Shift'
 import { Discount } from '@/models/Discount'
+import { Fine } from '@/models/Fine'
 import { getSettings } from '@/models/SystemSettings'
 import { calcFeeFromMinutes, calcFeeBreakdown, calcDurationMinutes } from '@/lib/calcFee'
 import { runCheckoutSequence } from '@/lib/hardware'
@@ -22,18 +23,13 @@ export async function GET(req: NextRequest) {
 
   const now = new Date()
   const durationMin = calcDurationMinutes(session.entryTime, now)
-  const afterHoursCfg = {
-    start: settings.businessHours.close,
-    end:   settings.businessHours.open,
-    fine:  settings.afterHoursFine,
-  }
-  const fee = calcFeeFromMinutes(session.cardType, durationMin, session.entryTime, now, settings.rates.overnight, afterHoursCfg)
+  const fee = calcFeeFromMinutes(session.cardType, durationMin, session.entryTime, now, settings.rates.overnight)
 
   return NextResponse.json({ ...session, durationMin, fee, totalFee: fee })
 }
 
 export async function POST(req: NextRequest) {
-  const { uid, sessionId, paymentMethod = 'cash', discountId, dailyDiscountId, exitTime: exitTimeRaw, lostCard } = await req.json()
+  const { uid, sessionId, paymentMethod = 'cash', discountId, dailyDiscountId, fineId, exitTime: exitTimeRaw, lostCard } = await req.json()
 
   const jar     = await cookies()
   const token   = jar.get(COOKIE_NAME)?.value
@@ -50,12 +46,7 @@ export async function POST(req: NextRequest) {
   const settings = await getSettings()
   const now = exitTimeRaw ? new Date(exitTimeRaw) : new Date()
   const durationMin = calcDurationMinutes(session.entryTime, now)
-  const afterHoursCfg = {
-    start: settings.businessHours.close,
-    end:   settings.businessHours.open,
-    fine:  settings.afterHoursFine,
-  }
-  const fee = calcFeeFromMinutes(session.cardType, durationMin, session.entryTime, now, settings.rates.overnight, afterHoursCfg)
+  const fee = calcFeeFromMinutes(session.cardType, durationMin, session.entryTime, now, settings.rates.overnight)
 
   // คำนวณส่วนลดร้านค้า (fixed / percent)
   let discountAmount = 0
@@ -81,7 +72,7 @@ export async function POST(req: NextRequest) {
       name: string; discountType: string; discountValue: number
     } | null
     if (dailyDiscount && dailyDiscount.discountType === 'per_day') {
-      const segments = calcFeeBreakdown(session.cardType, session.entryTime, now, settings.rates.overnight, afterHoursCfg).segments
+      const segments = calcFeeBreakdown(session.cardType, session.entryTime, now, settings.rates.overnight).segments
       const nights = segments.filter(s => s.kind === 'overnight').length
       if (nights > 0) {
         discountNames.push(`${dailyDiscount.name} (${nights} คืน)`)
@@ -91,8 +82,20 @@ export async function POST(req: NextRequest) {
   }
 
   const discountName = discountNames.join(' + ') || undefined
+
+  // ค่าปรับที่ operator เลือกจาก dropdown ตอน checkout
+  let fineName: string | undefined
+  let fineAmount = 0
+  if (fineId) {
+    const fine = await Fine.findById(fineId).lean() as { name: string; amount: number } | null
+    if (fine) {
+      fineName = fine.name
+      fineAmount = fine.amount
+    }
+  }
+
   const lostFine = lostCard ? settings.lostCardFine : 0
-  const totalFee = Math.max(0, fee - discountAmount) + lostFine
+  const totalFee = Math.max(0, fee - discountAmount) + fineAmount + lostFine
 
   session.exitTime       = now
   session.durationMin    = durationMin
@@ -102,6 +105,9 @@ export async function POST(req: NextRequest) {
   session.discountId     = discountId ?? undefined
   session.discountName   = discountName
   session.discountAmount = discountAmount
+  session.fineId         = fineId ?? undefined
+  session.fineName       = fineName
+  session.fineAmount     = fineAmount
   session.status         = 'completed'
   session.paymentMethod  = paymentMethod as 'cash' | 'qr'
   if (payload) session.operatorId = payload.sub
