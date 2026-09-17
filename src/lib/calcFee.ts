@@ -112,6 +112,26 @@ export function calcFeeBreakdown(
 ): { segments: FeeSegment[]; total: number } {
   const cfg = overnight ?? DEFAULT_OVERNIGHT
 
+  // Grace period: จอดไม่ถึง 1 นาที (นับแบบ floor เหมือน totalMin ด้านล่าง) → ไม่คิดค่าจอดเลย
+  // ใช้กับทุกประเภทบัตรรวมถึง overnight แต่ไม่กระทบค่าบริการนอกเวลา (after-hours) ซึ่งยังคิดตามปกติ
+  const graceMin = Math.floor((exitTime.getTime() - entryTime.getTime()) / 60000)
+  if (graceMin < 1) {
+    const segs: FeeSegment[] = [{
+      kind: 'normal', from: entryTime, to: exitTime,
+      minutes: graceMin, hours: 0, fee: 0, rateLabel: 'ฟรี (จอดไม่ถึง 1 นาที)',
+    }]
+    if (afterHours && isInAfterHours(exitTime, afterHours)) {
+      segs.push({
+        kind: 'after-hours',
+        from: exitTime, to: exitTime,
+        minutes: 0, hours: 0,
+        fee: afterHours.fine,
+        rateLabel: `ค่าบริการนอกเวลา (${afterHours.start}–${afterHours.end})`,
+      })
+    }
+    return { segments: segs, total: segs.reduce((s, seg) => s + seg.fee, 0) }
+  }
+
   // คำนวณ windows ก่อน — overnight mode จะ active ก็ต่อเมื่อมี window ที่ถึง flatRateStart จริง
   const spansWindow = cardType === 'overnight' || spansOvernightWindow(entryTime, exitTime, cfg)
   const windows = spansWindow ? overnightWindowsIn(entryTime, exitTime, cfg) : []
