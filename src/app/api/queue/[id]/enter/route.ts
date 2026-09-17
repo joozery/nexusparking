@@ -5,13 +5,17 @@ import { connectDB } from '@/lib/mongodb'
 import { ParkingQueue } from '@/models/ParkingQueue'
 import { ParkingSession } from '@/models/ParkingSession'
 import { Shift } from '@/models/Shift'
+import { getSettings } from '@/models/SystemSettings'
 
 // POST /api/queue/[id]/enter — รถออกจากคิวเข้าลานจอด
+// body.skipCapacityCheck: true — ใช้เมื่อรถ "ไม่รอแล้ว" และแค่เช็คเอาต์จ่ายค่าคิวทันที
+// (ไม่ได้เข้าไปจอดในลานจริง จึงไม่ต้องนับที่ว่าง ต่างจากการโปรโมทคิวเข้าลานปกติที่ต้องมีที่ว่างจริง)
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
+  const { skipCapacityCheck } = await req.json().catch(() => ({ skipCapacityCheck: false }))
   const jar     = await cookies()
   const token   = jar.get(COOKIE_NAME)?.value
   const payload = token ? verifyToken(token) : null
@@ -20,6 +24,19 @@ export async function POST(
 
   const q = await ParkingQueue.findOne({ _id: id, status: 'waiting' })
   if (!q) return NextResponse.json({ error: 'ไม่พบคิว' }, { status: 404 })
+
+  if (!skipCapacityCheck) {
+    const settings      = await getSettings()
+    const isCarBucket   = q.cardType !== 'motorcycle'
+    const bucketTypes   = isCarBucket ? (['car', 'overnight'] as const) : (['motorcycle'] as const)
+    const bucketCapacity = isCarBucket ? settings.capacity.car : settings.capacity.motorcycle
+    const bucketActive   = await ParkingSession.countDocuments({ cardType: { $in: bucketTypes }, status: 'active' })
+    if (bucketActive >= bucketCapacity) {
+      return NextResponse.json({
+        error: isCarBucket ? 'ลานจอดรถยนต์เต็มแล้ว กรุณาใช้ระบบคิวรอ' : 'ลานจอดรถจักรยานยนต์เต็มแล้ว กรุณาใช้ระบบคิวรอ',
+      }, { status: 409 })
+    }
+  }
 
   // เวลาเข้าลานใช้เวลาที่เข้าคิวจริง (joinedAt) เสมอ — ห้ามแก้ไขเอง ป้องกันการโกงเวลา
   const now = q.joinedAt

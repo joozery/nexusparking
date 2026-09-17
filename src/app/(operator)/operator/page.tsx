@@ -11,7 +11,6 @@ import {
 import { CheckInDialog } from '@/components/parking/CheckInDialog'
 import { CheckOutDialog, type PaymentMethod } from '@/components/parking/CheckOutDialog'
 import { LostCardDialog } from '@/components/parking/LostCardDialog'
-import { CardRegisterDialog } from '@/components/parking/CardRegisterDialog'
 import { CctvStrip } from '@/components/parking/CctvStrip'
 import { FleetStatusBar, type FleetStats } from '@/components/parking/FleetStatusBar'
 import { CarsInLotDialog } from '@/components/parking/CarsInLotDialog'
@@ -140,8 +139,6 @@ export default function OperatorPage() {
   const { success, error: toastError, warning } = useToast()
 
   const [overnightCfg,   setOvernightCfg]   = useState<OvernightConfig | undefined>(undefined)
-  const [monthlyDeposit, setMonthlyDeposit] = useState(500)
-  const [monthlyFee,     setMonthlyFee]     = useState(300)
   const [lostCardFine,   setLostCardFine]   = useState(300)
   const [sessions, setSessions] = useState<Session[]>([])
   const [stats, setStats] = useState<Stats | null>(null)
@@ -200,8 +197,6 @@ export default function OperatorPage() {
 
   const [carsListOpen, setCarsListOpen] = useState(false)
 
-  const [regOpen, setRegOpen] = useState(false)
-  const [regUid,  setRegUid]  = useState('')
   const onCardScanRef = useRef<(uid: string) => void>(() => {})
   const scanInputRef = useRef<HTMLInputElement>(null)
   const scanTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -256,8 +251,6 @@ export default function OperatorPage() {
       .then(r => r.json())
       .then(s => {
         if (s?.rates?.overnight) setOvernightCfg(s.rates.overnight)
-        if (s?.monthlyDeposit !== undefined) setMonthlyDeposit(s.monthlyDeposit)
-        if (s?.monthlyFee     !== undefined) setMonthlyFee(s.monthlyFee)
         if (s?.lostCardFine   !== undefined) setLostCardFine(s.lostCardFine)
       })
       .catch(() => {})
@@ -275,7 +268,7 @@ export default function OperatorPage() {
   }, [fetchData, fetchSettings])
 
   // ── Scan input focus management ─────────────────────────────────────────
-  const noDialogOpen = !checkInOpen && !checkOutOpen && !lostOpen && !shiftEnding && !regOpen && shift !== null
+  const noDialogOpen = !checkInOpen && !checkOutOpen && !lostOpen && !shiftEnding && shift !== null
   useEffect(() => {
     if (noDialogOpen) {
       setTimeout(() => scanInputRef.current?.focus(), 50)
@@ -331,7 +324,7 @@ export default function OperatorPage() {
     const res = await fetch(`/api/queue/${q._id}/enter`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({}),
+      body: JSON.stringify({ skipCapacityCheck: true }),
     })
     setQLoading(null)
     if (res.ok) {
@@ -344,30 +337,25 @@ export default function OperatorPage() {
     }
   }
 
-  // Auto-promote the first waiting queue entry into an active session as soon as a slot frees up
-  // (called right after a checkout — fetches fresh stats/queue instead of relying on possibly-stale state)
-  async function autoPromoteQueue() {
+  // รถคันหน้าคิวเข้าลานจริง — operator ต้องกดยืนยันเอง (ไม่ auto) เพราะแค่มีที่ว่างไม่ได้แปลว่ารถคันนั้นขับเข้ามาจริงแล้ว
+  async function handleEnterFromQueue(q: QueueEntry) {
+    setQLoading(q._id)
     try {
-      const [stRes, qRes] = await Promise.all([fetch('/api/stats'), fetch('/api/queue')])
-      if (!stRes.ok || !qRes.ok) return
-      const st = await stRes.json() as Stats | null
-      const qs = await qRes.json() as QueueEntry[]
-      // Car and motorcycle lots are separate — only promote a queue entry whose own lot has a free slot.
-      const next = st && Array.isArray(qs)
-        ? qs.find(q => (q.cardType === 'motorcycle' ? st.motorcycle : st.car).available > 0)
-        : undefined
-      if (!st || !next) return
-      const res = await fetch(`/api/queue/${next._id}/enter`, {
+      const res = await fetch(`/api/queue/${q._id}/enter`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
       })
       if (res.ok) {
+        void triggerBarrierClient('checkin')
         await Promise.all([fetchData(), fetchShift()])
-        success('เข้าลานอัตโนมัติ', `มีที่ว่าง — ทะเบียน ${next.plate} จากคิวเข้าลานแล้ว`)
+        success('เข้าลานแล้ว', `ทะเบียน ${q.plate} เข้าลานเรียบร้อย`)
+      } else {
+        const err = await res.json()
+        toastError('เข้าลานไม่สำเร็จ', err.error ?? 'เกิดข้อผิดพลาด')
       }
-    } catch (e) {
-      console.error('[autoPromoteQueue]', e)
+    } finally {
+      setQLoading(null)
     }
   }
 
@@ -432,10 +420,15 @@ export default function OperatorPage() {
       body: JSON.stringify(body),
     })
     if (res.ok) {
-      setCheckInOpen(false); resetCI()
       void triggerBarrierClient('checkin')
+      // Wait for the sessions list to refresh BEFORE closing the dialog and re-arming the
+      // card-reader listener — otherwise an immediate re-tap of the same card still sees the
+      // stale (pre-checkin) sessions list, doesn't find the new active session, and gets
+      // routed back into check-in instead of check-out.
       await Promise.all([fetchData(), fetchShift()])
+      setCheckInOpen(false)
       success('ขาเข้าสำเร็จ', `ทะเบียน ${ciPlate} เข้าลานเรียบร้อย`)
+      resetCI()
       return
     }
 
@@ -549,7 +542,6 @@ export default function OperatorPage() {
       await Promise.all([fetchData(), fetchShift()])
       const label = paymentMethod === 'qr' ? 'โอนเงิน' : 'เงินสด'
       success('ขาออกสำเร็จ', `รับ${label} เรียบร้อย`)
-      void autoPromoteQueue()
     } else {
       const err = await res.json()
       toastError('ขาออกไม่สำเร็จ', err.error ?? 'เกิดข้อผิดพลาด')
@@ -577,7 +569,7 @@ export default function OperatorPage() {
   useEffect(() => {
     onCardScanRef.current = async (uid: string) => {
       // Ignore scan when any dialog is already open — prevents resetting in-progress forms
-      if (checkInOpen || checkOutOpen || lostOpen || shiftEnding || regOpen) return
+      if (checkInOpen || checkOutOpen || lostOpen || shiftEnding) return
 
       // Cards/sessions registered before Thai→ASCII conversion have Thai chars stored as UID.
       // Match by the converted uid OR by converting the stored uid (backward-compat).
@@ -604,9 +596,8 @@ export default function OperatorPage() {
             }
           }
         } catch { /* ignore */ }
-        // ไม่พบบัตรในระบบ → เปิดฟอร์มลงทะเบียน
-        setRegUid(uid)
-        setRegOpen(true)
+        // ไม่พบบัตรในระบบ → แจ้งเตือนเฉยๆ (ลงทะเบียนบัตรทำที่หน้าจัดการบัตรแทน)
+        warning('บัตรนี้ไม่ได้ลงทะเบียน', `UID: ${uid} — กรุณาลงทะเบียนบัตรก่อนใช้งาน`)
       }
     }
   })
@@ -639,7 +630,7 @@ export default function OperatorPage() {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // ป้องกันการทำงานซ้อนถ้ามี modal เปิดอยู่แล้ว (ยกเว้น carsListOpen เอง — F2 ต้องสลับปิดได้)
-      if (checkInOpen || checkOutOpen || lostOpen || shiftEnding || regOpen) return
+      if (checkInOpen || checkOutOpen || lostOpen || shiftEnding) return
 
       if (e.key === 'F2') {
         e.preventDefault()
@@ -653,7 +644,7 @@ export default function OperatorPage() {
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [checkInOpen, checkOutOpen, lostOpen, shiftEnding, regOpen, shift])
+  }, [checkInOpen, checkOutOpen, lostOpen, shiftEnding, shift])
 
   return (
     <div className="h-screen flex flex-col bg-[#F0F4FF]">
@@ -882,6 +873,19 @@ export default function OperatorPage() {
                           <span className="text-[8px] font-black shrink-0" style={{ color: '#7C3AED' }}>{idx + 1}</span>
                           <span className="text-[11px] font-black text-slate-800 tracking-wider truncate">{q.plate}</span>
                           <div className="flex-1" />
+                          {idx === 0 && stats && stats[col.type].available > 0 && (
+                            <button
+                              onClick={() => handleEnterFromQueue(q)}
+                              disabled={!!qLoading}
+                              className="flex items-center justify-center size-4 rounded transition-all disabled:opacity-40 shrink-0"
+                              style={{ background: 'rgba(22,163,74,0.1)' }}
+                              title="มีที่ว่าง — กดยืนยันรถเข้าจอด"
+                            >
+                              {qLoading === q._id
+                                ? <RefreshCw className="size-2.5 text-green-700 animate-spin" />
+                                : <LogIn className="size-2.5" style={{ color: '#16A34A' }} />}
+                            </button>
+                          )}
                           <button
                             onClick={() => checkoutFromQueue(q)}
                             disabled={!!qLoading}
@@ -1064,21 +1068,6 @@ export default function OperatorPage() {
         onOpenChange={setLostOpen}
         onConfirm={handleLostCard}
         defaultPlate={lostPlate}
-      />
-      <CardRegisterDialog
-        open={regOpen}
-        onOpenChange={setRegOpen}
-        uid={regUid}
-        monthlyDeposit={monthlyDeposit}
-        monthlyFee={monthlyFee}
-        onRegistered={card => {
-          success('ลงทะเบียนสำเร็จ', `UID: ${card.uid}`)
-          setCiUid(card.uid)
-          setCiType(card.type)
-          setCiPlate(card.plate)
-          setCiStep('confirm')
-          setCheckInOpen(true)
-        }}
       />
 
     </div>
