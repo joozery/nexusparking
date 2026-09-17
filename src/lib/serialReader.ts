@@ -9,7 +9,7 @@
 // reader is a peripheral of the same machine running the browser (unlike the
 // barrier, which lives on a different Tailscale-only host — see barrierClient.ts).
 
-import { sanitizeUid } from './thaiInput'
+import { normalizeUid } from './thaiInput'
 
 const BAUD_STORAGE_KEY = 'np_reader_baud'
 export const COMMON_BAUD_RATES = [9600, 19200, 38400, 57600, 115200, 4800] as const
@@ -74,7 +74,7 @@ export async function connectSerialReader(
         buf += value
         let idx: number
         while ((idx = buf.search(/[\r\n]/)) !== -1) {
-          const line = sanitizeUid(buf.slice(0, idx))
+          const line = normalizeUid(buf.slice(0, idx))
           buf = buf.slice(idx + 1)
           if (line.length >= 4) onUid(line)
         }

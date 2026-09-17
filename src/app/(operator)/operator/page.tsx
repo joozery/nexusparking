@@ -19,7 +19,7 @@ import { type CardType } from '@/components/parking/types'
 import { calcFeeFromMinutes, type OvernightConfig, type AfterHoursConfig } from '@/lib/calcFee'
 import { useToast } from '@/components/ui/Toast'
 import { triggerBarrierClient } from '@/lib/barrierClient'
-import { convertThaiToEn, toAsciiNumber, toAsciiPlate, sanitizeUid } from '@/lib/thaiInput'
+import { convertThaiToEn, normalizeUid, toAsciiNumber, toAsciiPlate } from '@/lib/thaiInput'
 import {
   isSerialSupported, connectSerialReader, getReaderBaud, setReaderBaud,
   COMMON_BAUD_RATES, type SerialReaderHandle,
@@ -674,7 +674,7 @@ export default function OperatorPage() {
           setScanBuf(val)
           if (scanTimerRef.current) clearTimeout(scanTimerRef.current)
           scanTimerRef.current = setTimeout(() => {
-            const uid = sanitizeUid(convertThaiToEn(val))
+            const uid = normalizeUid(val)
             setScanBuf('')
             if (uid.length >= 4) onCardScanRef.current(uid)
           }, 300)
@@ -682,7 +682,7 @@ export default function OperatorPage() {
         onKeyDown={e => {
           if (e.key === 'Enter') {
             if (scanTimerRef.current) clearTimeout(scanTimerRef.current)
-            const uid = sanitizeUid(convertThaiToEn(scanBuf))
+            const uid = normalizeUid(scanBuf)
             setScanBuf('')
             if (uid.length >= 4) onCardScanRef.current(uid)
           }

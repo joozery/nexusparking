@@ -1,7 +1,8 @@
-// Thai Kedmanee keyboard → ASCII mapping (USB card-reader keyboard-wedge fix)
 export const THAI_TO_EN: Record<string, string> = {
-  'ๅ': '`', 'ภ': '3', 'ถ': '4', 'ุ': '5', 'ึ': '6',
+  // Number row (unshifted Kedmanee)
+  'ๅ': '1', '/': '2', 'ภ': '3', 'ถ': '4', 'ุ': '5', 'ึ': '6',
   'ค': '7', 'ต': '8', 'จ': '9', 'ข': '0', 'ช': '-',
+  // Shifted number row / Thai digits
   '๑': '1', '๒': '2', '๓': '3', '๔': '4', '๕': '5',
   '๖': '6', '๗': '7', '๘': '8', '๙': '9', '๐': '0',
   'ๆ': 'q', 'ไ': 'w', 'ำ': 'e', 'พ': 'r', 'ะ': 't',
@@ -41,4 +42,9 @@ export function toAsciiNumber(s: string): string {
 /** Strip control chars and trim — shared by keyboard-wedge and serial card-reader input paths */
 export function sanitizeUid(s: string): string {
   return s.replace(/[\x00-\x1F\x7F]/g, '').trim()
+}
+
+/** Normalize a HID/serial card-reader value and keep UID-safe characters only. */
+export function normalizeUid(s: string): string {
+  return sanitizeUid(convertThaiToEn(s)).replace(/[^0-9A-Fa-f:\- ]/g, '')
 }

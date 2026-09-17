@@ -10,47 +10,7 @@ import { useToast } from '@/components/ui/Toast'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
-
-// Thai Kedmanee layout → English mapping (for USB card readers sending keystrokes in Thai mode)
-const THAI_TO_EN: Record<string, string> = {
-  // Number row (some systems convert number keys in Thai mode)
-  'ๅ': '`', 'ภ': '3', 'ถ': '4', 'ุ': '5', 'ึ': '6',
-  'ค': '7', 'ต': '8', 'จ': '9', 'ข': '0', 'ช': '-',
-  '๑': '1', '๒': '2', '๓': '3', '๔': '4', '๕': '5',
-  '๖': '6', '๗': '7', '๘': '8', '๙': '9', '๐': '0',
-  // QWERTY row (regular)
-  'ๆ': 'q', 'ไ': 'w', 'ำ': 'e', 'พ': 'r', 'ะ': 't',
-  'ั': 'y', 'ี': 'u', 'ร': 'i', 'น': 'o', 'ย': 'p',
-  'บ': '[', 'ล': ']',
-  // ASDF row (regular)
-  'ฟ': 'a', 'ห': 's', 'ก': 'd', 'ด': 'f', 'เ': 'g',
-  '้': 'h', '่': 'j', 'า': 'k', 'ส': 'l', 'ว': ';', 'ง': "'",
-  // ZXCV row (regular)
-  'ผ': 'z', 'ป': 'x', 'แ': 'c', 'อ': 'v', 'ิ': 'b',
-  'ื': 'n', 'ท': 'm', 'ม': ',', 'ใ': '.', 'ฝ': '/',
-  // QWERTY row (shift = uppercase)
-  'ฎ': 'E', 'ฑ': 'R', 'ธ': 'T', 'ณ': 'I', 'ฯ': 'O', 'ญ': 'P',
-  // ASDF row (shift = uppercase)
-  'ฤ': 'A', 'ฆ': 'S', 'ฏ': 'D', 'โ': 'F', 'ฌ': 'G',
-  '็': 'H', '๋': 'J', 'ษ': 'K', 'ศ': 'L', 'ซ': ':',
-  // ZXCV row (shift = uppercase)
-  'ฉ': 'C', 'ฮ': 'V', 'ฺ': 'B', 'ฒ': 'M',
-}
-
-function convertThaiToEn(text: string): string {
-  return text.split('').map(ch => THAI_TO_EN[ch] ?? ch).join('')
-}
-
-/**
- * Sanitise a raw UID string coming from a USB card reader.
- * After Thai→EN conversion, keep only hex-valid characters (0-9, A-F, a-f)
- * plus common separators used in UID notation (colon, hyphen, space).
- * Non-matching characters are stripped so garbage from the reader is removed.
- */
-function sanitizeUid(raw: string): string {
-  // Allow hex digits and common separators; strip everything else
-  return raw.replace(/[^0-9A-Fa-f:\- ]/g, '')
-}
+import { normalizeUid } from '@/lib/thaiInput'
 
 type CardType = 'car' | 'motorcycle' | 'overnight'
 type CardCategory = 'temporary' | 'monthly'
@@ -437,7 +397,7 @@ export default function CardsPage() {
                 <div>
                   <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide block mb-1.5">UID บัตร *</label>
                   <input ref={uidInputRef}
-                    value={uid} onChange={e => setUid(sanitizeUid(convertThaiToEn(e.target.value)))}
+                    value={uid} onChange={e => setUid(normalizeUid(e.target.value))}
                     placeholder="แตะบัตรหรือพิมพ์ UID"
                     required
                     className="w-full h-9 px-3 rounded-lg text-sm font-mono text-slate-800 outline-none"
@@ -711,7 +671,9 @@ export default function CardsPage() {
             {(['car', 'motorcycle'] as CardType[]).map(t => {
               const m = TYPE_META[t]
               const Icon = m.icon
-              const count = cards.filter(c => c.type === t).length
+              const vehicleCards = cards.filter(c => c.type === t)
+              const temporaryCount = vehicleCards.filter(c => (c.cardCategory ?? 'temporary') === 'temporary').length
+              const monthlyCount = vehicleCards.filter(c => c.cardCategory === 'monthly').length
               return (
                 <div key={t} className="bg-white rounded-xl px-4 py-3 flex items-center gap-3 cursor-pointer transition-shadow hover:shadow-sm"
                   style={{ border: `1px solid ${typeTab === t ? m.color : '#E8ECF4'}` }}
@@ -721,7 +683,20 @@ export default function CardsPage() {
                   </div>
                   <div>
                     <p className="text-[10px] text-slate-400">{m.label}</p>
-                    <p className="text-lg font-bold text-slate-900">{count}</p>
+                    <div className="flex items-end gap-2">
+                      <p className="text-lg font-bold text-slate-900 leading-none">{vehicleCards.length}</p>
+                      <span className="text-[9px] text-slate-400 leading-none mb-0.5">ใบทั้งหมด</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 mt-1.5">
+                      <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded"
+                        style={{ color: '#64748B', background: 'rgba(100,116,139,0.1)' }}>
+                        ชั่วคราว {temporaryCount}
+                      </span>
+                      <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded"
+                        style={{ color: '#059669', background: 'rgba(5,150,105,0.1)' }}>
+                        รายเดือน {monthlyCount}
+                      </span>
+                    </div>
                   </div>
                 </div>
               )

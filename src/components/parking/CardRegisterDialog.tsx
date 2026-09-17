@@ -48,7 +48,15 @@ export function CardRegisterDialog({ open, onOpenChange, uid, monthlyDeposit = 5
       const res = await fetch('/api/cards', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ uid, type, label, ownerName, plate, expiryDate: expiryDate || null }),
+        body: JSON.stringify({
+          uid,
+          type,
+          cardCategory: expiryDate ? 'monthly' : 'temporary',
+          label,
+          ownerName,
+          plate,
+          expiryDate: expiryDate || null,
+        }),
       })
       if (!res.ok) {
         const err = await res.json()
