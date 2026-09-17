@@ -180,7 +180,7 @@ export default function OperatorPage() {
   const [coPlate,       setCoPlate]       = useState('')
   const [coCustomTime,  setCoCustomTime]  = useState('')
   const [coEntryTime,   setCoEntryTime]   = useState<Date | null>(null)
-  const [coAssumeLostCard, setCoAssumeLostCard] = useState(false)
+  const [coSource,      setCoSource]      = useState<'card' | 'plate'>('card')
 
   // Entry-capture replay (CctvStrip exit view) — deliberately NOT cleared by resetCO/finishCheckout,
   // so the last car's entry photos stay on screen until the next car starts checking out.
@@ -212,7 +212,7 @@ export default function OperatorPage() {
   const [serialBaud, setSerialBaudState] = useState(9600)
 
   function resetCI() { setCiStep('scan'); setCiPlate(''); setCiType('car'); setCiUid(''); setCiCustomTime('') }
-  function resetCO() { setCoStep('scan'); setCoSessionId(''); setCoPlate(''); setCoCustomTime(''); setCoEntryTime(null); setCoPaidAmount(0); setCoAssumeLostCard(false) }
+  function resetCO() { setCoStep('scan'); setCoSessionId(''); setCoPlate(''); setCoCustomTime(''); setCoEntryTime(null); setCoPaidAmount(0); setCoSource('card') }
 
   const fetchShift = useCallback(async () => {
     const res = await fetch('/api/shifts/current')
@@ -332,7 +332,7 @@ export default function OperatorPage() {
     if (res.ok) {
       const data = await res.json()
       await fetchData()
-      openCheckoutFromCard(data.session)
+      openCheckout(data.session, 'card')
     } else {
       const err = await res.json()
       toastError('ไม่สำเร็จ', err.error)
@@ -483,16 +483,18 @@ export default function OperatorPage() {
     const entry = new Date(active.entryTime)
     setCoType(active.cardType)
     setCoSessionId(active._id)
+    setCoPlate(active.plate)
     setCoEntryTime(entry)
     setCoCustomTime('')
     setCoHours(0)
     setCoFee(0)
+    setCoSource('card')
     setCoStep('payment')
   }
 
-  // assumeLostCard: true when checkout was triggered without an actual card tap
-  // (e.g. typed straight into the sidebar) — pre-ticks the "บัตรหาย" checkbox in the popup
-  function openCheckoutFromCard(s: Session, assumeLostCard = false) {
+  // Keep card taps and plate lookups as explicit, separate checkout paths.
+  // Only the plate path is allowed to add the lost-card fine.
+  function openCheckout(s: Session, source: 'card' | 'plate') {
     fetchSettings()
     const entry = new Date(s.entryTime)
     const now = new Date()
@@ -503,7 +505,7 @@ export default function OperatorPage() {
     setCoFee(calcFeeFromMinutes(s.cardType, durationMin, entry, now, overnightCfg))
     setCoSessionId(s._id); setCoPlate(s.plate); setCoEntryTime(entry); setCoStep('payment'); setCheckOutOpen(true)
     setLastExitSessionId(s._id); setLastExitPlate(s.plate)
-    setCoAssumeLostCard(assumeLostCard)
+    setCoSource(source)
   }
 
   // Sidebar plate input → auto-route:
@@ -515,7 +517,7 @@ export default function OperatorPage() {
     if (plate.length !== 4) return
     const activeSession = sessions.find(s => s.status === 'active' && s.plate === plate)
     if (activeSession) {
-      openCheckoutFromCard(activeSession, true) // typed manually, no card tap → assume lost card
+      openCheckout(activeSession, 'plate')
     } else if (isExitView) {
       setLostPlate(plate)
       setLostOpen(true)
@@ -533,8 +535,15 @@ export default function OperatorPage() {
     scanInputRef.current?.focus()
   }
 
-  async function handleCheckout(paymentMethod: PaymentMethod, discountId?: string, dailyDiscountId?: string, isLostCard?: boolean, fineId?: string) {
-    const body: Record<string, unknown> = { sessionId: coSessionId || undefined, paymentMethod, discountId, dailyDiscountId, lostCard: isLostCard, fineId }
+  async function handleCheckout(paymentMethod: PaymentMethod, discountId?: string, dailyDiscountId?: string, _isLostCard?: boolean, fineId?: string) {
+    const body: Record<string, unknown> = {
+      sessionId: coSessionId || undefined,
+      paymentMethod,
+      discountId,
+      dailyDiscountId,
+      lostCard: coSource === 'plate',
+      fineId,
+    }
     if (coCustomTime) body.exitTime = new Date(coCustomTime).toISOString()
     const res = await fetch('/api/sessions/checkout', {
       method: 'POST',
@@ -585,7 +594,7 @@ export default function OperatorPage() {
       const activeSession = sessions.find(s => s.status === 'active' && matchUid(s.cardUid))
       if (activeSession) {
         // Card already inside → checkout
-        openCheckoutFromCard(activeSession)
+        openCheckout(activeSession, 'card')
       } else {
         // Card not inside → checkin: resolve card type + plate from registration
         try {
@@ -860,7 +869,7 @@ export default function OperatorPage() {
             search={search}
             onSearchChange={setSearch}
             onRefresh={fetchData}
-            onCheckout={s => { setCarsListOpen(false); openCheckoutFromCard(s) }}
+            onCheckout={s => { setCarsListOpen(false); openCheckout(s, 'card') }}
           />
 
           {/* ── Queue panel — vertical list, fills remaining sidebar height ── */}
@@ -1077,7 +1086,7 @@ export default function OperatorPage() {
         paidAmount={coPaidAmount}
         printing={coPrinting}
         lostCardFine={lostCardFine}
-        defaultLostCard={coAssumeLostCard}
+        checkoutSource={coSource}
         entryTime={coEntryTime}
         overnightCfg={overnightCfg}
         onSimulateScan={simulateCOScan}

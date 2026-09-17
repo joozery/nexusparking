@@ -695,6 +695,7 @@ ${lostFine > 0 ? `<div class="row lost-row"><span>ค่าปรับบัต
         open={checkOutOpen}
         onOpenChange={o => { setCheckOutOpen(o); if (!o) resetCO() }}
         step={coStep} plate={active?.plate} cardType={coType} hours={coHours} fee={coFee}
+        checkoutSource="card"
         onSimulateScan={simulateCOScan}
         onBack={() => setCoStep('scan')}
         onConfirm={handleCheckout}

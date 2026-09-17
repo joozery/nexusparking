@@ -44,7 +44,7 @@ interface Props {
   overnightCfg?: OvernightConfig
   printing?: boolean
   lostCardFine?: number
-  defaultLostCard?: boolean
+  checkoutSource: 'card' | 'plate'
   onCustomExitTimeChange?: (v: string) => void
   onSimulateScan: () => void
   onBack: () => void
@@ -72,7 +72,7 @@ function fmtDuration(entryTime: Date | null | undefined, exitTime: Date | null |
 }
 
 export function CheckOutDialog({
-  open, onOpenChange, step, plate, cardType, hours, fee, paidAmount, printing, lostCardFine = 300, defaultLostCard,
+  open, onOpenChange, step, plate, cardType, hours, fee, paidAmount, printing, lostCardFine = 300, checkoutSource,
   entryTime, customExitTime, overnightCfg, onCustomExitTimeChange,
   onSimulateScan, onBack, onConfirm, onPrintReceipt, onDone,
 }: Props) {
@@ -112,11 +112,7 @@ export function CheckOutDialog({
   const [fines, setFines] = useState<FineOption[]>([])
   const [selectedFineId, setSelectedFineId] = useState<string>('')
   const [cashReceived, setCashReceived] = useState('')
-  const [isLostCard, setIsLostCard] = useState(false)
-
-  useEffect(() => {
-    if (open) setIsLostCard(!!defaultLostCard)
-  }, [open, defaultLostCard])
+  const isLostCard = checkoutSource === 'plate'
 
   const storeDiscounts = discounts.filter(d => d.discountType !== 'per_day')
   const dailyDiscounts = discounts.filter(d => d.discountType === 'per_day')
@@ -172,7 +168,7 @@ export function CheckOutDialog({
   }, [open, plate])
 
   function handleClose(o: boolean) {
-    if (!o) { setPaymentMethod('cash'); setSelectedId(''); setDailySelectedId(''); setSelectedFineId(''); setCashReceived(''); setIsLostCard(false) }
+    if (!o) { setPaymentMethod('cash'); setSelectedId(''); setDailySelectedId(''); setSelectedFineId(''); setCashReceived('') }
     onOpenChange(o)
   }
 
@@ -346,24 +342,21 @@ export function CheckOutDialog({
                   </div>
                 )}
 
-                {/* Lost card toggle */}
-                <button
-                  type="button"
-                  onClick={() => setIsLostCard(v => !v)}
-                  className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-left transition-all"
-                  style={isLostCard
-                    ? { background: 'rgba(217,119,6,0.1)', border: '1.5px solid rgba(217,119,6,0.4)' }
-                    : { background: '#FAFBFF', border: '1px solid #E8ECF4' }}
-                >
-                  <div className="flex items-center justify-center size-4 rounded shrink-0"
-                    style={isLostCard ? { background: '#D97706' } : { border: '1.5px solid #CBD5E1' }}>
-                    {isLostCard && <CheckCircle2 className="size-3 text-white" />}
+                {/* Plate lookup is a dedicated lost-card path; card taps never enter it. */}
+                {isLostCard && (
+                  <div
+                    className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-left"
+                    style={{ background: 'rgba(217,119,6,0.1)', border: '1.5px solid rgba(217,119,6,0.4)' }}
+                  >
+                    <div className="flex items-center justify-center size-4 rounded shrink-0" style={{ background: '#D97706' }}>
+                      <CheckCircle2 className="size-3 text-white" />
+                    </div>
+                    <AlertTriangle className="size-3.5 shrink-0 text-amber-700" />
+                    <span className="text-[11px] font-bold flex-1 text-amber-800">
+                      ค้นหาด้วยเลขทะเบียน — คิดเป็นกรณีบัตรหาย เพิ่ม ฿{lostCardFine}
+                    </span>
                   </div>
-                  <AlertTriangle className="size-3.5 shrink-0" style={{ color: isLostCard ? '#B45309' : '#94A3B8' }} />
-                  <span className="text-[11px] font-bold flex-1" style={{ color: isLostCard ? '#92400E' : '#64748B' }}>
-                    ลูกค้าทำบัตรหาย — เก็บค่าปรับเพิ่ม ฿{lostCardFine}
-                  </span>
-                </button>
+                )}
 
                 {/* Sim: custom exit time */}
                 {onCustomExitTimeChange && (
