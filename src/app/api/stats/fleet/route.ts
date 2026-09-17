@@ -19,16 +19,18 @@ export async function GET() {
 
   const settings = await getSettings()
 
-  const [carActive, motoActive, carLost, motoLost, carCards, motoCards, carQueueWaiting, motoQueueWaiting] = await Promise.all([
+  const [carActive, motoActive, carLost, motoLost, carOnlyCards, overnightCards, motoCards, carQueueWaiting, motoQueueWaiting] = await Promise.all([
     ParkingSession.find({ cardType: { $in: CAR_TYPES }, status: 'active' }).lean(),
     ParkingSession.find({ cardType: 'motorcycle', status: 'active' }).lean(),
     ParkingSession.find({ cardType: { $in: CAR_TYPES }, lostFine: { $gt: 0 } }).lean(),
     ParkingSession.find({ cardType: 'motorcycle', lostFine: { $gt: 0 } }).lean(),
-    ParkingCard.countDocuments({ type: { $in: CAR_TYPES }, isActive: true }),
+    ParkingCard.countDocuments({ type: 'car', isActive: true }),
+    ParkingCard.countDocuments({ type: 'overnight', isActive: true }),
     ParkingCard.countDocuments({ type: 'motorcycle', isActive: true }),
     ParkingQueue.countDocuments({ cardType: 'car', status: 'waiting' }),
     ParkingQueue.countDocuments({ cardType: 'motorcycle', status: 'waiting' }),
   ])
+  const carCards = carOnlyCards + overnightCards
 
   // "เข้าวันนี้" นับรวมรถที่ยังรอ/ยกเลิกอยู่ในคิวด้วย เพราะไม้กั้นเปิด+ถ่ายรูปไปแล้วตอนเข้าคิว
   // ถือว่าเข้าพื้นที่จริงแล้ว แม้ยังไม่ได้เป็น session — รถที่ถูกโปรโมทจากคิวเข้า session แล้ว
@@ -60,6 +62,11 @@ export async function GET() {
   const carSplit  = splitByBillingMode(carActive)
   const motoSplit = splitByBillingMode(motoActive)
 
+  // จำนวนรถที่ใช้ "บัตร" แต่ละประเภทอยู่ในลานตอนนี้ (แยกตามประเภทบัตรที่ลงทะเบียนไว้จริง
+  // ไม่ใช่โหมดคิดค่าบริการแบบ activeNormal/activeOvernight ด้านบน)
+  const activeOvernightCards = carActive.filter(s => s.cardType === 'overnight').length
+  const activeCarCards       = carActive.filter(s => s.cardType === 'car').length
+
   return NextResponse.json({
     car: {
       inToday:           carInToday,
@@ -72,6 +79,10 @@ export async function GET() {
       queueWaiting:      carQueueWaiting,
       cardsRegistered:   carCards,
       cardsRemaining:    Math.max(0, carCards - carActive.length),
+      overnightCardsRegistered: overnightCards,
+      overnightCardsRemaining:  Math.max(0, overnightCards - activeOvernightCards),
+      normalCardsRegistered:    carOnlyCards,
+      normalCardsRemaining:     Math.max(0, carOnlyCards - activeCarCards),
       lostToday:         lostToday(carLost),
     },
     motorcycle: {

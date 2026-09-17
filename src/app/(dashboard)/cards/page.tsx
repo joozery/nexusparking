@@ -70,6 +70,17 @@ function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
+// วันที่สมัคร + 30 วัน = วันหมดอายุ (นับแบบปฏิทิน ไม่ปัดเวลา)
+function addDaysIso(dateStr: string, days: number): string {
+  const d = new Date(`${dateStr}T00:00:00`)
+  d.setDate(d.getDate() + days)
+  return d.toISOString()
+}
+
+function daysUntil(expiryDate: string): number {
+  return Math.ceil((new Date(expiryDate).getTime() - Date.now()) / 86400000)
+}
+
 const inputStyle = { border: '1.5px solid #E8ECF4', background: '#F8FAFF' }
 function focusIn(e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement>)  { e.currentTarget.style.borderColor = '#A16207' }
 function focusOut(e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement>) { e.currentTarget.style.borderColor = '#E8ECF4' }
@@ -95,7 +106,7 @@ export default function CardsPage() {
   const [plate,        setPlate]        = useState('')
   const [phone,        setPhone]        = useState('')
   const [address,      setAddress]      = useState('')
-  const [expiryDate,   setExpiryDate]   = useState('')
+  const [regDate,      setRegDate]      = useState('') // วันที่สมัคร — หมดอายุ = วันนี้ + 30 วัน เสมอ
   const [renewId,      setRenewId]      = useState<string | null>(null)
   const uidInputRef = useRef<HTMLInputElement>(null)
 
@@ -135,7 +146,7 @@ export default function CardsPage() {
 
   function resetAddForm() {
     setUid(''); setLabel(''); setType('car'); setCardCategory('temporary')
-    setFirstName(''); setLastName(''); setPlate(''); setPhone(''); setAddress(''); setExpiryDate('')
+    setFirstName(''); setLastName(''); setPlate(''); setPhone(''); setAddress(''); setRegDate('')
   }
 
   async function handleAdd(e: React.FormEvent) {
@@ -152,7 +163,7 @@ export default function CardsPage() {
           label: cardCategory === 'monthly' ? label : '',
           phone: cardCategory === 'monthly' ? phone : '',
           address: cardCategory === 'monthly' ? address : '',
-          expiryDate: cardCategory === 'monthly' ? (expiryDate || null) : null,
+          expiryDate: cardCategory === 'monthly' ? (regDate ? addDaysIso(regDate, 30) : null) : null,
         }),
       })
       if (!res.ok) {
@@ -353,7 +364,11 @@ export default function CardsPage() {
                     const Icon = m.icon
                     const active = cardCategory === key
                     return (
-                      <button key={key} type="button" onClick={() => setCardCategory(key)}
+                      <button key={key} type="button"
+                        onClick={() => {
+                          setCardCategory(key)
+                          if (key === 'monthly' && !regDate) setRegDate(new Date().toISOString().slice(0, 10))
+                        }}
                         className="flex items-center gap-2 px-3 py-2.5 rounded-lg transition-all text-left"
                         style={active
                           ? { background: m.bg, border: `1.5px solid ${m.color}`, color: m.color }
@@ -398,10 +413,27 @@ export default function CardsPage() {
                   <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide block mb-1.5">UID บัตร *</label>
                   <input ref={uidInputRef}
                     value={uid} onChange={e => setUid(normalizeUid(e.target.value))}
+                    onKeyDown={e => {
+                      // Card readers send an Enter/CR right after the UID burst — inside a <form>,
+                      // Enter in a text input submits it by default, saving immediately with
+                      // whatever's (or isn't) in the other fields. Just fill the UID, don't submit.
+                      if (e.key === 'Enter') e.preventDefault()
+                    }}
+                    onBlur={e => {
+                      focusOut(e)
+                      // A card tap can happen any time the dialog is open (not just right after
+                      // it opens) — keep this field focused until it actually has a UID, unless
+                      // the operator deliberately clicked into another real input, so the reader's
+                      // keystrokes always land here instead of wherever focus drifted to.
+                      if (uid) return
+                      const target = e.relatedTarget as HTMLElement | null
+                      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT')) return
+                      setTimeout(() => uidInputRef.current?.focus(), 50)
+                    }}
                     placeholder="แตะบัตรหรือพิมพ์ UID"
                     required
                     className="w-full h-9 px-3 rounded-lg text-sm font-mono text-slate-800 outline-none"
-                    style={inputStyle} onFocus={focusIn} onBlur={focusOut} />
+                    style={inputStyle} onFocus={focusIn} />
                 </div>
                 <div>
                   <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide block mb-1.5">ทะเบียนรถ</label>
@@ -440,10 +472,15 @@ export default function CardsPage() {
                         style={inputStyle} onFocus={focusIn} onBlur={focusOut} />
                     </div>
                     <div>
-                      <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide block mb-1.5">วันหมดอายุ</label>
-                      <input type="date" value={expiryDate} onChange={e => setExpiryDate(e.target.value)}
+                      <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide block mb-1.5">วันที่สมัคร</label>
+                      <input type="date" value={regDate} onChange={e => setRegDate(e.target.value)}
                         className="w-full h-9 px-3 rounded-lg text-sm text-slate-800 outline-none"
                         style={inputStyle} onFocus={focusIn} onBlur={focusOut} />
+                      {regDate && (
+                        <p className="text-[10px] text-slate-400 mt-1">
+                          หมดอายุ {fmtDate(addDaysIso(regDate, 30))} (อีก {daysUntil(addDaysIso(regDate, 30))} วัน)
+                        </p>
+                      )}
                     </div>
                     <div className="col-span-2">
                       <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide block mb-1.5 flex items-center gap-1">
@@ -804,7 +841,11 @@ export default function CardsPage() {
                             {status !== 'none' ? (
                               <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full whitespace-nowrap"
                                 style={{ background: em.bg, color: em.color }}>
-                                {em.label} · {fmtDate(card.expiryDate!)}
+                                {em.label} · {fmtDate(card.expiryDate!)} ·{' '}
+                                {(() => {
+                                  const d = daysUntil(card.expiryDate!)
+                                  return d >= 0 ? `เหลือ ${d} วัน` : `เกิน ${Math.abs(d)} วัน`
+                                })()}
                               </span>
                             ) : <span className="text-[11px] text-slate-300">—</span>}
                           </td>

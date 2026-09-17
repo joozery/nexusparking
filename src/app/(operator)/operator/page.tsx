@@ -190,6 +190,8 @@ export default function OperatorPage() {
   // Sidebar quick plate lookup (checkin/checkout auto-route by typed plate)
   const [plateQuick, setPlateQuick] = useState('')
   const [isExitView, setIsExitView] = useState(false) // mirrors CctvStrip's F12 entry/exit toggle
+  const plateInputRef = useRef<HTMLInputElement>(null)
+  const plateIdleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Lost card
   const [lostOpen,  setLostOpen]  = useState(false)
@@ -524,6 +526,11 @@ export default function OperatorPage() {
       setCheckInOpen(true)
     }
     setPlateQuick('')
+    // Give focus straight back to the hidden card-reader input — otherwise this box stays
+    // focused indefinitely and a real card tap right after typing a plate here would land its
+    // keystrokes in this box instead, getting misread as another manual "assume lost card" entry.
+    plateInputRef.current?.blur()
+    scanInputRef.current?.focus()
   }
 
   async function handleCheckout(paymentMethod: PaymentMethod, discountId?: string, dailyDiscountId?: string, isLostCard?: boolean, fineId?: string) {
@@ -779,8 +786,24 @@ export default function OperatorPage() {
               className="flex items-center gap-2"
             >
               <input
+                ref={plateInputRef}
                 value={plateQuick}
-                onChange={e => setPlateQuick(toAsciiPlate(convertThaiToEn(e.target.value)).slice(0, 4))}
+                onChange={e => {
+                  setPlateQuick(toAsciiPlate(convertThaiToEn(e.target.value)).slice(0, 4))
+                  // Keep resetting the idle timer while the operator is actively typing digits.
+                  if (plateIdleTimerRef.current) clearTimeout(plateIdleTimerRef.current)
+                  plateIdleTimerRef.current = setTimeout(() => { plateInputRef.current?.blur(); scanInputRef.current?.focus() }, 2000)
+                }}
+                onFocus={() => {
+                  // A real card tap can land its keystrokes here if this box was merely
+                  // clicked/focused earlier and never blurred — auto-release it after a short
+                  // idle period so the hidden reader-capture input reclaims focus.
+                  if (plateIdleTimerRef.current) clearTimeout(plateIdleTimerRef.current)
+                  plateIdleTimerRef.current = setTimeout(() => { plateInputRef.current?.blur(); scanInputRef.current?.focus() }, 2000)
+                }}
+                onBlur={() => {
+                  if (plateIdleTimerRef.current) { clearTimeout(plateIdleTimerRef.current); plateIdleTimerRef.current = null }
+                }}
                 inputMode="numeric"
                 enterKeyHint="done"
                 placeholder="0000"
