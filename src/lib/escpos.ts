@@ -1,4 +1,5 @@
 import iconv from 'iconv-lite'
+import { receiptLogo } from './receiptLogo'
 
 const ESC = 0x1B
 const GS  = 0x1D
@@ -34,6 +35,8 @@ export interface ReceiptData {
   duration:  string
   fee:       number
   lostFine?: number
+  fineAmount?: number
+  discountAmount?: number
   total:     number
 }
 
@@ -41,21 +44,42 @@ const CARD_TYPE_LABEL: Record<string, string> = {
   car: 'รถยนต์', motorcycle: 'รถจักรยานยนต์', overnight: 'ค้างคืน',
 }
 
+function receiptRow(label: string, value: string): Buffer {
+  // Thai combining vowels/tone marks do not occupy a separate print column.
+  const width = (text: string) => text.replace(/[\u0E31\u0E34-\u0E3A\u0E47-\u0E4E]/g, '').length
+  const gap = Math.max(2, 32 - width(label) - width(value))
+  return thaiLine(`${label}${' '.repeat(gap)}${value}\n`)
+}
+
+function receiptTime(value: string): string {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return date.toLocaleString('th-TH', { timeZone: 'Asia/Bangkok', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
+}
+
 /** Build a full ESC/POS receipt for the EPSON TM-T82II (58/80mm thermal). */
 export function buildReceipt(r: ReceiptData): Buffer {
   const parts: Buffer[] = [INIT, THAI_CODEPAGE, ALIGN_CENTER, BOLD_ON]
+  parts.push(receiptLogo, NL)
   parts.push(thaiLine('ใบเสร็จรับเงิน\n'), thaiLine('A20 Park\n'), BOLD_OFF, NL)
-  parts.push(ALIGN_LEFT, DIVIDER)
-  parts.push(thaiLine(`ทะเบียน   : ${r.plate}\n`))
-  parts.push(thaiLine(`ประเภท    : ${CARD_TYPE_LABEL[r.cardType] ?? r.cardType}\n`))
-  parts.push(thaiLine(`เข้า       : ${r.entryTime}\n`))
-  parts.push(thaiLine(`ออก       : ${r.exitTime}\n`))
-  parts.push(thaiLine(`ระยะเวลา  : ${r.duration}\n`))
+  parts.push(ALIGN_CENTER, DIVIDER)
+  parts.push(receiptRow('ทะเบียน', r.plate))
+  parts.push(receiptRow('ประเภทรถ', CARD_TYPE_LABEL[r.cardType] ?? r.cardType))
   parts.push(DIVIDER)
-  parts.push(thaiLine(`ค่าจอดรถ  : ${r.fee.toLocaleString('th-TH')} บาท\n`))
-  if (r.lostFine) parts.push(thaiLine(`ค่าปรับบัตรหาย : ${r.lostFine.toLocaleString('th-TH')} บาท\n`))
-  parts.push(BOLD_ON, thaiLine(`รวม       : ${r.total.toLocaleString('th-TH')} บาท\n`), BOLD_OFF)
-  parts.push(DIVIDER, ALIGN_CENTER, thaiLine('ขอบคุณที่ใช้บริการ\n'))
+  parts.push(receiptRow('เวลาเข้า', receiptTime(r.entryTime)))
+  parts.push(receiptRow('เวลาออก', receiptTime(r.exitTime)))
+  parts.push(DIVIDER)
+  parts.push(receiptRow('เวลาจอด', r.duration.replace(' ชั่วโมง', ' ชม.').replace(' นาที', ' น.').replace(' วินาที', ' วิ.')))
+  parts.push(DIVIDER)
+  parts.push(receiptRow('ค่าจอดรถ', `${r.fee.toLocaleString('th-TH')} บาท`))
+  if (r.discountAmount) parts.push(receiptRow('ส่วนลด', `${r.discountAmount.toLocaleString('th-TH')} บาท`))
+  const combinedFine = (r.fineAmount ?? 0) + (r.lostFine ?? 0)
+  parts.push(receiptRow('ค่าปรับ', `${combinedFine.toLocaleString('th-TH')} บาท`))
+  parts.push(BOLD_ON, receiptRow('ยอดชำระสุทธิ', `${r.total.toLocaleString('th-TH')} บาท`), BOLD_OFF)
+  parts.push(DIVIDER, ALIGN_CENTER,
+    thaiLine('หากมีข้อสงสัยหรือต้องการ\nสอบถามข้อมูลเพิ่มเติม\n'),
+    thaiLine('โทร.086-555-7634 Line:@A20PARK\n'),
+    thaiLine('ขอบคุณที่ใช้บริการครับ\n'))
   parts.push(NL, NL, NL, CUT)
   return Buffer.concat(parts)
 }

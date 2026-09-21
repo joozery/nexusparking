@@ -1,6 +1,7 @@
 'use client'
 
 import { Car, Search, RefreshCw } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
   DialogDescription, DialogBody,
@@ -17,11 +18,9 @@ const TYPE_META: Record<CardType, { label: string; icon: typeof Car; color: stri
   overnight:  { label: 'ค้างคืน',     icon: Car, color: '#B45309' },
 }
 
-function fmtDuration(entryTime: string) {
-  const diff = Date.now() - new Date(entryTime).getTime()
-  const h = Math.floor(diff / 3600000)
-  const m = Math.floor((diff % 3600000) / 60000)
-  return h > 0 ? `${h} ชม. ${m} น.` : `${m} น.`
+function fmtDuration(entryTime: string, now: number) {
+  const seconds = Math.max(0, Math.floor((now - new Date(entryTime).getTime()) / 1000))
+  return `${Math.floor(seconds / 86400)} วัน ${Math.floor((seconds % 86400) / 3600)} ชั่วโมง ${Math.floor((seconds % 3600) / 60)} นาที ${seconds % 60} วินาที`
 }
 
 interface CarLike {
@@ -46,6 +45,12 @@ interface Props<T extends CarLike> {
 export function CarsInLotDialog<T extends CarLike>({
   open, onOpenChange, sessions, stats, loading, search, onSearchChange, onRefresh, onCheckout,
 }: Props<T>) {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    if (!open) return
+    const timer = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(timer)
+  }, [open])
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-3xl max-h-[85vh] flex flex-col" showCloseButton>
@@ -111,7 +116,10 @@ export function CarsInLotDialog<T extends CarLike>({
                 {sessions.map((s, idx) => {
                   const m = TYPE_META[s.cardType]
                   const Icon = m.icon
-                  const entryTime = new Date(s.entryTime).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })
+                  const entryTime = new Date(s.entryTime).toLocaleString('th-TH', {
+                    timeZone: 'Asia/Bangkok', day: '2-digit', month: '2-digit', year: 'numeric',
+                    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+                  })
                   return (
                     <tr key={s._id}
                       style={{ borderBottom: idx < sessions.length - 1 ? '1px solid #F1F5F9' : 'none', background: idx % 2 === 1 ? '#FAFBFF' : 'white' }}>
@@ -129,7 +137,7 @@ export function CarsInLotDialog<T extends CarLike>({
                         </div>
                       </td>
                       <td className="px-3 py-2.5"><span className="text-[11px] text-slate-500 tabular-nums">{entryTime}</span></td>
-                      <td className="px-3 py-2.5"><span className="text-[11px] font-semibold text-slate-600">{fmtDuration(s.entryTime)}</span></td>
+                      <td className="px-3 py-2.5"><span className="text-[11px] font-semibold text-slate-600 tabular-nums">{fmtDuration(s.entryTime, now)}</span></td>
                       <td className="pr-4 py-1.5">
                         <button
                           onClick={() => onCheckout(s)}

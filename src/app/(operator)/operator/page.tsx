@@ -250,37 +250,37 @@ export default function OperatorPage() {
   function resetCO() { setCoQueueId(''); setCoStep('scan'); setCoSessionId(''); setCoPlate(''); setCoCustomTime(''); setCoEntryTime(null); setCoPaidAmount(0); setCoSource('card') }
 
   const fetchShift = useCallback(async () => {
-    const res = await fetch('/api/shifts/current')
-    setShift(res.ok ? await res.json() : null)
+    try {
+      const res = await fetch('/api/shifts/current', { cache: 'no-store' })
+      if (!res.ok) return
+      const data = await res.json()
+      setShift(data)
+    } catch {
+      // Keep the last known shift; an unavailable server does not mean no active shift.
+    }
   }, [])
 
-  const fetchData = useCallback(async () => {
-    try {
-      const [sRes, stRes, qRes, fRes] = await Promise.all([
-        fetch('/api/sessions?status=active&allActive=1'),
-        fetch('/api/stats'),
-        fetch('/api/queue'),
-        fetch('/api/stats/fleet'),
-      ])
-      const safeJson = async (r: Response, fallback: unknown) => {
-        if (!r.ok) return fallback
-        try { return await r.json() } catch { return fallback }
-      }
-      const [sData, stData, qData, fData] = await Promise.all([
-        safeJson(sRes, {}),
-        safeJson(stRes, null),
-        safeJson(qRes, []),
-        safeJson(fRes, null),
-      ])
-      setSessions((sData as { sessions?: Session[] }).sessions ?? [])
-      setStats(stData as Stats | null)
-      setQueues(Array.isArray(qData) ? qData as QueueEntry[] : [])
-      setFleetStats(fData as FleetStats | null)
-    } catch (e) {
-      console.error('[fetchData]', e)
-    } finally {
-      setLoading(false)
-    }
+  const [dataUnavailable, setDataUnavailable] = useState(false)
+  const dataRequest = useRef<Promise<void> | null>(null)
+  const fetchData = useCallback(() => {
+    if (dataRequest.current) return dataRequest.current
+    dataRequest.current = (async () => {
+      const results = await Promise.allSettled([
+        '/api/sessions?status=active&allActive=1', '/api/stats', '/api/queue', '/api/stats/fleet',
+      ].map(async url => {
+        const res = await fetch(url, { cache: 'no-store', signal: AbortSignal.timeout(12000) })
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        return res.json()
+      }))
+      const [sessionsResult, statsResult, queueResult, fleetResult] = results
+      // Keep the last known values when an endpoint is unavailable, never show a false empty lot.
+      if (sessionsResult.status === 'fulfilled' && Array.isArray(sessionsResult.value?.sessions)) setSessions(sessionsResult.value.sessions)
+      if (statsResult.status === 'fulfilled' && statsResult.value?.car && statsResult.value?.motorcycle) setStats(statsResult.value)
+      if (queueResult.status === 'fulfilled' && Array.isArray(queueResult.value)) setQueues(queueResult.value)
+      if (fleetResult.status === 'fulfilled' && fleetResult.value?.car && fleetResult.value?.motorcycle) setFleetStats(fleetResult.value)
+      setDataUnavailable(results.some(result => result.status === 'rejected'))
+    })().finally(() => { setLoading(false); dataRequest.current = null })
+    return dataRequest.current
   }, [])
 
   const fetchSettings = useCallback(() => {
@@ -393,18 +393,22 @@ export default function OperatorPage() {
 
   // Shift actions
   async function startShift() {
+    try {
     const res = await fetch('/api/shifts/start', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ openingFloat: denomTotal(openingCounts), openingBreakdown: denomBreakdown(openingCounts) }),
     })
-    if (res.ok) {
+    const data = await res.json().catch(() => null)
+    if (res.ok && data?._id) {
       setOpeningCounts({})
-      await fetchShift()
+      setShift(data)
       success('เริ่มกะแล้ว', 'ระบบเริ่มนับยอดเงินและรถสำหรับกะนี้')
     } else {
-      const err = await res.json()
-      toastError('ไม่สามารถเริ่มกะได้', err.error)
+      toastError('ไม่สามารถเริ่มกะได้', data?.error ?? `เซิร์ฟเวอร์ตอบกลับไม่สมบูรณ์ (HTTP ${res.status}) กรุณาตรวจสถานะกะแล้วลองใหม่`)
+    }
+    } catch {
+      toastError('ไม่สามารถติดต่อเซิร์ฟเวอร์', 'กรุณาตรวจการเชื่อมต่อและสถานะกะก่อนลองใหม่')
     }
   }
 
@@ -720,14 +724,23 @@ export default function OperatorPage() {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // ป้องกันการทำงานซ้อนถ้ามี modal เปิดอยู่แล้ว (ยกเว้น carsListOpen เอง — F2 ต้องสลับปิดได้)
-      if (checkInOpen || checkOutOpen || lostOpen || shiftEnding || plateMatches) return
-      if (e.key === 'F3') {
+      if (e.key === 'F3' || e.code === 'F3') {
         e.preventDefault()
-        if (e.repeat || !shift) return
+        e.stopPropagation()
+        if (e.repeat) return
+        if (checkInOpen || checkOutOpen || lostOpen || shiftEnding || plateMatches) {
+          warning('กรุณาปิดหน้ารายการที่กำลังทำก่อนเปิดรายงาน F3')
+          return
+        }
+        if (shift === null) {
+          warning('กรุณาเริ่มกะก่อนเปิดรายงาน F3')
+          return
+        }
         setCarsListOpen(false)
         setShiftReportOpen(o => !o)
         return
       }
+      if (checkInOpen || checkOutOpen || lostOpen || shiftEnding || plateMatches) return
       if (shiftReportOpen) return
 
       if (e.key === 'F2') {
@@ -740,9 +753,9 @@ export default function OperatorPage() {
         setShiftEnding(true)
       }
     }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [checkInOpen, checkOutOpen, lostOpen, shiftEnding, shift, plateMatches, shiftReportOpen])
+    window.addEventListener('keydown', handleKeyDown, true)
+    return () => window.removeEventListener('keydown', handleKeyDown, true)
+  }, [checkInOpen, checkOutOpen, lostOpen, shiftEnding, shift, plateMatches, shiftReportOpen, warning])
 
   return (
     <div className="h-screen flex flex-col bg-[#F0F4FF]">
@@ -864,6 +877,10 @@ export default function OperatorPage() {
         </div>
       </header>
 
+      {dataUnavailable && <div role="status" className="shrink-0 bg-amber-100 px-4 py-2 text-xs text-amber-900">
+        โหลดข้อมูลบางส่วนไม่ได้ ข้อมูลที่เห็นอาจยังไม่อัปเดต — ระบบจะลองใหม่อัตโนมัติ
+        <button className="ml-3 underline font-bold" onClick={() => { void fetchData() }}>ลองใหม่</button>
+      </div>}
       {/* ─── Body ─── */}
       <div className="flex-1 min-h-0 p-3 flex gap-3">
 

@@ -186,7 +186,7 @@ export function CheckOutDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-xl" showCloseButton>
+      <DialogContent className="sm:max-w-2xl" showCloseButton>
 
         {/* Header */}
         <DialogHeader className={`bg-gradient-to-r ${theme.headerGrad}`}>
@@ -252,7 +252,7 @@ export function CheckOutDialog({
                 </div>
               )}
 
-              <div className="grid grid-cols-[1.15fr_1fr] gap-3">
+              <div className="grid grid-cols-[1.15fr_1fr] gap-4">
 
               {/* ═══ LEFT PANEL — info + breakdown ═══ */}
               <div className="space-y-2">

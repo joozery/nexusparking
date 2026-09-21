@@ -3,6 +3,7 @@ import { connectDB } from '@/lib/mongodb'
 import { ParkingSession } from '@/models/ParkingSession'
 import { getSettings } from '@/models/SystemSettings'
 import { triggerPrinter } from '@/lib/hardware'
+import { parkingDuration } from '@/lib/parkingDuration'
 
 // On-demand receipt print — checkout no longer auto-prints (most customers
 // don't take the slip), operator triggers this only if the customer asks.
@@ -18,15 +19,16 @@ export async function POST(
 
   const settings = await getSettings()
   const exitTime = session.exitTime ?? new Date()
-  const durationMin = Math.max(1, Math.round((exitTime.getTime() - session.entryTime.getTime()) / 60000))
 
   const result = await triggerPrinter(settings.hardware, {
     plate:     session.plate,
     cardType:  session.cardType,
     entryTime: session.entryTime.toISOString(),
     exitTime:  exitTime.toISOString(),
-    duration:  `${Math.floor(durationMin / 60)}h ${durationMin % 60}m`,
-    fee:       session.totalFee,
+    duration:  parkingDuration(session.entryTime, exitTime),
+    fee:       session.fee,
+    fineAmount: session.fineAmount ?? 0,
+    discountAmount: session.discountAmount ?? 0,
     lostFine:  session.lostFine || undefined,
     total:     session.totalFee,
   })

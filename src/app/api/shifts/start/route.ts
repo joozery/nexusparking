@@ -11,6 +11,7 @@ import { triggerDrawer, printRaw } from '@/lib/hardware'
 import { buildShiftStartSlip } from '@/lib/escpos'
 
 export async function POST(req: NextRequest) {
+  try {
   const body = await req.json().catch(() => ({}))
   const openingFloat: number = Number(body.openingFloat ?? 0)
   const openingBreakdown: Record<string, number> = body.openingBreakdown ?? {}
@@ -36,6 +37,7 @@ export async function POST(req: NextRequest) {
   // นับรถค้างในลานตอนเริ่มกะ
   const carryoverCars = await ParkingSession.countDocuments({ status: 'active' })
 
+  const cfg = await getSettings()
   const shift = await Shift.create({
     operatorId:   payload.sub,
     operatorName,
@@ -46,11 +48,10 @@ export async function POST(req: NextRequest) {
     carryoverCars,
   })
 
-  const cfg = await getSettings()
 
   // เปิดลิ้นชัก — operator ต้องใส่เงินทอนตั้งต้น (opening float) ลงลิ้นชักตอนเข้ากะ
-  void triggerDrawer(cfg.hardware)
-  void printRaw(cfg.hardware, buildShiftStartSlip({ operatorName, startTime: shift.startTime, openingFloat, carryoverCars }))
+  void triggerDrawer(cfg.hardware).catch(() => {})
+  void printRaw(cfg.hardware, buildShiftStartSlip({ operatorName, startTime: shift.startTime, openingFloat, carryoverCars })).catch(() => {})
 
   // LINE notification — fire and forget
   if (cfg.line?.enabled && cfg.line.channelToken && cfg.line.targets?.length) {
@@ -62,4 +63,8 @@ export async function POST(req: NextRequest) {
   }
 
   return NextResponse.json(shift, { status: 201 })
+  } catch (error) {
+    console.error('[shifts/start]', error instanceof Error ? error.name : 'UnknownError')
+    return NextResponse.json({ error: 'เริ่มกะไม่สำเร็จ กรุณาตรวจสอบการเชื่อมต่อฐานข้อมูลและสถานะกะก่อนลองใหม่' }, { status: 503 })
+  }
 }

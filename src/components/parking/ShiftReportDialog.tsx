@@ -40,7 +40,13 @@ export function ShiftReportDialog({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     const controller = new AbortController()
     fetch('/api/shifts/current/report', { cache: 'no-store', signal: controller.signal })
-      .then(async res => { const data = await res.json(); if (!res.ok) throw new Error(data.error ?? 'โหลดรายงานไม่สำเร็จ'); return data })
+      .then(async res => {
+        const data = await res.json().catch(() => null)
+        if (!res.ok || !data || !Array.isArray(data.sessions)) {
+          throw new Error(data?.error ?? `โหลดรายงานไม่สำเร็จ (HTTP ${res.status}) กรุณาตรวจการเชื่อมต่อแล้วกดรีเฟรช`)
+        }
+        return data
+      })
       .then(setReport)
       .catch(e => { if (!controller.signal.aborted) setError(e instanceof Error ? e.message : 'โหลดรายงานไม่สำเร็จ') })
     return () => controller.abort()
@@ -55,8 +61,8 @@ export function ShiftReportDialog({ onClose }: { onClose: () => void }) {
         <button className="rounded-lg border px-3 py-2 text-sm" onClick={() => { setReport(null); setError(''); setVersion(v => v + 1) }}>รีเฟรชรายงาน</button>
         {error ? <p role="alert" className="text-red-600">{error}</p> : !report ? <p role="status">กำลังโหลดรายงาน…</p> : <>
           {report.sessions.length === 0 ? <p className="py-6 text-center text-slate-500">ยังไม่มีรายการรถออกในกะนี้</p> : <div className="overflow-x-auto"><table className="w-full text-sm text-left">
-            <thead><tr className="border-b"><th className="p-2">ทะเบียน / บัตร</th><th className="p-2">เวลาเข้า</th><th className="p-2">เวลาออก</th><th className="p-2">ใบเสร็จ</th></tr></thead>
-            <tbody>{report.sessions.map(s => <tr key={s._id} className="border-b"><td className="p-2"><strong>{s.plate}</strong><p className="text-xs text-slate-500">{s.cardUid}</p></td><td className="p-2">{s.entryTime ? new Date(s.entryTime).toLocaleString('th-TH') : '—'}</td><td className="p-2">{new Date(s.exitTime).toLocaleString('th-TH')}</td><td className="p-2"><div className="flex gap-2 whitespace-nowrap">
+            <thead><tr className="border-b"><th className="p-2">ทะเบียน</th><th className="p-2">เวลาออก</th><th className="p-2">ใบเสร็จ</th></tr></thead>
+            <tbody>{report.sessions.map(s => <tr key={s._id} className="border-b"><td className="p-2"><strong>{s.plate}</strong></td><td className="p-2">{new Date(s.exitTime).toLocaleString('th-TH')}</td><td className="p-2"><div className="flex gap-2 whitespace-nowrap">
               <button disabled={receiptAction !== null} onClick={() => receipt(s._id)} className="rounded-lg border px-3 py-2 text-xs font-bold disabled:opacity-40">{receiptAction === s._id ? 'กำลังพิมพ์…' : 'พิมพ์ใบเสร็จ'}</button>
             </div></td></tr>)}</tbody>
           </table></div>}
