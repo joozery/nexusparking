@@ -52,6 +52,7 @@ async function handlePost(
     if (shift) {
       shiftId = String(shift._id)
       shift.checkinsCount += 1
+      if (shift.checkinsByType) shift.checkinsByType[q.cardType === 'motorcycle' ? 'motorcycle' : 'car'] += 1
       await shift.save()
     }
   }

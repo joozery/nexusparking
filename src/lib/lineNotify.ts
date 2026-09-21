@@ -31,12 +31,39 @@ function thaiTime(date: Date): string {
   })
 }
 
-export function buildShiftStartMessage(operatorName: string, startTime: Date, carryoverCars: number): string {
+export function buildShiftStartMessage(params: {
+  operatorName: string
+  startTime: Date
+  openingFloat: number
+  openingBreakdown: Record<string, number>
+  carryoverByType: { car: number; motorcycle: number }
+  temporaryCardsRemaining: { car: number; motorcycle: number }
+}): string {
+  const { operatorName, startTime, openingFloat, openingBreakdown, carryoverByType } = params
+  const money = (amount: number) => amount.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  const denominations = Object.entries(openingBreakdown)
+    .filter(([, count]) => count > 0)
+    .sort(([a], [b]) => Number(b) - Number(a))
+    .map(([value, count]) => `${Number(value).toLocaleString('th-TH')} บาท × ${count} = ${money(Number(value) * count)} บาท`)
   return [
     '🟢 เปิดกะการทำงาน',
     `พนักงาน: ${operatorName}`,
     `เวลา: ${thaiTime(startTime)}`,
-    `รถค้างในลาน: ${carryoverCars} คัน`,
+    '─────────────────',
+    `เงินต้นกะ: ${money(openingFloat)} บาท`,
+    'รายละเอียดเงินที่กรอก:',
+    ...(denominations.length ? denominations : ['ไม่ได้ระบุจำนวนธนบัตร/เหรียญ']),
+    '─────────────────',
+    'รถค้างในลานตอนเปิดกะ',
+    `รถยนต์: ${carryoverByType.car} คัน`,
+    `มอเตอร์ไซค์: ${carryoverByType.motorcycle} คัน`,
+    ...(carryoverByType.car + carryoverByType.motorcycle > 0
+      ? [`รวม: ${carryoverByType.car + carryoverByType.motorcycle} คัน`] : []),
+    '─────────────────',
+    'บัตรชั่วคราวคงเหลือตอนเปิดกะ',
+    `รถยนต์: ${params.temporaryCardsRemaining.car} ใบ`,
+    `มอเตอร์ไซค์: ${params.temporaryCardsRemaining.motorcycle} ใบ`,
+    `รวม: ${params.temporaryCardsRemaining.car + params.temporaryCardsRemaining.motorcycle} ใบ`,
   ].join('\n')
 }
 
@@ -51,31 +78,69 @@ export function buildShiftEndMessage(params: {
   totalAmount: number
   openingFloat: number
   closingFloat: number
+  closingBreakdown: Record<string, number>
   closingCarCount: number
+  closingByType: { car: number; motorcycle: number }
+  queuedByType: { car: number; motorcycle: number }
+  lostCardsCount: number
+  lostCardsFineTotal: number
+  otherFines: { name: string; count: number; total: number }[]
+  temporaryCardsRemaining: { car: number; motorcycle: number }
 }): string {
   const {
     operatorName, startTime, endTime,
     checkinsCount, checkoutsCount,
     cashAmount, qrAmount, totalAmount,
-    openingFloat, closingFloat, closingCarCount,
+    openingFloat, closingFloat, closingCarCount, closingBreakdown, closingByType,
   } = params
   const dur = Math.round((endTime.getTime() - startTime.getTime()) / 60000)
   const h = Math.floor(dur / 60)
   const m = dur % 60
+  const money = (amount: number) => amount.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  const denominations = Object.entries(closingBreakdown)
+    .filter(([, count]) => count > 0)
+    .sort(([a], [b]) => Number(b) - Number(a))
+    .map(([value, count]) => `${Number(value).toLocaleString('th-TH')} บาท × ${count} = ${money(Number(value) * count)} บาท`)
   return [
     '🔴 ปิดกะการทำงาน',
     `พนักงาน: ${operatorName}`,
-    `เวลา: ${thaiTime(startTime)} — ${thaiTime(endTime)}`,
+    `เวลาเปิดกะ: ${thaiTime(startTime)}`,
+    `เวลาปิดกะ: ${thaiTime(endTime)}`,
     `ระยะเวลา: ${h} ชม. ${m} นาที`,
+    '─────────────────',
+    `เงินต้นกะ:   ฿${openingFloat.toLocaleString()}`,
+    'รายละเอียดเงินส่งคืนที่กรอก:',
+    ...(denominations.length ? denominations : ['ไม่ได้ระบุจำนวนธนบัตร/เหรียญ']),
+    `ยอดเงินส่งคืนรวม: ${money(closingFloat)} บาท`,
     '─────────────────',
     `Check-in:  ${checkinsCount} คัน`,
     `Check-out: ${checkoutsCount} คัน`,
+    ...(params.lostCardsCount > 0 || params.lostCardsFineTotal > 0 ? [
+      `บัตรหายในกะนี้: ${params.lostCardsCount} ใบ`,
+      `ค่าปรับบัตรหายรวม: ${money(params.lostCardsFineTotal)} บาท`,
+    ] : []),
+    ...(params.otherFines.length ? [
+      '⚠️ ค่าปรับอื่นในกะนี้',
+      ...params.otherFines.map(fine => `${fine.name}: ${fine.count} รายการ = ${money(fine.total)} บาท`),
+      `รวมค่าปรับอื่น: ${money(params.otherFines.reduce((sum, fine) => sum + fine.total, 0))} บาท`,
+    ] : []),
+    'รถเข้าคิวรอในกะนี้ (รวมทุกสถานะ)',
+    `รถยนต์: ${params.queuedByType.car} คัน`,
+    `มอเตอร์ไซค์: ${params.queuedByType.motorcycle} คัน`,
+    ...(params.queuedByType.car + params.queuedByType.motorcycle > 0
+      ? [`รวม: ${params.queuedByType.car + params.queuedByType.motorcycle} คัน`] : []),
     `รายรับเงินสด: ฿${cashAmount.toLocaleString()}`,
     `รายรับ QR:    ฿${qrAmount.toLocaleString()}`,
     `รวมทั้งหมด:   ฿${totalAmount.toLocaleString()}`,
     '─────────────────',
-    `เงินต้นกะ:   ฿${openingFloat.toLocaleString()}`,
-    `เงินส่งคืน:  ฿${closingFloat.toLocaleString()}`,
-    `รถค้างปิดกะ: ${closingCarCount} คัน`,
+    'รถค้างในลานตอนปิดกะ',
+    `รถยนต์: ${closingByType.car} คัน`,
+    `มอเตอร์ไซค์: ${closingByType.motorcycle} คัน`,
+    ...(closingCarCount > 0 ? [`รวม: ${closingCarCount} คัน`] : []),
+    '─────────────────',
+    'บัตรชั่วคราวคงเหลือตอนปิดกะ',
+    `รถยนต์: ${params.temporaryCardsRemaining.car} ใบ`,
+    `มอเตอร์ไซค์: ${params.temporaryCardsRemaining.motorcycle} ใบ`,
+    `รวม: ${params.temporaryCardsRemaining.car + params.temporaryCardsRemaining.motorcycle} ใบ`,
   ].join('\n')
 }

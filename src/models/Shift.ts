@@ -1,6 +1,7 @@
 import mongoose, { Schema, type Document } from 'mongoose'
 
-export interface IShift extends Document {
+import type { ShiftVehicleCounts } from '@/lib/shiftVehicleCounts'
+export interface IShift extends Document, ShiftVehicleCounts {
   operatorId:      string
   operatorName:    string
   startTime:       Date
@@ -19,7 +20,12 @@ export interface IShift extends Document {
   closingCarCount:   number   // รถค้างในลานตอนปิดกะ
 }
 
+const countsSchema = new Schema({ car: { type: Number, required: true }, motorcycle: { type: Number, required: true } }, { _id: false })
 const ShiftSchema = new Schema<IShift>({
+  checkinsByType: { type: countsSchema, default: undefined },
+  checkoutsByType: { type: countsSchema, default: undefined },
+  carryoverByType: { type: countsSchema, default: undefined },
+  closingByType: { type: countsSchema, default: undefined },
   operatorId:      { type: String, required: true },
   operatorName:    { type: String, required: true },
   startTime:       { type: Date,   required: true },

@@ -9,6 +9,7 @@ export interface IParkingSession extends Document {
   durationMin:   number        // minutes (updated on checkout)
   fee:           number        // parking fee
   lostFine:      number        // 0 or 300
+  lostCard?:     boolean
   totalFee:      number        // fee + lostFine
   status:        'active' | 'completed' | 'lost' | 'void'
   paymentMethod:  'cash' | 'qr'
@@ -39,6 +40,7 @@ const ParkingSessionSchema = new Schema<IParkingSession>({
   durationMin: { type: Number, default: 0 },
   fee:         { type: Number, default: 0 },
   lostFine:    { type: Number, default: 0 },
+  lostCard:    { type: Boolean },
   totalFee:    { type: Number, default: 0 },
   status:         { type: String, required: true, enum: ['active', 'completed', 'lost', 'void'], default: 'active' },
   paymentMethod:  { type: String, enum: ['cash', 'qr'], default: 'cash' },

@@ -19,7 +19,7 @@ export async function GET() {
 
   const settings = await getSettings()
 
-  const [carActive, motoActive, carLost, motoLost, carOnlyCards, overnightCards, motoCards, carQueueWaiting, motoQueueWaiting] = await Promise.all([
+  const [carActive, motoActive, carLost, motoLost, carOnlyCards, overnightCards, motoCards, carQueueWaiting, motoQueueWaiting, carMonthlyCards, motoMonthlyCards] = await Promise.all([
     ParkingSession.find({ cardType: { $in: CAR_TYPES }, status: 'active' }).lean(),
     ParkingSession.find({ cardType: 'motorcycle', status: 'active' }).lean(),
     ParkingSession.find({ cardType: { $in: CAR_TYPES }, lostFine: { $gt: 0 } }).lean(),
@@ -29,8 +29,31 @@ export async function GET() {
     ParkingCard.countDocuments({ type: 'motorcycle', isActive: true }),
     ParkingQueue.countDocuments({ cardType: 'car', status: 'waiting' }),
     ParkingQueue.countDocuments({ cardType: 'motorcycle', status: 'waiting' }),
+    ParkingCard.countDocuments({ type: { $in: CAR_TYPES }, cardCategory: 'monthly', isActive: true }),
+    ParkingCard.countDocuments({ type: 'motorcycle', cardCategory: 'monthly', isActive: true }),
   ])
   const carCards = carOnlyCards + overnightCards
+  // Legacy cards without a category are temporary, matching the registration default.
+  const [enabledCards, waitingCards] = await Promise.all([
+    ParkingCard.find({ isActive: true }).select('uid type cardCategory').lean(),
+    ParkingQueue.find({ status: 'waiting' }).select('cardUid').lean(),
+  ])
+  const occupiedUids = new Set([
+    ...carActive.map(session => session.cardUid),
+    ...motoActive.map(session => session.cardUid),
+    ...waitingCards.map(queue => queue.cardUid),
+  ])
+  function temporaryCounts(types: readonly string[], sessions: IParkingSession[]) {
+    const cards = enabledCards.filter(card => types.includes(card.type) && (!card.cardCategory || card.cardCategory === 'temporary'))
+    const monthlyCards = enabledCards.filter(card => types.includes(card.type) && card.cardCategory === 'monthly')
+    const parkedUids = new Set(sessions.map(session => session.cardUid))
+    return {
+      temporaryCardsRegistered: cards.length,
+      temporaryCardsInUse: cards.filter(card => parkedUids.has(card.uid)).length,
+      temporaryCardsRemaining: cards.filter(card => !occupiedUids.has(card.uid)).length,
+      monthlyCardsRemaining: monthlyCards.filter(card => !occupiedUids.has(card.uid)).length,
+    }
+  }
 
   // "เข้าวันนี้" นับรวมรถที่ยังรอ/ยกเลิกอยู่ในคิวด้วย เพราะไม้กั้นเปิด+ถ่ายรูปไปแล้วตอนเข้าคิว
   // ถือว่าเข้าพื้นที่จริงแล้ว แม้ยังไม่ได้เป็น session — รถที่ถูกโปรโมทจากคิวเข้า session แล้ว
@@ -59,6 +82,20 @@ export async function GET() {
   const lostToday = (sessions: IParkingSession[]) =>
     sessions.filter(s => (s.exitTime ?? s.entryTime) >= todayStart).length
 
+  const lostSessionsToday = [...carLost, ...motoLost].filter(s => (s.exitTime ?? s.entryTime) >= todayStart)
+  // Include disabled cards: disabling a lost card must not remove its history.
+  const lostCards = await ParkingCard.find({ uid: { $in: lostSessionsToday.map(s => s.cardUid) } })
+    .select('uid cardCategory').lean()
+  const lostCategories = new Map(lostCards.map(card => [card.uid, card.cardCategory ?? 'temporary']))
+  function lostByCategory(sessions: IParkingSession[]) {
+    const today = sessions.filter(s => (s.exitTime ?? s.entryTime) >= todayStart)
+    const unknown = today.some(s => !lostCategories.has(s.cardUid))
+    return {
+      lostTemporaryToday: unknown ? null : today.filter(s => lostCategories.get(s.cardUid) === 'temporary').length,
+      lostMonthlyToday: unknown ? null : today.filter(s => lostCategories.get(s.cardUid) === 'monthly').length,
+    }
+  }
+
   const carSplit  = splitByBillingMode(carActive)
   const motoSplit = splitByBillingMode(motoActive)
 
@@ -69,6 +106,8 @@ export async function GET() {
 
   return NextResponse.json({
     car: {
+      ...temporaryCounts(CAR_TYPES, carActive),
+      ...lostByCategory(carLost),
       inToday:           carInToday,
       outToday:          carOutToday,
       activeTotal:       carActive.length,
@@ -78,6 +117,7 @@ export async function GET() {
       capacityAvailable: Math.max(0, settings.capacity.car - carActive.length),
       queueWaiting:      carQueueWaiting,
       cardsRegistered:   carCards,
+      monthlyCardsRegistered: carMonthlyCards,
       cardsRemaining:    Math.max(0, carCards - carActive.length),
       overnightCardsRegistered: overnightCards,
       overnightCardsRemaining:  Math.max(0, overnightCards - activeOvernightCards),
@@ -86,6 +126,8 @@ export async function GET() {
       lostToday:         lostToday(carLost),
     },
     motorcycle: {
+      ...temporaryCounts(['motorcycle'], motoActive),
+      ...lostByCategory(motoLost),
       inToday:           motoInToday,
       outToday:          motoOutToday,
       activeTotal:       motoActive.length,
@@ -95,6 +137,7 @@ export async function GET() {
       capacityAvailable: Math.max(0, settings.capacity.motorcycle - motoActive.length),
       queueWaiting:      motoQueueWaiting,
       cardsRegistered:   motoCards,
+      monthlyCardsRegistered: motoMonthlyCards,
       cardsRemaining:    Math.max(0, motoCards - motoActive.length),
       lostToday:         lostToday(motoLost),
     },

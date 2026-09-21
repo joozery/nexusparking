@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { Save, RefreshCw, MessageCircle, Plus, X, Send, Radar, Trash2, Copy, Check } from 'lucide-react'
 import { useToast } from '@/components/ui/Toast'
+import { DailyLineReportPreview } from '@/components/parking/DailyLineReportPreview'
 
 interface LineSettings {
   line: { enabled: boolean; channelToken: string; targets: string[] }
@@ -217,6 +218,8 @@ export default function LineSettingsPage() {
         {sendingTest ? <RefreshCw className="size-4 animate-spin" /> : <Send className="size-4" />}
         {sendingTest ? 'กำลังส่ง...' : 'ส่งข้อความทดสอบ'}
       </button>
+
+      <DailyLineReportPreview />
 
       {/* Discover IDs */}
       <div className="bg-white rounded-xl overflow-hidden" style={{ border: '1px solid #E8ECF4' }}>

@@ -111,6 +111,7 @@ async function handlePost(req: NextRequest) {
   session.durationMin    = durationMin
   session.fee            = fee
   session.lostFine       = lostFine
+  session.lostCard       = Boolean(lostCard)
   session.totalFee       = totalFee
   session.discountId     = discountId ?? undefined
   session.discountName   = discountName
@@ -128,6 +129,7 @@ async function handlePost(req: NextRequest) {
     if (shift) {
       session.shiftId = String(shift._id)
       shift.checkoutsCount += 1
+      if (shift.checkoutsByType) shift.checkoutsByType[session.cardType === 'motorcycle' ? 'motorcycle' : 'car'] += 1
       if (paymentMethod === 'qr') {
         shift.qrAmount += totalFee
       } else {

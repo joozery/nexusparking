@@ -82,6 +82,7 @@ async function handlePost(req: NextRequest) {
     if (shift) {
       shiftId = String(shift._id)
       shift.checkinsCount += 1
+      if (shift.checkinsByType) shift.checkinsByType[resolvedType === 'motorcycle' ? 'motorcycle' : 'car'] += 1
       await shift.save()
     }
   }

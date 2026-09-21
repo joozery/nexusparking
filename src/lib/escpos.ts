@@ -1,3 +1,4 @@
+import { vehicleCountLines, type ShiftVehicleCounts } from './shiftVehicleCounts'
 import iconv from 'iconv-lite'
 import { receiptLogo } from './receiptLogo'
 
@@ -89,12 +90,13 @@ function thaiDateTime(d: Date): string {
 }
 
 /** Slip printed when a shift starts — operator's own record of the opening float. */
-export function buildShiftStartSlip(data: { operatorName: string; startTime: Date; openingFloat: number; carryoverCars: number }): Buffer {
+export function buildShiftStartSlip(data: { operatorName: string; startTime: Date; openingFloat: number; carryoverCars: number } & ShiftVehicleCounts): Buffer {
   const parts: Buffer[] = [INIT, THAI_CODEPAGE, ALIGN_CENTER, BOLD_ON]
   parts.push(thaiLine('เปิดกะการทำงาน\n'), BOLD_OFF, NL, ALIGN_LEFT, DIVIDER)
   parts.push(thaiLine(`พนักงาน   : ${data.operatorName}\n`))
   parts.push(thaiLine(`เวลา      : ${thaiDateTime(data.startTime)}\n`))
   parts.push(thaiLine(`รถค้างในลาน : ${data.carryoverCars} คัน\n`))
+  vehicleCountLines("ค้าง", data.carryoverByType).forEach(line => parts.push(thaiLine(line + "\n")))
   parts.push(DIVIDER)
   parts.push(BOLD_ON, thaiLine(`เงินต้นกะ : ${data.openingFloat.toLocaleString('th-TH')} บาท\n`), BOLD_OFF)
   parts.push(NL, NL, NL, CUT)
@@ -114,7 +116,7 @@ export function buildShiftEndSlip(data: {
   openingFloat: number
   closingFloat: number
   closingCarCount: number
-}): Buffer {
+} & ShiftVehicleCounts): Buffer {
   const durMin = Math.round((data.endTime.getTime() - data.startTime.getTime()) / 60000)
   const h = Math.floor(durMin / 60)
   const m = durMin % 60
@@ -127,6 +129,7 @@ export function buildShiftEndSlip(data: {
   parts.push(DIVIDER)
   parts.push(thaiLine(`Check-in  : ${data.checkinsCount} คัน\n`))
   parts.push(thaiLine(`Check-out : ${data.checkoutsCount} คัน\n`))
+  ;[...vehicleCountLines("เข้า", data.checkinsByType), ...vehicleCountLines("ออก", data.checkoutsByType)].forEach(line => parts.push(thaiLine(line + "\n")))
   parts.push(thaiLine(`รายรับเงินสด : ${data.cashAmount.toLocaleString('th-TH')} บาท\n`))
   parts.push(thaiLine(`รายรับ QR    : ${data.qrAmount.toLocaleString('th-TH')} บาท\n`))
   parts.push(BOLD_ON, thaiLine(`รวมทั้งหมด   : ${data.totalAmount.toLocaleString('th-TH')} บาท\n`), BOLD_OFF)
@@ -134,6 +137,7 @@ export function buildShiftEndSlip(data: {
   parts.push(thaiLine(`เงินต้นกะ  : ${data.openingFloat.toLocaleString('th-TH')} บาท\n`))
   parts.push(thaiLine(`เงินส่งคืน : ${data.closingFloat.toLocaleString('th-TH')} บาท\n`))
   parts.push(thaiLine(`รถค้างปิดกะ : ${data.closingCarCount} คัน\n`))
+  vehicleCountLines("ค้าง", data.closingByType).forEach(line => parts.push(thaiLine(line + "\n")))
   parts.push(NL, NL, NL, CUT)
   return Buffer.concat(parts)
 }

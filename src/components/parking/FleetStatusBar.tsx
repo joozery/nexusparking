@@ -12,6 +12,11 @@ export interface FleetTypeStats {
   capacityAvailable: number
   queueWaiting: number
   cardsRegistered: number
+  monthlyCardsRegistered?: number
+  temporaryCardsRegistered?: number
+  temporaryCardsInUse?: number
+  temporaryCardsRemaining?: number
+  monthlyCardsRemaining?: number
   cardsRemaining: number
   // เฉพาะรถยนต์ — แยกจำนวนบัตรตามประเภทที่ลงทะเบียนไว้จริง (ค้างคืน vs ชั่วคราว)
   overnightCardsRegistered?: number
@@ -19,6 +24,8 @@ export interface FleetTypeStats {
   normalCardsRegistered?: number
   normalCardsRemaining?: number
   lostToday: number
+  lostTemporaryToday?: number | null
+  lostMonthlyToday?: number | null
 }
 export interface FleetStats {
   car: FleetTypeStats
@@ -73,25 +80,30 @@ function FleetRow({ type, label, accent, bg, stats }: {
         <Divider />
         <Stat label="คิวรอ" value={stats.queueWaiting} icon={Users} color="#7C3AED" />
         <Divider />
-        <Stat label="บัตร" value={`${stats.activeTotal}/${stats.cardsRegistered}`} icon={IdCard} color="#334155" />
+        <div title="บัตรชั่วคราวที่รถอยู่ในลาน / บัตรชั่วคราวที่เปิดใช้งานทั้งหมด">
+          <Stat label="บัตรชั่วคราว" value={`${stats.temporaryCardsInUse ?? '—'}/${stats.temporaryCardsRegistered ?? '—'}`} icon={IdCard} color="#334155" />
+        </div>
         <Divider />
-        <Stat label="บัตรเหลือ" value={stats.cardsRemaining} icon={IdCard} color={stats.cardsRemaining > 0 ? '#059669' : '#DC2626'} />
-        {type === 'car' && stats.overnightCardsRegistered !== undefined ? (
-          <>
-            <Divider />
-            <Stat label="บัตรค้างคืน" value={`${stats.overnightCardsRemaining}/${stats.overnightCardsRegistered}`} icon={Moon} color="#7C3AED" />
-            <Divider />
-            <Stat label="บัตรชั่วคราว" value={`${stats.normalCardsRemaining}/${stats.normalCardsRegistered}`} icon={Sun} color="#D97706" />
-          </>
-        ) : type === 'motorcycle' && (
-          <>
-            <Divider />
-            {/* มอเตอร์ไซค์ไม่มีบัตรประเภท overnight — บัตรทุกใบนับเป็นชั่วคราวหมด ค่าจึงเท่ากับ "บัตร"/"บัตรเหลือ" ด้านบน */}
-            <Stat label="บัตรชั่วคราว" value={`${stats.cardsRemaining}/${stats.cardsRegistered}`} icon={Sun} color="#D97706" />
-          </>
-        )}
+        <div title="บัตรชั่วคราวที่เปิดใช้งาน หักบัตรของรถในลานและคิวรอ">
+          <Stat label="บัตรเหลือชั่วคราว" value={stats.temporaryCardsRemaining ?? '—'} icon={IdCard} color={(stats.temporaryCardsRemaining ?? 0) > 0 ? '#059669' : '#DC2626'} />
+        </div>
+        {stats.monthlyCardsRegistered !== 0 && <><Divider />
+        <div title="จำนวนบัตรรายเดือนที่เปิดใช้งาน รวมบัตรที่เลยวันหมดอายุแต่ยังไม่ได้ปิดใช้งาน">
+          <Stat label="บัตรรายเดือน" value={stats.monthlyCardsRegistered ?? '—'} icon={IdCard} color="#7C3AED" />
+        </div></>}
+        {stats.monthlyCardsRemaining !== 0 && <><Divider />
+        <div title="บัตรรายเดือนที่เปิดใช้งาน หักบัตรของรถในลานและคิวรอ รวมบัตรที่เลยวันหมดอายุแต่ยังไม่ได้ปิดใช้งาน">
+          <Stat label="บัตรเหลือรายเดือน" value={stats.monthlyCardsRemaining ?? '—'} icon={IdCard} color={(stats.monthlyCardsRemaining ?? 0) > 0 ? '#059669' : '#DC2626'} />
+        </div></>}
         <Divider />
-        <Stat label="บัตรหาย" value={stats.lostToday} icon={AlertTriangle} color="#DC2626" />
+        <div title="รายการเสียค่าบัตรหายวันนี้ แยกตามประเภทบัตรที่ลงทะเบียนปัจจุบัน — หมายถึงข้อมูลประเภทบัตรไม่ครบ">
+          <Stat label="บัตรหายชั่วคราว" value={stats.lostTemporaryToday ?? '—'} icon={AlertTriangle} color="#DC2626" />
+        </div>
+        {stats.lostMonthlyToday !== 0 && <><Divider />
+          <div title="รายการเสียค่าบัตรหายวันนี้ แยกตามประเภทบัตรที่ลงทะเบียนปัจจุบัน — หมายถึงข้อมูลประเภทบัตรไม่ครบ">
+            <Stat label="บัตรหายรายเดือน" value={stats.lostMonthlyToday ?? '—'} icon={AlertTriangle} color="#DC2626" />
+          </div>
+        </>}
       </div>
     </div>
   )

@@ -1,4 +1,6 @@
 'use client'
+import { ShiftVehicleSummary } from '@/components/parking/ShiftVehicleSummary'
+import type { VehicleCounts } from '@/lib/shiftVehicleCounts'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 
@@ -11,6 +13,8 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogBody } from '@/components/ui/dialog'
 import { CheckInDialog } from '@/components/parking/CheckInDialog'
 import { ShiftReportDialog } from '@/components/parking/ShiftReportDialog'
+import { DailyLineTestButton } from '@/components/parking/DailyLineTestButton'
+import { ClosedShiftDialog, type ClosedShift } from '@/components/parking/ClosedShiftDialog'
 import { CheckOutDialog, type PaymentMethod } from '@/components/parking/CheckOutDialog'
 import { LostCardDialog } from '@/components/parking/LostCardDialog'
 import { CctvStrip } from '@/components/parking/CctvStrip'
@@ -68,6 +72,8 @@ interface Shift {
   operatorName: string
   startTime: string
   status: 'active' | 'closed'
+  checkinsByType?: VehicleCounts
+  checkoutsByType?: VehicleCounts
   checkinsCount: number
   checkoutsCount: number
   cashAmount: number
@@ -174,6 +180,8 @@ export default function OperatorPage() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [shiftEnding, setShiftEnding] = useState(false)
+  const [openedShift, setOpenedShift] = useState<ClosedShift | null>(null)
+  const [closedShift, setClosedShift] = useState<ClosedShift | null>(null)
   const [openingCounts, setOpeningCounts] = useState<DenomCounts>({})
   const [closingCounts, setClosingCounts] = useState<DenomCounts>({})
   const [nowTick, setNowTick] = useState(() => Date.now())
@@ -305,7 +313,7 @@ export default function OperatorPage() {
   }, [fetchData, fetchSettings])
 
   // ── Scan input focus management ─────────────────────────────────────────
-  const noDialogOpen = !checkInOpen && !checkOutOpen && !lostOpen && !shiftEnding && !plateMatches && !carsListOpen && !shiftReportOpen && !!shift
+  const noDialogOpen = !openedShift && !closedShift && !checkInOpen && !checkOutOpen && !lostOpen && !shiftEnding && !plateMatches && !carsListOpen && !shiftReportOpen && !!shift
   useEffect(() => {
     if (noDialogOpen) {
       setTimeout(() => scanInputRef.current?.focus(), 50)
@@ -403,6 +411,7 @@ export default function OperatorPage() {
     if (res.ok && data?._id) {
       setOpeningCounts({})
       setShift(data)
+      setOpenedShift(data)
       success('เริ่มกะแล้ว', 'ระบบเริ่มนับยอดเงินและรถสำหรับกะนี้')
     } else {
       toastError('ไม่สามารถเริ่มกะได้', data?.error ?? `เซิร์ฟเวอร์ตอบกลับไม่สมบูรณ์ (HTTP ${res.status}) กรุณาตรวจสถานะกะแล้วลองใหม่`)
@@ -419,10 +428,11 @@ export default function OperatorPage() {
       body: JSON.stringify({ closingFloat: denomTotal(closingCounts), closingBreakdown: denomBreakdown(closingCounts) }),
     })
     if (res.ok) {
+      const result = await res.json()
+      setClosedShift(result)
       setShiftEnding(false)
       setClosingCounts({})
-      success('ปิดกะแล้ว', 'บันทึกยอดเรียบร้อย — กำลังออกจากระบบ...')
-      setTimeout(handleLogout, 1500)
+      success('ปิดกะแล้ว', 'บันทึกยอดเรียบร้อย สามารถรับใบปิดกะได้')
     } else {
       const err = await res.json()
       toastError('ไม่สามารถปิดกะได้', err.error)
@@ -633,7 +643,7 @@ export default function OperatorPage() {
   useEffect(() => {
     onCardScanRef.current = async (uid: string) => {
       // Ignore scan when any dialog is already open — prevents resetting in-progress forms
-      if (checkInOpen || checkOutOpen || lostOpen || shiftEnding || plateMatches || shiftReportOpen || !shift || cardScanBusy.current) return
+      if (openedShift || closedShift || checkInOpen || checkOutOpen || lostOpen || shiftEnding || plateMatches || shiftReportOpen || !shift || cardScanBusy.current) return
       cardScanBusy.current = true
       try {
       setCarsListOpen(false)
@@ -723,6 +733,7 @@ export default function OperatorPage() {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (openedShift || closedShift) return
       // ป้องกันการทำงานซ้อนถ้ามี modal เปิดอยู่แล้ว (ยกเว้น carsListOpen เอง — F2 ต้องสลับปิดได้)
       if (e.key === 'F3' || e.code === 'F3') {
         e.preventDefault()
@@ -755,7 +766,7 @@ export default function OperatorPage() {
     }
     window.addEventListener('keydown', handleKeyDown, true)
     return () => window.removeEventListener('keydown', handleKeyDown, true)
-  }, [checkInOpen, checkOutOpen, lostOpen, shiftEnding, shift, plateMatches, shiftReportOpen, warning])
+  }, [checkInOpen, checkOutOpen, lostOpen, shiftEnding, shift, plateMatches, shiftReportOpen, warning, closedShift, openedShift])
 
   return (
     <div className="h-screen flex flex-col bg-[#F0F4FF]">
@@ -801,7 +812,7 @@ export default function OperatorPage() {
           // Don't steal focus from a real input the operator clicked (e.g. search box)
           const target = e.relatedTarget as HTMLElement | null
           if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT')) return
-          if (!checkInOpen && !checkOutOpen && !lostOpen && !shiftEnding && !plateMatches && !carsListOpen && !shiftReportOpen && !!shift) {
+          if (!openedShift && !closedShift && !checkInOpen && !checkOutOpen && !lostOpen && !shiftEnding && !plateMatches && !carsListOpen && !shiftReportOpen && !!shift) {
             setTimeout(() => scanInputRef.current?.focus(), 50)
           }
         }}
@@ -982,6 +993,7 @@ export default function OperatorPage() {
 
           <button disabled={!shift} onClick={() => setShiftReportOpen(true)} className="shrink-0 rounded-xl border bg-white px-4 py-2 text-xs font-bold text-slate-700 disabled:opacity-40">รายงานยอดเงิน / รถออกกะนี้ · F3</button>
           {shiftReportOpen && <ShiftReportDialog onClose={() => setShiftReportOpen(false)} />}
+          <DailyLineTestButton />
           <CarsInLotDialog
             open={carsListOpen}
             onOpenChange={setCarsListOpen}
@@ -1086,10 +1098,14 @@ export default function OperatorPage() {
               <div className="flex-1 rounded-2xl p-3.5 text-center" style={{ background: '#F0F7FF', border: '1px solid rgba(161,98,7,0.12)' }}>
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">รถในลานขณะนี้</p>
                 <p className="text-3xl font-black mt-1" style={{ color: '#A16207' }}>
-                  {stats?.activeCars ?? 0}
+                  {stats?.activeCars ?? '—'}
                 </p>
                 <p className="text-[10px] text-slate-400 mt-0.5">คัน (รถค้างจากกะก่อน)</p>
               </div>
+            </div>
+
+            <div className="px-6 pb-4">
+              <ShiftVehicleSummary opening remaining={stats ? { car: stats.car.active, motorcycle: stats.motorcycle.active } : undefined} />
             </div>
 
             {/* Opening float input */}
@@ -1158,6 +1174,8 @@ export default function OperatorPage() {
                 ))}
               </div>
 
+              <ShiftVehicleSummary incoming={shift.checkinsByType} outgoing={shift.checkoutsByType} remaining={stats ? { car: stats.car.active, motorcycle: stats.motorcycle.active } : undefined} />
+
               {/* Closing float input */}
               <div>
                 <label className="block text-xs font-black text-slate-700 mb-1.5">
@@ -1205,6 +1223,8 @@ export default function OperatorPage() {
           </DialogBody>
         </DialogContent>
       </Dialog>
+      {openedShift && <ClosedShiftDialog opening shift={openedShift} onLogout={() => setOpenedShift(null)} />}
+      {closedShift && <ClosedShiftDialog shift={closedShift} onLogout={handleLogout} />}
       {/* ─── Dialogs ─── */}
       <CheckInDialog
         open={checkInOpen}

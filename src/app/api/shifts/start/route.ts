@@ -4,7 +4,8 @@ import { verifyToken, COOKIE_NAME } from '@/lib/auth'
 import { connectDB } from '@/lib/mongodb'
 import { Shift } from '@/models/Shift'
 import { Admin } from '@/models/Admin'
-import { ParkingSession } from '@/models/ParkingSession'
+import { countActiveVehicles } from '@/lib/countActiveVehicles'
+import { countRemainingTemporaryCards } from '@/lib/countRemainingTemporaryCards'
 import { getSettings } from '@/models/SystemSettings'
 import { sendLineMessage, buildShiftStartMessage } from '@/lib/lineNotify'
 import { triggerDrawer, printRaw } from '@/lib/hardware'
@@ -35,9 +36,11 @@ export async function POST(req: NextRequest) {
   if (existing) return NextResponse.json({ error: 'มีกะที่เปิดอยู่แล้ว' }, { status: 409 })
 
   // นับรถค้างในลานตอนเริ่มกะ
-  const carryoverCars = await ParkingSession.countDocuments({ status: 'active' })
+  const carryoverByType = await countActiveVehicles()
+  const carryoverCars = carryoverByType.car + carryoverByType.motorcycle
 
   const cfg = await getSettings()
+  const temporaryCardsRemaining = await countRemainingTemporaryCards()
   const shift = await Shift.create({
     operatorId:   payload.sub,
     operatorName,
@@ -46,19 +49,29 @@ export async function POST(req: NextRequest) {
     openingFloat,
     openingBreakdown,
     carryoverCars,
+    carryoverByType,
+    checkinsByType: { car: 0, motorcycle: 0 },
+    checkoutsByType: { car: 0, motorcycle: 0 },
   })
 
 
   // เปิดลิ้นชัก — operator ต้องใส่เงินทอนตั้งต้น (opening float) ลงลิ้นชักตอนเข้ากะ
   void triggerDrawer(cfg.hardware).catch(() => {})
-  void printRaw(cfg.hardware, buildShiftStartSlip({ operatorName, startTime: shift.startTime, openingFloat, carryoverCars })).catch(() => {})
+  void printRaw(cfg.hardware, buildShiftStartSlip({ operatorName, startTime: shift.startTime, openingFloat, carryoverCars, carryoverByType })).catch(() => {})
 
   // LINE notification — fire and forget
   if (cfg.line?.enabled && cfg.line.channelToken && cfg.line.targets?.length) {
     sendLineMessage(
       cfg.line.channelToken,
       cfg.line.targets,
-      buildShiftStartMessage(operatorName, shift.startTime, carryoverCars),
+      buildShiftStartMessage({
+        operatorName: shift.operatorName,
+        startTime: shift.startTime,
+        openingFloat: shift.openingFloat,
+        openingBreakdown: Object.fromEntries(shift.openingBreakdown),
+        carryoverByType,
+        temporaryCardsRemaining,
+      }),
     ).catch(() => {})
   }
 
