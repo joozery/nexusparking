@@ -96,11 +96,11 @@ function FleetRow({ type, label, accent, bg, stats }: {
             <Stat label="บัตรเหลือรายเดือน" value={stats.monthlyCardsRemaining ?? '—'} icon={IdCard} color={(stats.monthlyCardsRemaining ?? 0) > 0 ? '#059669' : '#DC2626'} />
           </div></>}
         <Divider />
-        <div title="รายการเสียค่าบัตรหายวันนี้ แยกตามประเภทบัตรที่ลงทะเบียนปัจจุบัน — หมายถึงข้อมูลประเภทบัตรไม่ครบ">
+        <div title="รายการเสียค่าบัตรหายวันนี้ หักรายการที่ยืนยันคืนบัตรแล้ววันนี้ — หมายถึงข้อมูลประเภทบัตรไม่ครบ">
           <Stat label="บัตรหาย" value={stats.lostTemporaryToday ?? '—'} icon={AlertTriangle} color="#DC2626" />
         </div>
         {(stats.monthlyCardsRegistered ?? 0) > 0 && <><Divider />
-          <div title="รายการเสียค่าบัตรหายวันนี้ แยกตามประเภทบัตรที่ลงทะเบียนปัจจุบัน — หมายถึงข้อมูลประเภทบัตรไม่ครบ">
+          <div title="รายการเสียค่าบัตรหายวันนี้ หักรายการที่ยืนยันคืนบัตรแล้ววันนี้ — หมายถึงข้อมูลประเภทบัตรไม่ครบ">
             <Stat label="บัตรหายรายเดือน" value={stats.lostMonthlyToday ?? '—'} icon={AlertTriangle} color="#DC2626" />
           </div>
         </>}

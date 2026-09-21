@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { connectDB } from '@/lib/mongodb'
 import { ParkingSession, type IParkingSession } from '@/models/ParkingSession'
 import { ParkingCard } from '@/models/ParkingCard'
+import { Shift } from '@/models/Shift'
 import { getMissingCardUids } from '@/lib/missingCards'
 import { ParkingQueue } from '@/models/ParkingQueue'
 import { getSettings } from '@/models/SystemSettings'
@@ -80,16 +81,24 @@ export async function GET() {
     return { normal: sessions.length - overnight, overnight }
   }
 
-  const lostToday = (sessions: IParkingSession[]) =>
-    sessions.filter(s => (s.exitTime ?? s.entryTime) >= todayStart).length
+  const refundShifts = await Shift.find({
+    cardRefunds: { $elemMatch: { refundedAt: { $gte: todayStart, $lte: now } } },
+  }).select('cardRefunds.sessionId cardRefunds.refundedAt').lean()
+  const returnedToday = new Set(refundShifts.flatMap(shift => (shift.cardRefunds ?? [])
+    .filter(refund => refund.refundedAt >= todayStart && refund.refundedAt <= now)
+    .map(refund => refund.sessionId)))
+  const stillLostToday = (s: IParkingSession) =>
+    (s.exitTime ?? s.entryTime) >= todayStart && (s.exitTime ?? s.entryTime) <= now
+    && !returnedToday.has(String(s._id))
+  const lostToday = (sessions: IParkingSession[]) => sessions.filter(stillLostToday).length
 
-  const lostSessionsToday = [...carLost, ...motoLost].filter(s => (s.exitTime ?? s.entryTime) >= todayStart)
+  const lostSessionsToday = [...carLost, ...motoLost].filter(stillLostToday)
   // Include disabled cards: disabling a lost card must not remove its history.
   const lostCards = await ParkingCard.find({ uid: { $in: lostSessionsToday.map(s => s.cardUid) } })
     .select('uid cardCategory').lean()
   const lostCategories = new Map(lostCards.map(card => [card.uid, card.cardCategory ?? 'temporary']))
   function lostByCategory(sessions: IParkingSession[]) {
-    const today = sessions.filter(s => (s.exitTime ?? s.entryTime) >= todayStart)
+    const today = sessions.filter(stillLostToday)
     const unknown = today.some(s => !lostCategories.has(s.cardUid))
     return {
       lostTemporaryToday: unknown ? null : today.filter(s => lostCategories.get(s.cardUid) === 'temporary').length,
