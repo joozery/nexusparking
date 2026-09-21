@@ -20,6 +20,19 @@ interface GeneralSettings {
   monthlyFee:     number
 }
 
+function Time24Input({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+  const [hour, minute] = value.split(':')
+  return <div className="flex h-10 items-center rounded-lg border border-slate-200 bg-white px-2 text-sm font-bold text-slate-800">
+    <select aria-label={`${label} ชั่วโมง`} value={hour} onChange={e => onChange(`${e.target.value}:${minute}`)} className="min-w-0 flex-1 bg-transparent text-center outline-none">
+      {Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0')).map(h => <option key={h} value={h}>{h}</option>)}
+    </select>
+    <span aria-hidden="true">:</span>
+    <select aria-label={`${label} นาที`} value={minute} onChange={e => onChange(`${hour}:${e.target.value}`)} className="min-w-0 flex-1 bg-transparent text-center outline-none">
+      {Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0')).map(m => <option key={m} value={m}>{m}</option>)}
+    </select>
+  </div>
+}
+
 export default function GeneralSettingsPage() {
   const { success, error: toastError } = useToast()
   const [settings, setSettings] = useState<GeneralSettings | null>(null)
@@ -106,12 +119,8 @@ export default function GeneralSettingsPage() {
             {([['เปิดบริการ', 'open'], ['ปิดบริการ', 'close']] as const).map(([label, key]) => (
               <div key={key}>
                 <label className="text-[10px] font-black text-slate-500 uppercase tracking-wide block mb-1.5">{label}</label>
-                <input type="time" value={settings.businessHours[key]}
-                  onChange={e => setSettings(s => s ? ({ ...s, businessHours: { ...s.businessHours, [key]: e.target.value } }) : s)}
-                  className="w-full h-10 px-3 rounded-lg text-sm text-slate-800 outline-none"
-                  style={{ border: '1.5px solid #E8ECF4', background: '#FAFBFF' }}
-                  onFocus={e => e.currentTarget.style.borderColor = '#A16207'}
-                  onBlur={e => e.currentTarget.style.borderColor = '#E8ECF4'} />
+                <Time24Input label={label} value={settings.businessHours[key]}
+                  onChange={value => setSettings(s => s ? ({ ...s, businessHours: { ...s.businessHours, [key]: value } }) : s)} />
               </div>
             ))}
           </div>
@@ -215,12 +224,8 @@ export default function GeneralSettingsPage() {
               {([['เริ่มช่วงกลางคืน', 'windowStart'], ['สิ้นสุดช่วงกลางคืน', 'windowEnd'], ['เวลาตัดรอบเหมาค้างคืน', 'flatRateStart']] as const).map(([label, key]) => (
                 <div key={key}>
                   <label className="text-[9px] font-black text-slate-500 uppercase block mb-1">{label}</label>
-                  <input type="time" aria-label={label} value={settings.rates.overnight[key] ?? '22:00'}
-                    onChange={e => setSettings(s => s ? ({ ...s, rates: { ...s.rates, overnight: { ...s.rates.overnight, [key]: e.target.value } } }) : s)}
-                    className="w-full h-9 px-3 rounded-lg text-sm font-black text-slate-800 outline-none"
-                    style={{ border: '1.5px solid #E8ECF4', background: 'white' }}
-                    onFocus={e => e.currentTarget.style.borderColor = '#7C3AED'}
-                    onBlur={e => e.currentTarget.style.borderColor = '#E8ECF4'} />
+                  <Time24Input label={label} value={settings.rates.overnight[key] ?? '22:00'}
+                    onChange={value => setSettings(s => s ? ({ ...s, rates: { ...s.rates, overnight: { ...s.rates.overnight, [key]: value } } }) : s)} />
                 </div>
               ))}
             </div>
