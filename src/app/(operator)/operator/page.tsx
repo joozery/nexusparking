@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogBody } from '@/components/ui/dialog'
 import { CheckInDialog } from '@/components/parking/CheckInDialog'
+import { ShiftReportDialog } from '@/components/parking/ShiftReportDialog'
 import { CheckOutDialog, type PaymentMethod } from '@/components/parking/CheckOutDialog'
 import { LostCardDialog } from '@/components/parking/LostCardDialog'
 import { CctvStrip } from '@/components/parking/CctvStrip'
@@ -199,10 +200,12 @@ export default function OperatorPage() {
   const [coStep,        setCoStep]        = useState<'scan' | 'payment' | 'done'>('scan')
   const [coPaidAmount,  setCoPaidAmount]  = useState(0)
   const [coPrinting,    setCoPrinting]    = useState(false)
+  const [coPdfLoading, setCoPdfLoading] = useState(false)
   const [coType,        setCoType]        = useState<CardType>('car')
   const [coHours,       setCoHours]       = useState(1)
   const [coFee,         setCoFee]         = useState(0)
   const [coSessionId,   setCoSessionId]   = useState('')
+  const [coQueueId, setCoQueueId] = useState('')
   const [coPlate,       setCoPlate]       = useState('')
   const [coCustomTime,  setCoCustomTime]  = useState('')
   const [coEntryTime,   setCoEntryTime]   = useState<Date | null>(null)
@@ -227,6 +230,7 @@ export default function OperatorPage() {
   const [lostPlate, setLostPlate] = useState('')
 
   const [carsListOpen, setCarsListOpen] = useState(false)
+  const [shiftReportOpen, setShiftReportOpen] = useState(false)
 
   const onCardScanRef = useRef<(uid: string) => void>(() => {})
   const cardScanBusy = useRef(false)
@@ -242,7 +246,7 @@ export default function OperatorPage() {
   const [serialBaud, setSerialBaudState] = useState(9600)
 
   function resetCI() { setCiStep('scan'); setCiPlate(''); setCiType('car'); setCiUid(''); setCiCustomTime('') }
-  function resetCO() { setCoStep('scan'); setCoSessionId(''); setCoPlate(''); setCoCustomTime(''); setCoEntryTime(null); setCoPaidAmount(0); setCoSource('card') }
+  function resetCO() { setCoQueueId(''); setCoStep('scan'); setCoSessionId(''); setCoPlate(''); setCoCustomTime(''); setCoEntryTime(null); setCoPaidAmount(0); setCoSource('card') }
 
   const fetchShift = useCallback(async () => {
     const res = await fetch('/api/shifts/current')
@@ -300,7 +304,7 @@ export default function OperatorPage() {
   }, [fetchData, fetchSettings])
 
   // ── Scan input focus management ─────────────────────────────────────────
-  const noDialogOpen = !checkInOpen && !checkOutOpen && !lostOpen && !shiftEnding && !plateMatches && !carsListOpen && !!shift
+  const noDialogOpen = !checkInOpen && !checkOutOpen && !lostOpen && !shiftEnding && !plateMatches && !carsListOpen && !shiftReportOpen && !!shift
   useEffect(() => {
     if (noDialogOpen) {
       setTimeout(() => scanInputRef.current?.focus(), 50)
@@ -350,23 +354,11 @@ export default function OperatorPage() {
   }
 
   // ยกเลิกรอคิว + เก็บเงินเลย — รถที่รอในคิวไม่อยากรอแล้ว แต่ยังต้องจ่ายค่าเวลาที่รอไปแล้ว (นับจาก joinedAt)
-  // ทำโดยโปรโมทเข้า session ปกติก่อน (entryTime = joinedAt) แล้วเปิด popup checkout ทันที
+  // Preview only: the queue remains waiting until payment is confirmed.
   async function checkoutFromQueue(q: QueueEntry) {
-    setQLoading(q._id)
-    const res = await fetch(`/api/queue/${q._id}/enter`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ skipCapacityCheck: true }),
-    })
-    setQLoading(null)
-    if (res.ok) {
-      const data = await res.json()
-      await fetchData()
-      openCheckout(data.session, 'card')
-    } else {
-      const err = await res.json()
-      toastError('ไม่สำเร็จ', err.error)
-    }
+    openCheckout({ _id: '', cardUid: q.cardUid ?? '', cardType: q.cardType, plate: q.plate,
+      entryTime: q.joinedAt, durationMin: 0, fee: 0, totalFee: 0, status: 'active' }, 'card')
+    setCoQueueId(q._id)
   }
 
   // รถคันหน้าคิวเข้าลานจริง — operator ต้องกดยืนยันเอง (ไม่ auto) เพราะแค่มีที่ว่างไม่ได้แปลว่ารถคันนั้นขับเข้ามาจริงแล้ว
@@ -507,6 +499,7 @@ export default function OperatorPage() {
   // Keep card taps and plate lookups as explicit, separate checkout paths.
   // Only the plate path is allowed to add the lost-card fine.
   function openCheckout(s: Session, source: 'card' | 'plate') {
+    setCoQueueId('')
     fetchSettings()
     const entry = new Date(s.entryTime)
     const now = new Date()
@@ -547,7 +540,17 @@ export default function OperatorPage() {
     try {
       const current = await loadActiveSessions()
       setMatchSource('plate')
-      setPlateMatches(current.filter(s => s.plate === plate))
+      const matches = current.filter(s => s.plate === plate)
+      if (matches.length === 0) {
+        setPlateMatches(null)
+        warning('ไม่พบข้อมูล')
+      } else if (matches.length === 1) {
+        setPlateMatches(null)
+        setPlateQuick('')
+        openCheckout(matches[0], 'plate')
+      } else {
+        setPlateMatches(matches)
+      }
     } catch {
       toastError('ค้นหาไม่สำเร็จ', 'กรุณาลองใหม่')
     } finally { setPlateBusy(false) }
@@ -556,6 +559,7 @@ export default function OperatorPage() {
   async function handleCheckout(paymentMethod: PaymentMethod, discountId?: string, dailyDiscountId?: string, isLostCard?: boolean, fineId?: string) {
     const body: Record<string, unknown> = {
       sessionId: coSessionId || undefined,
+      queueId: coQueueId || undefined,
       paymentMethod,
       discountId,
       dailyDiscountId,
@@ -570,6 +574,8 @@ export default function OperatorPage() {
     })
     if (res.ok) {
       const data = await res.json()
+      setCoSessionId(data._id)
+      setCoQueueId('')
       setCoPaidAmount(data.totalFee ?? coFee)
       setCoStep('done')
       void triggerBarrierClient('checkout')
@@ -592,6 +598,17 @@ export default function OperatorPage() {
     } finally {
       setCoPrinting(false)
     }
+  }
+
+  async function handleDownloadReceiptPdf() {
+    if (!coSessionId || coPdfLoading) return
+    setCoPdfLoading(true)
+    try {
+      const { downloadReceiptPdf } = await import('@/lib/receiptPdf')
+      await downloadReceiptPdf(coSessionId)
+    } catch (error) {
+      toastError('สร้าง PDF ไม่สำเร็จ', error instanceof Error ? error.message : 'กรุณาลองใหม่')
+    } finally { setCoPdfLoading(false) }
   }
 
   function finishCheckout() {
@@ -618,7 +635,7 @@ export default function OperatorPage() {
   useEffect(() => {
     onCardScanRef.current = async (uid: string) => {
       // Ignore scan when any dialog is already open — prevents resetting in-progress forms
-      if (checkInOpen || checkOutOpen || lostOpen || shiftEnding || plateMatches || !shift || cardScanBusy.current) return
+      if (checkInOpen || checkOutOpen || lostOpen || shiftEnding || plateMatches || shiftReportOpen || !shift || cardScanBusy.current) return
       cardScanBusy.current = true
       try {
       setCarsListOpen(false)
@@ -711,6 +728,14 @@ export default function OperatorPage() {
     const handleKeyDown = (e: KeyboardEvent) => {
       // ป้องกันการทำงานซ้อนถ้ามี modal เปิดอยู่แล้ว (ยกเว้น carsListOpen เอง — F2 ต้องสลับปิดได้)
       if (checkInOpen || checkOutOpen || lostOpen || shiftEnding || plateMatches) return
+      if (e.key === 'F3') {
+        e.preventDefault()
+        if (e.repeat || !shift) return
+        setCarsListOpen(false)
+        setShiftReportOpen(o => !o)
+        return
+      }
+      if (shiftReportOpen) return
 
       if (e.key === 'F2') {
         e.preventDefault()
@@ -724,7 +749,7 @@ export default function OperatorPage() {
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [checkInOpen, checkOutOpen, lostOpen, shiftEnding, shift, plateMatches])
+  }, [checkInOpen, checkOutOpen, lostOpen, shiftEnding, shift, plateMatches, shiftReportOpen])
 
   return (
     <div className="h-screen flex flex-col bg-[#F0F4FF]">
@@ -754,7 +779,7 @@ export default function OperatorPage() {
           // Don't steal focus from a real input the operator clicked (e.g. search box)
           const target = e.relatedTarget as HTMLElement | null
           if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT')) return
-          if (!checkInOpen && !checkOutOpen && !lostOpen && !shiftEnding && !plateMatches && !carsListOpen && !!shift) {
+          if (!checkInOpen && !checkOutOpen && !lostOpen && !shiftEnding && !plateMatches && !carsListOpen && !shiftReportOpen && !!shift) {
             setTimeout(() => scanInputRef.current?.focus(), 50)
           }
         }}
@@ -928,6 +953,8 @@ export default function OperatorPage() {
             <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full text-slate-400" style={{ border: '1px solid #E2E8F0' }}>F2</span>
           </button>
 
+          <button disabled={!shift} onClick={() => setShiftReportOpen(true)} className="shrink-0 rounded-xl border bg-white px-4 py-2 text-xs font-bold text-slate-700 disabled:opacity-40">รายงานยอดเงิน / รถออกกะนี้ · F3</button>
+          {shiftReportOpen && <ShiftReportDialog onClose={() => setShiftReportOpen(false)} />}
           <CarsInLotDialog
             open={carsListOpen}
             onOpenChange={setCarsListOpen}
@@ -1148,8 +1175,6 @@ export default function OperatorPage() {
                 เข้า {new Date(s.entryTime).toLocaleString('th-TH')}<br />บัตร {s.cardUid}<br /><span className="text-xs text-slate-500">รายการ {s._id}</span></span>
               <span className="self-end rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white">เลือกรถคันนี้</span>
             </button>)}
-            {plateMatches?.length === 0 && <div className="space-y-3"><p>ไม่พบรถทะเบียนนี้ในลาน กรุณาตรวจเลขทะเบียนอีกครั้ง</p>
-              <button className="rounded-lg bg-amber-100 p-3" onClick={() => { setPlateMatches(null); setLostPlate(plateQuick); setLostOpen(true) }}>ยืนยันบัตรหายและไม่มีประวัติ — ระบุเวลาจอด</button></div>}
           </DialogBody>
         </DialogContent>
       </Dialog>
@@ -1179,6 +1204,8 @@ export default function OperatorPage() {
         onBack={() => setCoStep('scan')}
         onConfirm={handleCheckout}
         onPrintReceipt={handlePrintReceipt}
+        onDownloadPdf={handleDownloadReceiptPdf}
+        downloadingPdf={coPdfLoading}
         onDone={finishCheckout}
       />
       <LostCardDialog

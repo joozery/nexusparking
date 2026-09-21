@@ -4,6 +4,7 @@ import { cookies } from 'next/headers'
 import { verifyToken, COOKIE_NAME } from '@/lib/auth'
 import { connectDB } from '@/lib/mongodb'
 import { ParkingSession } from '@/models/ParkingSession'
+import { ParkingQueue } from '@/models/ParkingQueue'
 import { Shift } from '@/models/Shift'
 import { Discount } from '@/models/Discount'
 import { Fine } from '@/models/Fine'
@@ -30,7 +31,7 @@ export async function GET(req: NextRequest) {
 }
 
 async function handlePost(req: NextRequest) {
-  const { uid, sessionId, paymentMethod = 'cash', discountId, dailyDiscountId, fineId, exitTime: exitTimeRaw, lostCard } = await req.json()
+  const { uid, sessionId, queueId, paymentMethod = 'cash', discountId, dailyDiscountId, fineId, exitTime: exitTimeRaw, lostCard } = await req.json()
 
   const jar     = await cookies()
   const token   = jar.get(COOKIE_NAME)?.value
@@ -38,7 +39,15 @@ async function handlePost(req: NextRequest) {
 
   await connectDB()
 
-  const session = sessionId
+  const queue = queueId ? await ParkingQueue.findOne({ _id: queueId, status: 'waiting' }) : null
+  if (queueId && !queue) return NextResponse.json({ error: 'คิวนี้ไม่ได้รออยู่แล้ว กรุณารีเฟรชรายการ' }, { status: 409 })
+  if (queue && await ParkingSession.exists({ _id: queue._id })) {
+    return NextResponse.json({ error: 'คิวนี้บันทึกรับเงินแล้ว กรุณาให้ผู้ดูแลตรวจสอบสถานะคิว' }, { status: 409 })
+  }
+  const session = queue ? new ParkingSession({
+    _id: queue._id, cardUid: queue.cardUid ?? `WALKIN-Q-${queue._id}`, cardType: queue.cardType,
+    plate: queue.plate, entryTime: queue.joinedAt,
+  }) : sessionId
     ? await ParkingSession.findOne({ _id: sessionId, status: 'active' as const })
     : await ParkingSession.findOne({ cardUid: uid?.trim(), status: 'active' as const })
 
@@ -130,6 +139,11 @@ async function handlePost(req: NextRequest) {
   }
 
   await session.save()
+  if (queue) {
+    queue.status = 'cancelled'
+    queue.cancelledAt = now
+    await queue.save()
+  }
 
   void runCheckoutSequence(settings.hardware, {
     sessionId: String(session._id),

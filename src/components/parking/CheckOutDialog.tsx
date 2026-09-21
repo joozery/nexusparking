@@ -50,6 +50,8 @@ interface Props {
   onBack: () => void
   onConfirm: (paymentMethod: PaymentMethod, discountId?: string, dailyDiscountId?: string, isLostCard?: boolean, fineId?: string) => void
   onPrintReceipt?: () => void
+  onDownloadPdf?: () => void
+  downloadingPdf?: boolean
   onDone?: () => void
 }
 
@@ -74,7 +76,7 @@ function fmtDuration(entryTime: Date | null | undefined, exitTime: Date | null |
 export function CheckOutDialog({
   open, onOpenChange, step, plate, cardType, hours, fee, paidAmount, printing, lostCardFine = 300, checkoutSource,
   entryTime, customExitTime, overnightCfg, onCustomExitTimeChange,
-  onSimulateScan, onBack, onConfirm, onPrintReceipt, onDone,
+  onSimulateScan, onBack, onConfirm, onPrintReceipt, onDone, onDownloadPdf, downloadingPdf,
 }: Props) {
   // รถยนต์ = เขียว (emerald), จักรยานยนต์ = ส้ม (orange) — ธีมสีของ popup ขาออกทั้งหมด
   const isMoto = cardType === 'motorcycle'
@@ -112,12 +114,12 @@ export function CheckOutDialog({
   const [fines, setFines] = useState<FineOption[]>([])
   const [selectedFineId, setSelectedFineId] = useState<string>('')
   const [cashReceived, setCashReceived] = useState('')
-  const [isLostCard, setIsLostCard] = useState(false)
-  const lostContext = `${open}:${plate}:${entryTime?.getTime()}`
+  const [isLostCard, setIsLostCard] = useState(checkoutSource === 'plate')
+  const lostContext = `${open}:${plate}:${entryTime?.getTime()}:${checkoutSource}`
   const [previousLostContext, setPreviousLostContext] = useState(lostContext)
   if (previousLostContext !== lostContext) {
     setPreviousLostContext(lostContext)
-    setIsLostCard(false)
+    setIsLostCard(checkoutSource === 'plate')
   }
 
   const storeDiscounts = discounts.filter(d => d.discountType !== 'per_day')
@@ -534,6 +536,9 @@ export function CheckOutDialog({
               <Button variant="outline" size="sm" className="flex-1" disabled={printing} onClick={onPrintReceipt}>
                 <Printer className="size-3.5" /> {printing ? 'กำลังพิมพ์...' : 'พิมพ์ใบเสร็จ'}
               </Button>
+              {onDownloadPdf && <Button variant="outline" size="sm" className="flex-1" disabled={downloadingPdf} onClick={onDownloadPdf}>
+                {downloadingPdf ? 'กำลังสร้าง PDF...' : 'ดาวน์โหลด PDF'}
+              </Button>}
               <Button size="sm" className="flex-1 text-white font-bold" style={{ background: theme.hex600 }} onClick={onDone}>
                 เสร็จสิ้น
               </Button>
