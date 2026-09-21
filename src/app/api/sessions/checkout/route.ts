@@ -59,13 +59,18 @@ async function handlePost(req: NextRequest) {
   const fee = calcFeeFromMinutes(session.cardType, durationMin, session.entryTime, now, settings.rates.overnight)
 
   // คำนวณส่วนลดร้านค้า (fixed / percent)
+  const nights = calcFeeBreakdown(session.cardType, session.entryTime, now, settings.rates.overnight)
+    .segments.filter(segment => segment.kind === 'overnight').length
+  let appliedDiscountId: string | undefined
+  let appliedDailyDiscountId: string | undefined
   let discountAmount = 0
   const discountNames: string[] = []
-  if (discountId) {
+  if (discountId && nights === 0) {
     const discount = await Discount.findById(discountId).lean() as {
       name: string; discountType: string; discountValue: number; maxDiscount?: number
     } | null
-    if (discount) {
+    if (discount && ['fixed', 'percent'].includes(discount.discountType)) {
+      appliedDiscountId = discountId
       discountNames.push(discount.name)
       if (discount.discountType === 'fixed') {
         discountAmount += Math.min(discount.discountValue, fee)
@@ -77,14 +82,13 @@ async function handlePost(req: NextRequest) {
   }
 
   // คำนวณส่วนลดรายคืน (per_day)
-  if (dailyDiscountId) {
+  if (dailyDiscountId && nights > 0) {
     const dailyDiscount = await Discount.findById(dailyDiscountId).lean() as {
       name: string; discountType: string; discountValue: number
     } | null
     if (dailyDiscount && dailyDiscount.discountType === 'per_day') {
-      const segments = calcFeeBreakdown(session.cardType, session.entryTime, now, settings.rates.overnight).segments
-      const nights = segments.filter(s => s.kind === 'overnight').length
       if (nights > 0) {
+        appliedDailyDiscountId = dailyDiscountId
         discountNames.push(`${dailyDiscount.name} (${nights} คืน)`)
         discountAmount += dailyDiscount.discountValue * nights
       }
@@ -113,7 +117,7 @@ async function handlePost(req: NextRequest) {
   session.lostFine       = lostFine
   session.lostCard       = Boolean(lostCard)
   session.totalFee       = totalFee
-  session.discountId     = discountId ?? undefined
+  session.discountId     = appliedDiscountId ?? appliedDailyDiscountId
   session.discountName   = discountName
   session.discountAmount = discountAmount
   session.fineId         = fineId ?? undefined

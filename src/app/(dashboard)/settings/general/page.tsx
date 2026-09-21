@@ -13,7 +13,7 @@ interface GeneralSettings {
   rates: {
     car:        { firstHour: number; extraHour: number }
     motorcycle: { firstHour: number; extraHour: number }
-    overnight:  { windowStart: string; windowEnd: string; flatRate: number; extraHour: number }
+    overnight:  { windowStart: string; windowEnd: string; flatRateStart?: string; flatRate: number; extraHour: number }
   }
   lostCardFine:   number
   monthlyDeposit: number
@@ -38,6 +38,10 @@ export default function GeneralSettingsPage() {
 
   async function handleSave() {
     if (!settings) return
+    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(settings.rates.overnight.flatRateStart ?? '22:00')) {
+      toastError('กรุณาระบุเวลาตัดรอบเหมาค้างคืนให้ถูกต้อง')
+      return
+    }
     setSaving(true)
     try {
       const res = await fetch('/api/settings', {
@@ -207,11 +211,11 @@ export default function GeneralSettingsPage() {
                 ค้างคืน (Overnight) — เหมาจ่าย {settings.rates.overnight.windowStart}–{settings.rates.overnight.windowEnd}
               </p>
             </div>
-            <div className="grid grid-cols-2 gap-3 max-w-xs mb-3">
-              {([['เริ่มช่วงกลางคืน', 'windowStart'], ['สิ้นสุดช่วงกลางคืน', 'windowEnd']] as const).map(([label, key]) => (
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 max-w-xl mb-3">
+              {([['เริ่มช่วงกลางคืน', 'windowStart'], ['สิ้นสุดช่วงกลางคืน', 'windowEnd'], ['เวลาตัดรอบเหมาค้างคืน', 'flatRateStart']] as const).map(([label, key]) => (
                 <div key={key}>
                   <label className="text-[9px] font-black text-slate-500 uppercase block mb-1">{label}</label>
-                  <input type="time" value={settings.rates.overnight[key]}
+                  <input type="time" aria-label={label} value={settings.rates.overnight[key] ?? '22:00'}
                     onChange={e => setSettings(s => s ? ({ ...s, rates: { ...s.rates, overnight: { ...s.rates.overnight, [key]: e.target.value } } }) : s)}
                     className="w-full h-9 px-3 rounded-lg text-sm font-black text-slate-800 outline-none"
                     style={{ border: '1.5px solid #E8ECF4', background: 'white' }}
@@ -220,6 +224,7 @@ export default function GeneralSettingsPage() {
                 </div>
               ))}
             </div>
+            <p className="text-xs text-slate-500 mb-3">รถที่เข้าก่อน {settings.rates.overnight.flatRateStart ?? '22:00'} และยังจอดหลังเวลานี้ จะคิดราคาเหมาในช่วงกลางคืน รถที่เข้าตั้งแต่เวลาตัดรอบจะคิดรายชั่วโมงสำหรับคืนนั้น</p>
             <div className="grid grid-cols-2 gap-3 max-w-xs">
               {[
                 { label: 'ราคาเหมาจ่าย (฿)', val: settings.rates.overnight.flatRate,  cb: (v: number) => setSettings(s => s ? ({ ...s, rates: { ...s.rates, overnight: { ...s.rates.overnight, flatRate: v } } }) : s) },

@@ -70,18 +70,11 @@ function overnightWindowsIn(entry: Date, exit: Date, cfg: OvernightConfig) {
       // billing threshold: frsH:frsM บน calendar day เดียวกับ wStart
       const billingThreshold = new Date(d)
       billingThreshold.setHours(frsH, frsM, 0, 0)
-      // ถ้ารถออกเลย billingThreshold → ลองคิดแบบเหมาจ่าย
-      let isFlatRate = oEnd.getTime() > billingThreshold.getTime()
-
-      // ถ้าราคาแบบชั่วโมงถูกกว่าแบบเหมาจ่าย (เช่น เข้า 06:30 ออก 07:00 หรือจอดแค่ 2 ชั่วโมง)
-      // ให้ปรับกลับไปคิดแบบชั่วโมงแทน เพื่อไม่ให้เป็นการเอาเปรียบหรือคิดเรทเหมาในกรณีที่จอดสั้นๆ
-      if (isFlatRate) {
-        const minInWindow = Math.floor((oEnd.getTime() - oStart.getTime()) / 60000)
-        const hInWindow = Math.max(1, Math.ceil(minInWindow / 60))
-        if (hInWindow * (cfg.extraHour ?? 20) < cfg.flatRate) {
-          isFlatRate = false
-        }
-      }
+      if (billingThreshold < wStart) billingThreshold.setDate(billingThreshold.getDate() + 1)
+      // ต้องเข้าก่อน 22:00 ของคืนที่กำลังคิด และยังจอดหลังเวลานั้น
+      // รถที่เข้าตั้งแต่ 22:00 หรือช่วงเช้าของคืนเดียวกันคิดรายชั่วโมง
+      const isFlatRate = entry.getTime() < billingThreshold.getTime()
+        && oEnd.getTime() > billingThreshold.getTime()
 
       windows.push({ start: oStart, end: oEnd, isFlatRate })
     }
@@ -89,50 +82,32 @@ function overnightWindowsIn(entry: Date, exit: Date, cfg: OvernightConfig) {
   return windows
 }
 
-// คำนวณ breakdown แยกแต่ละช่วง — ใช้แสดงผลใน simulator และ checkout
+// Shared calculation for checkout, previews, and receipts.
 export function calcFeeBreakdown(
-  cardType:    CardType,
-  entryTime:   Date,
-  exitTime:    Date,
-  overnight?:  OvernightConfig,
+  cardType: CardType,
+  entryTime: Date,
+  exitTime: Date,
+  overnight?: OvernightConfig,
 ): { segments: FeeSegment[]; total: number } {
   const cfg = overnight ?? DEFAULT_OVERNIGHT
-
-  // Grace period: จอดไม่ถึง 1 นาที (นับแบบ floor เหมือน totalMin ด้านล่าง) → ไม่คิดค่าจอดเลย
-  // ใช้กับทุกประเภทบัตรรวมถึง overnight
   const graceMin = Math.floor((exitTime.getTime() - entryTime.getTime()) / 60000)
   if (graceMin < 1) {
-    const segs: FeeSegment[] = [{
-      kind: 'normal', from: entryTime, to: exitTime,
-      minutes: graceMin, hours: 0, fee: 0, rateLabel: 'ฟรี (จอดไม่ถึง 1 นาที)',
-    }]
-    return { segments: segs, total: 0 }
+    return { segments: [{ kind: 'normal', from: entryTime, to: exitTime,
+      minutes: graceMin, hours: 0, fee: 0, rateLabel: 'ฟรี (จอดไม่ถึง 1 นาที)' }], total: 0 }
   }
-
-  // คำนวณ windows ก่อน — overnight mode จะ active ก็ต่อเมื่อมี window ที่ถึง flatRateStart จริง
   const spansWindow = cardType === 'overnight' || spansOvernightWindow(entryTime, exitTime, cfg)
   const windows = spansWindow ? overnightWindowsIn(entryTime, exitTime, cfg) : []
-  let isOvernight = cardType === 'overnight' || windows.some(w => w.isFlatRate)
-
-  // คำนวณราคากรณีปกติ (ไม่คิด windows) เพื่อเปรียบเทียบ
-  // ปัดเศษวินาทีทิ้งด้วย Math.floor เพื่อให้ 09:02:05 ถึง 13:02:29 นับเป็น 240 นาที (4 ชั่วโมงพอดี)
+  const isOvernight = windows.some(w => w.isFlatRate)
   const totalMin = Math.floor((exitTime.getTime() - entryTime.getTime()) / 60000)
   const totalH = ceilHours(totalMin)
   let normalFee: number
   let normalRateLabel: string
-  if (cardType === 'car') {
+  if (cardType !== 'motorcycle') {
     normalFee = totalH <= 1 ? 30 : 30 + (totalH - 1) * 20
     normalRateLabel = totalH <= 1 ? '฿30 (ชม.แรก)' : `฿30 + ${totalH - 1}×฿20`
   } else {
     normalFee = totalH <= 1 ? 20 : 20 + (totalH - 1) * 10
     normalRateLabel = totalH <= 1 ? '฿20 (ชม.แรก)' : `฿20 + ${totalH - 1}×฿10`
-  }
-
-  // ถ้าเป็นรถปกติ (ไม่ใช่บัตรค้างคืน) และค่าจอดแบบปกติถูกกว่าหรือเท่ากับเหมาจ่าย
-  // แปลว่าเขาแค่จอดสั้นๆ แล้วบังเอิญคร่อมเวลา หรือไม่ได้จอดนานพอที่จะคุ้มค่าเหมา
-  // ให้คิดแบบปกติไปเลย จะได้ไม่ถูก split window แล้วคิดเหมาจ่ายแพงกว่าความเป็นจริง
-  if (cardType !== 'overnight' && isOvernight && normalFee <= cfg.flatRate) {
-    isOvernight = false
   }
 
   if (!isOvernight) {

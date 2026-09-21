@@ -130,9 +130,6 @@ export function CheckOutDialog({
   const storeDiscounts = discounts.filter(d => d.discountType !== 'per_day')
   const dailyDiscounts = discounts.filter(d => d.discountType === 'per_day')
 
-  const selectedDiscount = storeDiscounts.find(d => d._id === selectedId) ?? null
-  const discountAmount = calcDiscountAmount(selectedDiscount, fee)
-
   const [currentTime, setCurrentTime] = useState(() => Date.now())
   useEffect(() => {
     if (!open || step !== 'payment' || customExitTime || scannedExitTime) return
@@ -145,8 +142,18 @@ export function CheckOutDialog({
     ? calcFeeBreakdown(cardType, entryTime, exitForCalc, overnightCfg)
     : null
   const nights = breakdown?.segments.filter(s => s.kind === 'overnight').length ?? 0
+  const isFlatRate = nights > 0
+  const discountContext = `${lostContext}:${isFlatRate}`
+  const [previousDiscountContext, setPreviousDiscountContext] = useState(discountContext)
+  if (previousDiscountContext !== discountContext) {
+    setPreviousDiscountContext(discountContext)
+    setSelectedId('')
+    setDailySelectedId('')
+  }
+  const selectedDiscount = !isFlatRate ? storeDiscounts.find(d => d._id === selectedId) ?? null : null
+  const discountAmount = calcDiscountAmount(selectedDiscount, fee)
 
-  const selectedDailyDiscount = dailyDiscounts.find(d => d._id === dailySelectedId) ?? null
+  const selectedDailyDiscount = isFlatRate ? dailyDiscounts.find(d => d._id === dailySelectedId) ?? null : null
   const dailyDiscountAmount = selectedDailyDiscount ? selectedDailyDiscount.discountValue * nights : 0
 
   const selectedFine = fines.find(f => f._id === selectedFineId) ?? null
@@ -390,7 +397,7 @@ export function CheckOutDialog({
                 )}
 
                 {/* Discounts */}
-                {storeDiscounts.length > 0 && (
+                {!isFlatRate && storeDiscounts.length > 0 && (
                   <div>
                     <p className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-1 flex items-center gap-1">
                       <Tag className="size-3" /> ส่วนลดร้านค้า
@@ -414,7 +421,7 @@ export function CheckOutDialog({
                   </div>
                 )}
 
-                {dailyDiscounts.length > 0 && (
+                {isFlatRate && dailyDiscounts.length > 0 && (
                   <div>
                     <p className="text-sm font-bold uppercase tracking-widest mb-1 flex items-center gap-1" style={{ color: '#6D28D9' }}>
                       <Moon className="size-3" /> ส่วนลดรายคืน
@@ -493,7 +500,7 @@ export function CheckOutDialog({
                   (paymentMethod === 'cash' && cashReceived !== '' && change < 0)
                 }
                 style={paymentMethod === 'qr' ? { background: '#7C3AED' } : { background: theme.hex600 }}
-                onClick={() => onConfirm(paymentMethod, selectedId || undefined, dailySelectedId || undefined, isLostCard, selectedFineId || undefined)}
+                onClick={() => onConfirm(paymentMethod, selectedDiscount?._id, selectedDailyDiscount?._id, isLostCard, selectedFineId || undefined)}
               >
                 {paymentMethod === 'cash'
                   ? <><Banknote className="size-4" /> รับเงินสด ฿{finalFee}</>

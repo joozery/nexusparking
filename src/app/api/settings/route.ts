@@ -12,6 +12,10 @@ export async function GET() {
 
 export async function PUT(req: NextRequest) {
   const body = await req.json()
+  const cutoff = body.rates?.overnight?.flatRateStart
+  if (cutoff !== undefined && (typeof cutoff !== 'string' || !/^([01]\d|2[0-3]):[0-5]\d$/.test(cutoff))) {
+    return NextResponse.json({ error: 'เวลาตัดรอบเหมาค้างคืนไม่ถูกต้อง' }, { status: 400 })
+  }
   await connectDB()
 
   const $set: Record<string, unknown> = {}
