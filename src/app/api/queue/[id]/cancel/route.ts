@@ -1,9 +1,10 @@
+import { parkingMutation } from '@/lib/parkingMutation'
 import { NextRequest, NextResponse } from 'next/server'
 import { connectDB } from '@/lib/mongodb'
 import { ParkingQueue } from '@/models/ParkingQueue'
 
 // POST /api/queue/[id]/cancel — ยกเลิกคิว
-export async function POST(
+async function handlePost(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -19,3 +20,5 @@ export async function POST(
 
   return NextResponse.json(q)
 }
+
+export const POST = parkingMutation(handlePost)

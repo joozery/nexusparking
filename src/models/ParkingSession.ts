@@ -10,7 +10,7 @@ export interface IParkingSession extends Document {
   fee:           number        // parking fee
   lostFine:      number        // 0 or 300
   totalFee:      number        // fee + lostFine
-  status:        'active' | 'completed' | 'lost'
+  status:        'active' | 'completed' | 'lost' | 'void'
   paymentMethod:  'cash' | 'qr'
   operatorId?:    string
   shiftId?:       string
@@ -40,7 +40,7 @@ const ParkingSessionSchema = new Schema<IParkingSession>({
   fee:         { type: Number, default: 0 },
   lostFine:    { type: Number, default: 0 },
   totalFee:    { type: Number, default: 0 },
-  status:         { type: String, required: true, enum: ['active', 'completed', 'lost'], default: 'active' },
+  status:         { type: String, required: true, enum: ['active', 'completed', 'lost', 'void'], default: 'active' },
   paymentMethod:  { type: String, enum: ['cash', 'qr'], default: 'cash' },
   operatorId:     { type: String },
   shiftId:        { type: String },
@@ -62,6 +62,7 @@ const ParkingSessionSchema = new Schema<IParkingSession>({
 
 ParkingSessionSchema.index({ status: 1, entryTime: -1 })
 ParkingSessionSchema.index({ cardUid: 1, status: 1 })
+ParkingSessionSchema.index({ cardUid: 1 }, { name: 'one_active_session_per_card', unique: true, partialFilterExpression: { status: 'active' } })
 
 export const ParkingSession = mongoose.models.ParkingSession as mongoose.Model<IParkingSession>
   ?? mongoose.model<IParkingSession>('ParkingSession', ParkingSessionSchema)

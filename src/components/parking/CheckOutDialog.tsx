@@ -46,7 +46,7 @@ interface Props {
   lostCardFine?: number
   checkoutSource: 'card' | 'plate'
   onCustomExitTimeChange?: (v: string) => void
-  onSimulateScan: () => void
+  onSimulateScan?: () => void
   onBack: () => void
   onConfirm: (paymentMethod: PaymentMethod, discountId?: string, dailyDiscountId?: string, isLostCard?: boolean, fineId?: string) => void
   onPrintReceipt?: () => void
@@ -112,7 +112,13 @@ export function CheckOutDialog({
   const [fines, setFines] = useState<FineOption[]>([])
   const [selectedFineId, setSelectedFineId] = useState<string>('')
   const [cashReceived, setCashReceived] = useState('')
-  const isLostCard = checkoutSource === 'plate'
+  const [isLostCard, setIsLostCard] = useState(false)
+  const lostContext = `${open}:${plate}:${entryTime?.getTime()}`
+  const [previousLostContext, setPreviousLostContext] = useState(lostContext)
+  if (previousLostContext !== lostContext) {
+    setPreviousLostContext(lostContext)
+    setIsLostCard(false)
+  }
 
   const storeDiscounts = discounts.filter(d => d.discountType !== 'per_day')
   const dailyDiscounts = discounts.filter(d => d.discountType === 'per_day')
@@ -214,7 +220,7 @@ export function CheckOutDialog({
               <div className="text-center">
                 <p className={`text-sm font-bold ${theme.scanTitle}`}>รอการสแกนบัตร...</p>
                 <p className={`text-xs ${theme.scanSub} mt-0.5`}>รับบัตรจากลูกค้าแล้วแตะที่เครื่องอ่านบัตร</p>
-                <p className={`text-[10px] ${theme.scanHint} mt-2 border ${theme.scanHintBd} px-2 py-0.5 rounded-full bg-white/60 inline-block`}>คลิกจำลองการสแกน</p>
+                {onSimulateScan && <p className={`text-[10px] ${theme.scanHint} mt-2 border ${theme.scanHintBd} px-2 py-0.5 rounded-full bg-white/60 inline-block`}>คลิกจำลองการสแกน</p>}
               </div>
             </div>
           ) : (
@@ -343,17 +349,15 @@ export function CheckOutDialog({
                 )}
 
                 {/* Plate lookup is a dedicated lost-card path; card taps never enter it. */}
-                {isLostCard && (
+                {checkoutSource === 'plate' && (
                   <div
                     className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-left"
                     style={{ background: 'rgba(217,119,6,0.1)', border: '1.5px solid rgba(217,119,6,0.4)' }}
                   >
-                    <div className="flex items-center justify-center size-4 rounded shrink-0" style={{ background: '#D97706' }}>
-                      <CheckCircle2 className="size-3 text-white" />
-                    </div>
+                    <input aria-label="ยืนยันบัตรหาย" type="checkbox" checked={isLostCard} onChange={e => setIsLostCard(e.target.checked)} />
                     <AlertTriangle className="size-3.5 shrink-0 text-amber-700" />
                     <span className="text-[11px] font-bold flex-1 text-amber-800">
-                      ค้นหาด้วยเลขทะเบียน — คิดเป็นกรณีบัตรหาย เพิ่ม ฿{lostCardFine}
+                      ยืนยันว่าบัตรหาย — เพิ่ม ฿{lostCardFine}
                     </span>
                   </div>
                 )}

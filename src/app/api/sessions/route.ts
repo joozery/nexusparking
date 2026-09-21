@@ -6,6 +6,7 @@ export async function GET(req: NextRequest) {
   await connectDB()
   const { searchParams } = new URL(req.url)
   const status  = searchParams.get('status')   // active | completed | lost
+  const allActive = status === 'active' && searchParams.get('allActive') === '1'
   const limit   = parseInt(searchParams.get('limit') ?? '50')
   const page    = parseInt(searchParams.get('page')  ?? '1')
   const plate   = searchParams.get('plate')
@@ -14,7 +15,7 @@ export async function GET(req: NextRequest) {
 
   const shiftId = searchParams.get('shiftId')
 
-  const filter: Record<string, unknown> = {}
+  const filter: Record<string, unknown> = { status: { $ne: 'void' } }
   if (status)  filter.status  = status
   if (plate)   filter.plate   = { $regex: plate, $options: 'i' }
   if (shiftId) filter.shiftId = shiftId
@@ -32,7 +33,7 @@ export async function GET(req: NextRequest) {
   }
 
   const [sessions, total] = await Promise.all([
-    ParkingSession.find(filter).sort({ entryTime: -1 }).skip((page - 1) * limit).limit(limit).lean(),
+    ParkingSession.find(filter).sort({ entryTime: -1 }).skip(allActive ? 0 : (page - 1) * limit).limit(allActive ? 0 : limit).lean(),
     ParkingSession.countDocuments(filter),
   ])
 

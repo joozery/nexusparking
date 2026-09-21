@@ -1,3 +1,4 @@
+import { parkingMutation } from '@/lib/parkingMutation'
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { verifyToken, COOKIE_NAME } from '@/lib/auth'
@@ -28,7 +29,7 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ ...session, durationMin, fee, totalFee: fee })
 }
 
-export async function POST(req: NextRequest) {
+async function handlePost(req: NextRequest) {
   const { uid, sessionId, paymentMethod = 'cash', discountId, dailyDiscountId, fineId, exitTime: exitTimeRaw, lostCard } = await req.json()
 
   const jar     = await cookies()
@@ -138,3 +139,5 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json(session)
 }
+
+export const POST = parkingMutation(handlePost)

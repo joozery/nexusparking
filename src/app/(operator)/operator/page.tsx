@@ -8,6 +8,7 @@ import {
   Play, X,
   XCircle, Nfc, Scan,
 } from 'lucide-react'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogBody } from '@/components/ui/dialog'
 import { CheckInDialog } from '@/components/parking/CheckInDialog'
 import { CheckOutDialog, type PaymentMethod } from '@/components/parking/CheckOutDialog'
 import { LostCardDialog } from '@/components/parking/LostCardDialog'
@@ -18,6 +19,7 @@ import { type CardType } from '@/components/parking/types'
 import { calcFeeFromMinutes, type OvernightConfig } from '@/lib/calcFee'
 import { useToast } from '@/components/ui/Toast'
 import { triggerBarrierClient } from '@/lib/barrierClient'
+import { createHidScan } from '@/lib/hidScan'
 import { convertThaiToEn, normalizeUid, toAsciiNumber, toAsciiPlate } from '@/lib/thaiInput'
 import {
   isSerialSupported, connectSerialReader, getReaderBaud, setReaderBaud,
@@ -53,6 +55,7 @@ interface Stats {
 
 interface QueueEntry {
   _id: string
+  cardUid?: string
   plate: string
   cardType: 'car' | 'motorcycle'
   joinedAt: string
@@ -69,6 +72,29 @@ interface Shift {
   cashAmount: number
   qrAmount: number
   totalAmount: number
+}
+
+function EntryPhoto({ sessionId, face = false }: { sessionId: string; face?: boolean }) {
+  const [sourceIndex, setSourceIndex] = useState(0)
+  const sources = face ? ['cam-face'] : ['cam-plate', 'entry', 'cam-rear']
+  const label = face ? 'ภาพผู้ขับตอนเข้า' : 'ภาพรถตอนเข้า'
+  return (
+    <span className="flex min-w-0 flex-col gap-1">
+      <span className="text-xs font-semibold text-slate-500">{label}</span>
+      {sourceIndex < sources.length ? (
+        <img
+          src={`/api/sessions/${sessionId}/photo?type=${sources[sourceIndex]}`}
+          alt={label}
+          className="h-40 w-full rounded-lg bg-slate-100 object-contain"
+          onError={() => setSourceIndex(i => i + 1)}
+        />
+      ) : (
+        <span className="flex h-40 items-center justify-center rounded-lg bg-slate-100 text-xs text-slate-500">
+          ไม่มีภาพที่บันทึกไว้ หรือโหลดภาพไม่ได้
+        </span>
+      )}
+    </span>
+  )
 }
 
 function LiveClock() {
@@ -188,6 +214,9 @@ export default function OperatorPage() {
   const [lastExitPlate,     setLastExitPlate]     = useState('')
 
   // Sidebar quick plate lookup (checkin/checkout auto-route by typed plate)
+  const [plateMatches, setPlateMatches] = useState<Session[] | null>(null)
+  const [matchSource, setMatchSource] = useState<'card' | 'plate'>('plate')
+  const [plateBusy, setPlateBusy] = useState(false)
   const [plateQuick, setPlateQuick] = useState('')
   const [isExitView, setIsExitView] = useState(false) // mirrors CctvStrip's F12 entry/exit toggle
   const plateInputRef = useRef<HTMLInputElement>(null)
@@ -200,6 +229,7 @@ export default function OperatorPage() {
   const [carsListOpen, setCarsListOpen] = useState(false)
 
   const onCardScanRef = useRef<(uid: string) => void>(() => {})
+  const cardScanBusy = useRef(false)
   const scanInputRef = useRef<HTMLInputElement>(null)
   const scanTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [scanBuf, setScanBuf] = useState('')
@@ -222,7 +252,7 @@ export default function OperatorPage() {
   const fetchData = useCallback(async () => {
     try {
       const [sRes, stRes, qRes, fRes] = await Promise.all([
-        fetch('/api/sessions?status=active&limit=50'),
+        fetch('/api/sessions?status=active&allActive=1'),
         fetch('/api/stats'),
         fetch('/api/queue'),
         fetch('/api/stats/fleet'),
@@ -270,7 +300,7 @@ export default function OperatorPage() {
   }, [fetchData, fetchSettings])
 
   // ── Scan input focus management ─────────────────────────────────────────
-  const noDialogOpen = !checkInOpen && !checkOutOpen && !lostOpen && !shiftEnding && shift !== null
+  const noDialogOpen = !checkInOpen && !checkOutOpen && !lostOpen && !shiftEnding && !plateMatches && !carsListOpen && !!shift
   useEffect(() => {
     if (noDialogOpen) {
       setTimeout(() => scanInputRef.current?.focus(), 50)
@@ -356,8 +386,14 @@ export default function OperatorPage() {
         const err = await res.json()
         toastError('เข้าลานไม่สำเร็จ', err.error ?? 'เกิดข้อผิดพลาด')
       }
+    } catch {
+      toastError('ตรวจสอบการเข้าลานไม่สำเร็จ', 'กรุณารีเฟรชรายการเพื่อตรวจสถานะรถก่อนลองใหม่')
     } finally {
       setQLoading(null)
+      // The clicked queue button disappears after entry; explicitly restore HID capture.
+      setScanBuf('')
+      if (scanTimerRef.current) clearTimeout(scanTimerRef.current)
+      requestAnimationFrame(() => scanInputRef.current?.focus())
     }
   }
 
@@ -396,22 +432,16 @@ export default function OperatorPage() {
   }
 
   // Check In
-  async function simulateCIScan() {
-    const res = await fetch('/api/cards')
-    const cards = await res.json()
-    if (cards.length > 0) {
-      const card = cards[Math.floor(Math.random() * cards.length)]
-      setCiUid(card.uid); setCiType(card.type)
-    } else {
-      const types: CardType[] = ['car', 'motorcycle']
-      setCiType(types[Math.floor(Math.random() * types.length)])
-      setCiUid('DEMO-' + Math.random().toString(36).slice(2, 8).toUpperCase())
-    }
-    setCiStep('confirm')
-  }
-
   async function handleCheckin() {
     if (!ciPlate || ciPlate.length !== 4) return
+    try {
+      const current = await loadActiveSessions()
+      const duplicates = current.filter(s => s.plate === ciPlate)
+      if (duplicates.length && !window.confirm('มีทะเบียน ' + ciPlate + ' อยู่ในลานแล้ว ' + duplicates.length + ' คัน ยืนยันว่าเป็นรถอีกคันและใช้บัตรคนละใบ?')) return
+    } catch {
+      toastError('ตรวจสอบทะเบียนไม่สำเร็จ', 'กรุณาลองใหม่ก่อนบันทึกขาเข้า')
+      return
+    }
     const body: Record<string, string> = ciUid
       ? { uid: ciUid, plate: ciPlate }
       : { cardType: ciType, plate: ciPlate }
@@ -474,24 +504,6 @@ export default function OperatorPage() {
   }
 
   // Check Out (scan dialog)
-  async function simulateCOScan() {
-    const active = sessions.find(s => s.status === 'active')
-    if (!active) {
-      toastError('ไม่มีรถในลาน', 'ยังไม่มีรถที่ Check-in เข้ามา')
-      return
-    }
-    const entry = new Date(active.entryTime)
-    setCoType(active.cardType)
-    setCoSessionId(active._id)
-    setCoPlate(active.plate)
-    setCoEntryTime(entry)
-    setCoCustomTime('')
-    setCoHours(0)
-    setCoFee(0)
-    setCoSource('card')
-    setCoStep('payment')
-  }
-
   // Keep card taps and plate lookups as explicit, separate checkout paths.
   // Only the plate path is allowed to add the lost-card fine.
   function openCheckout(s: Session, source: 'card' | 'plate') {
@@ -512,36 +524,42 @@ export default function OperatorPage() {
   //  - active session with this plate           → checkout
   //  - no session, but exit camera view is on    → lost card (car is at the exit gate with no record)
   //  - no session, otherwise                     → checkin (handleCheckin falls back to queue itself if the lot is full)
-  function handlePlateQuickSubmit() {
-    const plate = toAsciiPlate(convertThaiToEn(plateQuick))
-    if (plate.length !== 4) return
-    const activeSession = sessions.find(s => s.status === 'active' && s.plate === plate)
-    if (activeSession) {
-      openCheckout(activeSession, 'plate')
-    } else if (isExitView) {
-      setLostPlate(plate)
-      setLostOpen(true)
-    } else {
-      resetCI()
-      setCiPlate(plate)
-      setCiStep('confirm') // skip the card-tap screen — plate is already known, show it right away
-      setCheckInOpen(true)
-    }
-    setPlateQuick('')
-    // Give focus straight back to the hidden card-reader input — otherwise this box stays
-    // focused indefinitely and a real card tap right after typing a plate here would land its
-    // keystrokes in this box instead, getting misread as another manual "assume lost card" entry.
-    plateInputRef.current?.blur()
-    scanInputRef.current?.focus()
+  async function loadActiveSessions(): Promise<Session[]> {
+    const res = await fetch('/api/sessions?status=active&allActive=1', { cache: 'no-store' })
+    if (!res.ok) throw new Error('โหลดรายการรถไม่สำเร็จ')
+    const data = await res.json()
+    setSessions(data.sessions)
+    return data.sessions
   }
 
-  async function handleCheckout(paymentMethod: PaymentMethod, discountId?: string, dailyDiscountId?: string, _isLostCard?: boolean, fineId?: string) {
+  async function handlePlateQuickSubmit() {
+    const plate = toAsciiPlate(convertThaiToEn(plateQuick))
+    if (plate.length !== 4 || plateBusy || !shift) return
+    if (!isExitView) {
+      resetCI()
+      setCiPlate(plate)
+      setCiStep('confirm')
+      setCheckInOpen(true)
+      setPlateQuick('')
+      return
+    }
+    setPlateBusy(true)
+    try {
+      const current = await loadActiveSessions()
+      setMatchSource('plate')
+      setPlateMatches(current.filter(s => s.plate === plate))
+    } catch {
+      toastError('ค้นหาไม่สำเร็จ', 'กรุณาลองใหม่')
+    } finally { setPlateBusy(false) }
+  }
+
+  async function handleCheckout(paymentMethod: PaymentMethod, discountId?: string, dailyDiscountId?: string, isLostCard?: boolean, fineId?: string) {
     const body: Record<string, unknown> = {
       sessionId: coSessionId || undefined,
       paymentMethod,
       discountId,
       dailyDiscountId,
-      lostCard: coSource === 'plate',
+      lostCard: isLostCard === true,
       fineId,
     }
     if (coCustomTime) body.exitTime = new Date(coCustomTime).toISOString()
@@ -581,21 +599,66 @@ export default function OperatorPage() {
   }
 
   // ── Card-reader auto-route: checkin or checkout based on active sessions ──
+  useEffect(() => {
+    if (!carsListOpen) return
+    const read = createHidScan()
+    const listener = (event: KeyboardEvent) => {
+      if (event.ctrlKey || event.altKey || event.metaKey || event.repeat) return
+      const raw = read(event.key, performance.now())
+      if (raw) {
+        event.preventDefault()
+        event.stopPropagation()
+        onCardScanRef.current(normalizeUid(raw))
+      }
+    }
+    window.addEventListener('keydown', listener, true)
+    return () => window.removeEventListener('keydown', listener, true)
+  }, [carsListOpen])
   // Updated every render via ref so the keydown useEffect (deps=[]) is never stale
   useEffect(() => {
     onCardScanRef.current = async (uid: string) => {
       // Ignore scan when any dialog is already open — prevents resetting in-progress forms
-      if (checkInOpen || checkOutOpen || lostOpen || shiftEnding) return
+      if (checkInOpen || checkOutOpen || lostOpen || shiftEnding || plateMatches || !shift || cardScanBusy.current) return
+      cardScanBusy.current = true
+      try {
+      setCarsListOpen(false)
+      setSearch('')
 
       // Cards/sessions registered before Thai→ASCII conversion have Thai chars stored as UID.
       // Match by the converted uid OR by converting the stored uid (backward-compat).
-      const matchUid = (stored: string) => stored === uid || convertThaiToEn(stored) === uid
+      const matchUid = (stored: string) => convertThaiToEn(stored).trim().toUpperCase() === convertThaiToEn(uid).trim().toUpperCase()
 
-      const activeSession = sessions.find(s => s.status === 'active' && matchUid(s.cardUid))
+      let current: Session[]
+      try { current = await loadActiveSessions() } catch { toastError('ค้นหาบัตรไม่สำเร็จ', 'กรุณาลองใหม่'); return }
+      const matchingSessions = current.filter(s => matchUid(s.cardUid))
+      if (matchingSessions.length > 1) {
+        setMatchSource('card')
+        setPlateMatches(matchingSessions)
+        warning('พบข้อมูลบัตรซ้ำในลาน', 'กรุณาตรวจภาพและเวลาเข้าเพื่อเลือกรายการให้ตรงกับรถจริง')
+        return
+      }
+      const activeSession = matchingSessions[0]
       if (activeSession) {
         // Card already inside → checkout
         openCheckout(activeSession, 'card')
       } else {
+        // A waiting card must use its existing queue entry, not a new check-in.
+        try {
+          const queueRes = await fetch('/api/queue', { cache: 'no-store' })
+          if (!queueRes.ok) throw new Error('Queue lookup failed')
+          const waiting: QueueEntry[] = await queueRes.json()
+          if (!Array.isArray(waiting)) throw new Error('Invalid queue response')
+          setQueues(waiting)
+          const queued = waiting.find(q => q.cardUid && matchUid(q.cardUid))
+          if (queued) {
+            const position = waiting.filter(q => q.cardType === queued.cardType).findIndex(q => q._id === queued._id) + 1
+            warning('บัตรนี้อยู่ในคิวแล้ว', `ทะเบียน ${queued.plate} — ลำดับที่ ${position} กรุณาจัดการจากรายการคิวรอ`)
+            return
+          }
+        } catch {
+          toastError('ตรวจสอบคิวไม่สำเร็จ', 'กรุณาลองแตะบัตรใหม่')
+          return
+        }
         // Card not inside → checkin: resolve card type + plate from registration
         try {
           const res = await fetch('/api/cards')
@@ -604,8 +667,8 @@ export default function OperatorPage() {
             const found = cards.find(c => matchUid(c.uid))
             if (found) {
               setCiType(found.type)
-              if (found.plate) setCiPlate(found.plate)
-              setCiUid(uid)
+              setCiPlate((found.plate ?? '').replace(/[๐-๙]/g, c => String(c.charCodeAt(0) - 0x0E50)).replace(/\D/g, '').slice(-4))
+              setCiUid(found.uid)
               setCiStep('confirm')
               setCheckInOpen(true)
               return
@@ -615,6 +678,7 @@ export default function OperatorPage() {
         // ไม่พบบัตรในระบบ → แจ้งเตือนเฉยๆ (ลงทะเบียนบัตรทำที่หน้าจัดการบัตรแทน)
         warning('บัตรนี้ไม่ได้ลงทะเบียน', `UID: ${uid} — กรุณาลงทะเบียนบัตรก่อนใช้งาน`)
       }
+      } finally { cardScanBusy.current = false }
     }
   })
 
@@ -646,7 +710,7 @@ export default function OperatorPage() {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // ป้องกันการทำงานซ้อนถ้ามี modal เปิดอยู่แล้ว (ยกเว้น carsListOpen เอง — F2 ต้องสลับปิดได้)
-      if (checkInOpen || checkOutOpen || lostOpen || shiftEnding) return
+      if (checkInOpen || checkOutOpen || lostOpen || shiftEnding || plateMatches) return
 
       if (e.key === 'F2') {
         e.preventDefault()
@@ -660,7 +724,7 @@ export default function OperatorPage() {
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [checkInOpen, checkOutOpen, lostOpen, shiftEnding, shift])
+  }, [checkInOpen, checkOutOpen, lostOpen, shiftEnding, shift, plateMatches])
 
   return (
     <div className="h-screen flex flex-col bg-[#F0F4FF]">
@@ -690,7 +754,7 @@ export default function OperatorPage() {
           // Don't steal focus from a real input the operator clicked (e.g. search box)
           const target = e.relatedTarget as HTMLElement | null
           if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT')) return
-          if (!checkInOpen && !checkOutOpen && !lostOpen && !shiftEnding && shift !== null) {
+          if (!checkInOpen && !checkOutOpen && !lostOpen && !shiftEnding && !plateMatches && !carsListOpen && !!shift) {
             setTimeout(() => scanInputRef.current?.focus(), 50)
           }
         }}
@@ -789,6 +853,10 @@ export default function OperatorPage() {
               no session + exit camera view = lost card, no session + lot full = queue, else = checkin */}
           <div className="shrink-0 flex flex-col gap-1.5 p-3 rounded-xl"
             style={{ background: 'white', border: '1px solid #E8ECF4', boxShadow: '0 1px 8px rgba(0,0,0,0.05)' }}>
+            <div className="flex gap-2" role="group" aria-label="ทิศทางรถ">
+              <button type="button" onClick={() => setIsExitView(false)} aria-pressed={!isExitView} className={`flex-1 rounded-lg p-2 font-bold ${!isExitView ? 'bg-yellow-400' : 'bg-slate-100'}`}>รับรถเข้า</button>
+              <button type="button" onClick={() => setIsExitView(true)} aria-pressed={isExitView} className={`flex-1 rounded-lg p-2 font-bold ${isExitView ? 'bg-emerald-300' : 'bg-slate-100'}`}>รับรถออก</button>
+            </div>
             <label className="text-[10px] font-bold text-slate-400 px-0.5">เลขทะเบียน (4 หลัก) — Enter เพื่อยืนยัน</label>
             <form
               onSubmit={e => { e.preventDefault(); handlePlateQuickSubmit() }}
@@ -821,7 +889,7 @@ export default function OperatorPage() {
               />
               <button
                 type="submit"
-                disabled={plateQuick.length !== 4}
+                disabled={plateQuick.length !== 4 || plateBusy || !shift}
                 className="shrink-0 h-11 px-4 rounded-lg text-sm font-black text-black transition-all active:scale-[0.97] hover:brightness-110 disabled:opacity-40"
                 style={{ background: 'linear-gradient(135deg,#713F12,#EAB308)', boxShadow: '0 4px 16px rgba(161,98,7,0.38)' }}
               >
@@ -831,7 +899,7 @@ export default function OperatorPage() {
             {isExitView ? (
               <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full self-start"
                 style={{ background: 'rgba(217,119,6,0.1)', color: '#92400E' }}>
-                กล้องขาออก — ไม่พบทะเบียนจะถือว่าบัตรหาย
+                ขาออก — ค้นหาแล้วเลือกรถก่อนรับเงิน
               </span>
             ) : stats && stats.availableSlots === 0 && (
               <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full self-start"
@@ -1066,14 +1134,33 @@ export default function OperatorPage() {
         </div>
       )}
 
+      <Dialog open={plateMatches !== null} onOpenChange={o => { if (!o) setPlateMatches(null) }}>
+        <DialogContent className="sm:max-w-3xl">
+          <DialogHeader><DialogTitle>{matchSource === 'card' ? 'ตรวจรายการซ้ำของบัตร — เลือกรถขาออก' : `เลือกรถขาออก — ${plateQuick}`}</DialogTitle>
+            <DialogDescription>ตรวจภาพ เวลาเข้า และเลขบัตรให้ตรงกับรถจริงก่อนเลือก</DialogDescription></DialogHeader>
+          <DialogBody className="max-h-[65vh] overflow-y-auto space-y-3">
+            {plateMatches?.map(s => <button key={s._id} className="w-full rounded-xl border p-3 text-left flex flex-col gap-3 hover:border-emerald-500 focus-visible:outline-2 focus-visible:outline-emerald-600" onClick={() => { setPlateMatches(null); setPlateQuick(''); openCheckout(s, matchSource) }}>
+              <span className="grid w-full grid-cols-1 gap-3 sm:grid-cols-2">
+                <EntryPhoto sessionId={s._id} />
+                <EntryPhoto sessionId={s._id} face />
+              </span>
+              <span><strong>{s.plate} · {s.cardType === 'motorcycle' ? 'จักรยานยนต์' : 'รถยนต์'}</strong><br />
+                เข้า {new Date(s.entryTime).toLocaleString('th-TH')}<br />บัตร {s.cardUid}<br /><span className="text-xs text-slate-500">รายการ {s._id}</span></span>
+              <span className="self-end rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white">เลือกรถคันนี้</span>
+            </button>)}
+            {plateMatches?.length === 0 && <div className="space-y-3"><p>ไม่พบรถทะเบียนนี้ในลาน กรุณาตรวจเลขทะเบียนอีกครั้ง</p>
+              <button className="rounded-lg bg-amber-100 p-3" onClick={() => { setPlateMatches(null); setLostPlate(plateQuick); setLostOpen(true) }}>ยืนยันบัตรหายและไม่มีประวัติ — ระบุเวลาจอด</button></div>}
+          </DialogBody>
+        </DialogContent>
+      </Dialog>
       {/* ─── Dialogs ─── */}
       <CheckInDialog
         open={checkInOpen}
         onOpenChange={o => { setCheckInOpen(o); if (!o) resetCI() }}
         step={ciStep} cardType={ciType} plate={ciPlate}
+        duplicateSessions={sessions.filter(s => s.plate === ciPlate)}
         customEntryTime={ciCustomTime}
         onCustomEntryTimeChange={setCiCustomTime}
-        onSimulateScan={simulateCIScan}
         onSelectType={t => { setCiType(t); setCiStep('confirm') }}
         onPlateChange={setCiPlate}
         onBack={() => setCiStep('scan')}
@@ -1089,7 +1176,6 @@ export default function OperatorPage() {
         checkoutSource={coSource}
         entryTime={coEntryTime}
         overnightCfg={overnightCfg}
-        onSimulateScan={simulateCOScan}
         onBack={() => setCoStep('scan')}
         onConfirm={handleCheckout}
         onPrintReceipt={handlePrintReceipt}

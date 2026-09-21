@@ -21,8 +21,9 @@ interface Props {
   step: 'scan' | 'confirm'
   cardType: CardType
   plate: string
+  duplicateSessions?: { _id: string; cardUid: string; entryTime: string }[]
   customEntryTime?: string
-  onSimulateScan: () => void
+  onSimulateScan?: () => void
   onSelectType: (type: CardType) => void
   onPlateChange: (plate: string) => void
   onCustomEntryTimeChange?: (v: string) => void
@@ -31,7 +32,7 @@ interface Props {
 }
 
 export function CheckInDialog({
-  open, onOpenChange, step, cardType, plate,
+  open, onOpenChange, step, cardType, plate, duplicateSessions = [],
   customEntryTime, onCustomEntryTimeChange,
   onSimulateScan, onSelectType, onPlateChange, onBack, onConfirm,
 }: Props) {
@@ -70,6 +71,15 @@ export function CheckInDialog({
         </DialogHeader>
 
         <DialogBody className="space-y-3 py-3">
+          {step === 'confirm' && duplicateSessions.length > 0 && <div className="rounded-lg bg-amber-50 p-2 text-xs text-amber-900">
+            <p className="font-bold">ทะเบียนนี้อยู่ในลานแล้ว {duplicateSessions.length} คัน — ตรวจว่าเป็นรถอีกคันก่อนยืนยัน</p>
+            <div className="max-h-40 overflow-y-auto">
+              {duplicateSessions.map(s => <div key={s._id} className="flex gap-2 mt-2">
+                <img src={`/api/sessions/${s._id}/photo?type=cam-plate`} alt="ภาพตอนเข้า (หากมี)" className="w-20 h-14 object-contain" />
+                <span>บัตร {s.cardUid}<br />เข้า {new Date(s.entryTime).toLocaleString('th-TH')}</span>
+              </div>)}
+            </div>
+          </div>}
           {step === 'scan' ? (
             <div className="flex flex-col items-center gap-3">
               <div
@@ -82,7 +92,7 @@ export function CheckInDialog({
                 <div className="text-center">
                   <p className="text-sm font-bold text-yellow-800">รอการสแกนบัตร...</p>
                   <p className="text-xs text-yellow-700 mt-0.5">แตะบัตรที่เครื่องอ่านบัตร (Card Reader)</p>
-                  <p className="text-[10px] text-yellow-400 mt-1.5 border border-yellow-200 px-2 py-0.5 rounded-full bg-white/60 inline-block">คลิกจำลองการสแกน</p>
+                  {onSimulateScan && <p className="text-[10px] text-yellow-400 mt-1.5 border border-yellow-200 px-2 py-0.5 rounded-full bg-white/60 inline-block">คลิกจำลองการสแกน</p>}
                 </div>
               </div>
 
@@ -109,11 +119,11 @@ export function CheckInDialog({
               </div>
 
               <div className="space-y-1">
-                <Label htmlFor="plate-in" className="text-xs">เลขทะเบียน 4 ตัวท้าย</Label>
+                <Label htmlFor="plate-in" className="text-xs">เลขทะเบียน 4 หลัก</Label>
                 <Input
                   ref={plateRef}
                   id="plate-in"
-                  placeholder="เช่น 1234"
+                  placeholder="1234"
                   maxLength={4}
                   value={plate}
                   onChange={(e) => onPlateChange(toAsciiPlate(e.target.value))}

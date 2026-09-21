@@ -1,3 +1,4 @@
+import { parkingMutation } from '@/lib/parkingMutation'
 import { NextRequest, NextResponse } from 'next/server'
 import { connectDB } from '@/lib/mongodb'
 import { ParkingSession } from '@/models/ParkingSession'
@@ -15,7 +16,7 @@ async function triggerHardware(sessionId: string, plate: string) {
   } catch { /* hardware optional */ }
 }
 
-export async function POST(req: NextRequest) {
+async function handlePost(req: NextRequest) {
   const { plate, estimatedHours, cardType: reqCardType, note } = await req.json()
 
   if (!plate || !estimatedHours) {
@@ -64,3 +65,5 @@ export async function POST(req: NextRequest) {
   void triggerHardware(String(session._id), plate.trim())
   return NextResponse.json(session, { status: 201 })
 }
+
+export const POST = parkingMutation(handlePost)

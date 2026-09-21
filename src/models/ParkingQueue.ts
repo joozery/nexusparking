@@ -25,6 +25,7 @@ const ParkingQueueSchema = new Schema<IParkingQueue>({
 }, { timestamps: true })
 
 ParkingQueueSchema.index({ status: 1, joinedAt: 1 })
+ParkingQueueSchema.index({ cardUid: 1 }, { name: 'one_waiting_queue_per_card', unique: true, partialFilterExpression: { status: 'waiting', cardUid: { $type: 'string' } } })
 
 export const ParkingQueue =
   mongoose.models.ParkingQueue as mongoose.Model<IParkingQueue> ??

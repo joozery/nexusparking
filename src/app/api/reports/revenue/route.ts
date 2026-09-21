@@ -77,6 +77,7 @@ export async function GET(req: NextRequest) {
     ParkingSession.aggregate([
       {
         $match: {
+          status: { $ne: 'void' },
           entryTime: { $lte: refDate },
           $or: [{ exitTime: { $gte: startDate } }, { exitTime: null }, { exitTime: { $exists: false } }],
         },

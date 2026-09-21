@@ -1,14 +1,16 @@
+import { parkingMutation } from '@/lib/parkingMutation'
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { verifyToken, COOKIE_NAME } from '@/lib/auth'
 import { connectDB } from '@/lib/mongodb'
 import { ParkingCard } from '@/models/ParkingCard'
 import { ParkingSession } from '@/models/ParkingSession'
+import { ParkingQueue } from '@/models/ParkingQueue'
 import { Shift } from '@/models/Shift'
 import { getSettings } from '@/models/SystemSettings'
 import { runCheckinSequence, captureEntryCctvSnapshots } from '@/lib/hardware'
 
-export async function POST(req: NextRequest) {
+async function handlePost(req: NextRequest) {
   const { uid, plate, cardType: manualType, entryTime: customEntryTime } = await req.json()
 
   if (!plate) {
@@ -50,8 +52,12 @@ export async function POST(req: NextRequest) {
     }
     resolvedUid  = card.uid
     resolvedType = card.type
+    const waiting = await ParkingQueue.findOne({ cardUid: card.uid, status: 'waiting' })
+    if (waiting) {
+      return NextResponse.json({ error: 'บัตรนี้อยู่ในคิวแล้ว กรุณายืนยันเข้าลานจากรายการคิวรอ' }, { status: 409 })
+    }
   } else {
-    resolvedUid  = `WALKIN-${Date.now()}`
+    resolvedUid  = `WALKIN-${crypto.randomUUID()}`
     resolvedType = manualType as 'car' | 'motorcycle' | 'overnight'
   }
 
@@ -98,3 +104,5 @@ export async function POST(req: NextRequest) {
       : undefined,
   }, { status: 201 })
 }
+
+export const POST = parkingMutation(handlePost)

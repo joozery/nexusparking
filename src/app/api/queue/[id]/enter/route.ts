@@ -1,3 +1,4 @@
+import { parkingMutation } from '@/lib/parkingMutation'
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { verifyToken, COOKIE_NAME } from '@/lib/auth'
@@ -10,7 +11,7 @@ import { getSettings } from '@/models/SystemSettings'
 // POST /api/queue/[id]/enter — รถออกจากคิวเข้าลานจอด
 // body.skipCapacityCheck: true — ใช้เมื่อรถ "ไม่รอแล้ว" และแค่เช็คเอาต์จ่ายค่าคิวทันที
 // (ไม่ได้เข้าไปจอดในลานจริง จึงไม่ต้องนับที่ว่าง ต่างจากการโปรโมทคิวเข้าลานปกติที่ต้องมีที่ว่างจริง)
-export async function POST(
+async function handlePost(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -24,6 +25,9 @@ export async function POST(
 
   const q = await ParkingQueue.findOne({ _id: id, status: 'waiting' })
   if (!q) return NextResponse.json({ error: 'ไม่พบคิว' }, { status: 404 })
+  if (q.cardUid && await ParkingSession.exists({ cardUid: q.cardUid, status: 'active' })) {
+    return NextResponse.json({ error: 'บัตรนี้มีรถอยู่ในลานแล้ว กรุณาตรวจรายการรถก่อนย้ายคิว' }, { status: 409 })
+  }
 
   if (!skipCapacityCheck) {
     const settings      = await getSettings()
@@ -53,7 +57,7 @@ export async function POST(
   }
 
   const session = await ParkingSession.create({
-    cardUid:    q.cardUid ?? `WALKIN-${Date.now()}`,
+    cardUid:    q.cardUid ?? `WALKIN-${crypto.randomUUID()}`,
     cardType:   q.cardType,
     plate:      q.plate,
     entryTime:  now,
@@ -63,8 +67,10 @@ export async function POST(
   })
 
   q.status    = 'entered'
-  q.enteredAt = now
+  q.enteredAt = new Date()
   await q.save()
 
   return NextResponse.json({ queue: q, session })
 }
+
+export const POST = parkingMutation(handlePost)

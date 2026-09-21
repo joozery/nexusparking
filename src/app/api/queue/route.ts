@@ -1,8 +1,10 @@
+import { parkingMutation } from '@/lib/parkingMutation'
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { verifyToken, COOKIE_NAME } from '@/lib/auth'
 import { connectDB } from '@/lib/mongodb'
 import { ParkingQueue } from '@/models/ParkingQueue'
+import { ParkingSession } from '@/models/ParkingSession'
 import { Shift } from '@/models/Shift'
 import { getSettings } from '@/models/SystemSettings'
 import { runCheckinSequence } from '@/lib/hardware'
@@ -15,7 +17,7 @@ export async function GET() {
 }
 
 // POST — เพิ่มรถเข้าคิว
-export async function POST(req: NextRequest) {
+async function handlePost(req: NextRequest) {
   const { plate, cardType, cardUid } = await req.json()
   if (!plate || !cardType) return NextResponse.json({ error: 'plate และ cardType จำเป็น' }, { status: 400 })
 
@@ -25,9 +27,13 @@ export async function POST(req: NextRequest) {
 
   await connectDB()
 
-  // ห้ามเพิ่มทะเบียนเดิมซ้ำ
-  const existing = await ParkingQueue.findOne({ plate: plate.trim(), status: 'waiting' })
-  if (existing) return NextResponse.json({ error: 'ทะเบียนนี้อยู่ในคิวแล้ว' }, { status: 409 })
+  // A card already in the lot cannot join another queue.
+  if (cardUid && await ParkingSession.exists({ cardUid: cardUid.trim(), status: 'active' })) {
+    return NextResponse.json({ error: 'บัตรนี้มีรถอยู่ในลานแล้ว กรุณาทำรายการขาออก' }, { status: 409 })
+  }
+  // Different plates may share four digits; prevent duplicate cards instead.
+  const existing = cardUid ? await ParkingQueue.findOne({ cardUid: cardUid.trim(), status: 'waiting' }) : null
+  if (existing) return NextResponse.json({ error: 'บัตรนี้อยู่ในคิวแล้ว' }, { status: 409 })
 
   let shiftId: string | undefined
   if (payload) {
@@ -35,7 +41,7 @@ export async function POST(req: NextRequest) {
     if (shift) shiftId = String(shift._id)
   }
 
-  const resolvedUid = cardUid ?? `WALKIN-Q-${Date.now()}`
+  const resolvedUid = cardUid?.trim() || `WALKIN-Q-${crypto.randomUUID()}`
 
   const q = await ParkingQueue.create({
     plate:      plate.trim().toUpperCase(),
@@ -53,3 +59,5 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json(q, { status: 201 })
 }
+
+export const POST = parkingMutation(handlePost)
