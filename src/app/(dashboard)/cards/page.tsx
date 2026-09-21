@@ -11,6 +11,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
 import { normalizeUid } from '@/lib/thaiInput'
+import { hidKey } from '@/lib/hidScan'
 
 type CardType = 'car' | 'motorcycle' | 'overnight'
 type CardCategory = 'temporary' | 'monthly'
@@ -414,6 +415,16 @@ export default function CardsPage() {
                   <input ref={uidInputRef}
                     value={uid} onChange={e => setUid(normalizeUid(e.target.value))}
                     onKeyDown={e => {
+                      const key = hidKey(e)
+                      if (key && key !== 'Enter') {
+                        e.preventDefault()
+                        const input = e.currentTarget
+                        const start = input.selectionStart ?? uid.length
+                        const end = input.selectionEnd ?? uid.length
+                        const next = normalizeUid(uid.slice(0, start) + key + uid.slice(end))
+                        setUid(next)
+                        requestAnimationFrame(() => input.setSelectionRange(start + 1, start + 1))
+                      }
                       // Card readers send an Enter/CR right after the UID burst — inside a <form>,
                       // Enter in a text input submits it by default, saving immediately with
                       // whatever's (or isn't) in the other fields. Just fill the UID, don't submit.

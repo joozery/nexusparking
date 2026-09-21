@@ -14,7 +14,14 @@ function load(file, overrides = {}) {
 }
 
 async function main() {
-  const { createHidScan } = load('src/lib/hidScan.ts')
+  const { createHidScan, hidKey } = load('src/lib/hidScan.ts')
+  const thaiNumberRow = 'ขขขภุภคตคข'
+  const expectedUid = '0003537870'
+  assert.equal([...expectedUid].map((digit, i) => hidKey({ code: `Digit${digit}`, key: thaiNumberRow[i] })).join(''), expectedUid)
+  assert.equal(hidKey({ code: 'KeyA', key: 'ฟ' }), 'A')
+  assert.equal(hidKey({ code: 'Numpad7', key: 'Home' }), '7')
+  assert.equal(hidKey({ code: 'KeyV', key: 'อ', ctrlKey: true }), null)
+  assert.equal(hidKey({ code: 'Enter', key: 'Enter' }), 'Enter')
   const fast = createHidScan()
   let now = 1000
   for (const key of '0003537870') { assert.equal(fast(key, now), null); now += 8 }
@@ -23,6 +30,10 @@ async function main() {
   const slow = createHidScan()
   for (const key of '1111') { slow(key, now); now += 250 }
   assert.equal(slow('Enter', now), null, 'manual search is not a tap')
+  if (process.argv.includes('--hid-only')) {
+    console.log('PASS: Thai/English physical keys, numpad, shortcuts, scan burst and manual typing')
+    return
+  }
 
   await mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 8000 })
   // Isolated test collection only; never touches real parking records or locks.

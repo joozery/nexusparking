@@ -20,7 +20,7 @@ import { type CardType } from '@/components/parking/types'
 import { calcFeeFromMinutes, type OvernightConfig } from '@/lib/calcFee'
 import { useToast } from '@/components/ui/Toast'
 import { triggerBarrierClient } from '@/lib/barrierClient'
-import { createHidScan } from '@/lib/hidScan'
+import { createHidScan, hidKey } from '@/lib/hidScan'
 import { convertThaiToEn, normalizeUid, toAsciiNumber, toAsciiPlate } from '@/lib/thaiInput'
 import {
   isSerialSupported, connectSerialReader, getReaderBaud, setReaderBaud,
@@ -237,6 +237,7 @@ export default function OperatorPage() {
   const scanInputRef = useRef<HTMLInputElement>(null)
   const scanTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [scanBuf, setScanBuf] = useState('')
+  const physicalScanBuf = useRef('')
 
   // Serial (COM port) reader — fallback path for readers that aren't HID keyboard-wedge
   const serialHandleRef = useRef<SerialReaderHandle | null>(null)
@@ -384,6 +385,7 @@ export default function OperatorPage() {
       setQLoading(null)
       // The clicked queue button disappears after entry; explicitly restore HID capture.
       setScanBuf('')
+      physicalScanBuf.current = ''
       if (scanTimerRef.current) clearTimeout(scanTimerRef.current)
       requestAnimationFrame(() => scanInputRef.current?.focus())
     }
@@ -425,15 +427,11 @@ export default function OperatorPage() {
 
   // Check In
   async function handleCheckin() {
-    if (!ciPlate || ciPlate.length !== 4) return
-    try {
-      const current = await loadActiveSessions()
-      const duplicates = current.filter(s => s.plate === ciPlate)
-      if (duplicates.length && !window.confirm('มีทะเบียน ' + ciPlate + ' อยู่ในลานแล้ว ' + duplicates.length + ' คัน ยืนยันว่าเป็นรถอีกคันและใช้บัตรคนละใบ?')) return
-    } catch {
-      toastError('ตรวจสอบทะเบียนไม่สำเร็จ', 'กรุณาลองใหม่ก่อนบันทึกขาเข้า')
+    if (!ciUid) {
+      warning('กรุณาแตะบัตรก่อนกรอกทะเบียน')
       return
     }
+    if (!ciPlate || ciPlate.length !== 4) return
     const body: Record<string, string> = ciUid
       ? { uid: ciUid, plate: ciPlate }
       : { cardType: ciType, plate: ciPlate }
@@ -529,11 +527,7 @@ export default function OperatorPage() {
     const plate = toAsciiPlate(convertThaiToEn(plateQuick))
     if (plate.length !== 4 || plateBusy || !shift) return
     if (!isExitView) {
-      resetCI()
-      setCiPlate(plate)
-      setCiStep('confirm')
-      setCheckInOpen(true)
-      setPlateQuick('')
+      warning('กรุณาแตะบัตรก่อนกรอกทะเบียน')
       return
     }
     setPlateBusy(true)
@@ -621,7 +615,7 @@ export default function OperatorPage() {
     const read = createHidScan()
     const listener = (event: KeyboardEvent) => {
       if (event.ctrlKey || event.altKey || event.metaKey || event.repeat) return
-      const raw = read(event.key, performance.now())
+      const raw = read(hidKey(event) ?? event.key, performance.now())
       if (raw) {
         event.preventDefault()
         event.stopPropagation()
@@ -668,8 +662,7 @@ export default function OperatorPage() {
           setQueues(waiting)
           const queued = waiting.find(q => q.cardUid && matchUid(q.cardUid))
           if (queued) {
-            const position = waiting.filter(q => q.cardType === queued.cardType).findIndex(q => q._id === queued._id) + 1
-            warning('บัตรนี้อยู่ในคิวแล้ว', `ทะเบียน ${queued.plate} — ลำดับที่ ${position} กรุณาจัดการจากรายการคิวรอ`)
+            await checkoutFromQueue(queued)
             return
           }
         } catch {
@@ -684,7 +677,7 @@ export default function OperatorPage() {
             const found = cards.find(c => matchUid(c.uid))
             if (found) {
               setCiType(found.type)
-              setCiPlate((found.plate ?? '').replace(/[๐-๙]/g, c => String(c.charCodeAt(0) - 0x0E50)).replace(/\D/g, '').slice(-4))
+              setCiPlate('')
               setCiUid(found.uid)
               setCiStep('confirm')
               setCheckInOpen(true)
@@ -759,20 +752,36 @@ export default function OperatorPage() {
         value={scanBuf}
         onChange={e => {
           const val = e.target.value
+          physicalScanBuf.current = val
           setScanBuf(val)
           if (scanTimerRef.current) clearTimeout(scanTimerRef.current)
           scanTimerRef.current = setTimeout(() => {
             const uid = normalizeUid(val)
             setScanBuf('')
+            physicalScanBuf.current = ''
             if (uid.length >= 4) onCardScanRef.current(uid)
           }, 300)
         }}
         onKeyDown={e => {
-          if (e.key === 'Enter') {
+          const key = hidKey(e)
+          if (!key || e.repeat) return
+          e.preventDefault()
+          if (key === 'Enter') {
             if (scanTimerRef.current) clearTimeout(scanTimerRef.current)
-            const uid = normalizeUid(scanBuf)
+            const uid = normalizeUid(physicalScanBuf.current)
+            physicalScanBuf.current = ''
             setScanBuf('')
             if (uid.length >= 4) onCardScanRef.current(uid)
+          } else {
+            physicalScanBuf.current += key
+            setScanBuf(physicalScanBuf.current)
+            if (scanTimerRef.current) clearTimeout(scanTimerRef.current)
+            scanTimerRef.current = setTimeout(() => {
+              const uid = normalizeUid(physicalScanBuf.current)
+              physicalScanBuf.current = ''
+              setScanBuf('')
+              if (uid.length >= 4) onCardScanRef.current(uid)
+            }, 300)
           }
         }}
         onBlur={e => {
@@ -882,13 +891,14 @@ export default function OperatorPage() {
               <button type="button" onClick={() => setIsExitView(false)} aria-pressed={!isExitView} className={`flex-1 rounded-lg p-2 font-bold ${!isExitView ? 'bg-yellow-400' : 'bg-slate-100'}`}>รับรถเข้า</button>
               <button type="button" onClick={() => setIsExitView(true)} aria-pressed={isExitView} className={`flex-1 rounded-lg p-2 font-bold ${isExitView ? 'bg-emerald-300' : 'bg-slate-100'}`}>รับรถออก</button>
             </div>
-            <label className="text-[10px] font-bold text-slate-400 px-0.5">เลขทะเบียน (4 หลัก) — Enter เพื่อยืนยัน</label>
-            <form
+            <label className="text-[10px] font-bold text-slate-400 px-0.5">{isExitView ? 'เลขทะเบียนขาออก (4 หลัก) — Enter เพื่อยืนยัน' : 'ขาเข้า — กรุณาแตะบัตรก่อนกรอกทะเบียน'}</label>
+            {isExitView && <form
               onSubmit={e => { e.preventDefault(); handlePlateQuickSubmit() }}
               className="flex items-center gap-2"
             >
               <input
                 ref={plateInputRef}
+                disabled={!isExitView}
                 value={plateQuick}
                 onChange={e => {
                   setPlateQuick(toAsciiPlate(convertThaiToEn(e.target.value)).slice(0, 4))
@@ -914,13 +924,13 @@ export default function OperatorPage() {
               />
               <button
                 type="submit"
-                disabled={plateQuick.length !== 4 || plateBusy || !shift}
+                disabled={!isExitView || plateQuick.length !== 4 || plateBusy || !shift}
                 className="shrink-0 h-11 px-4 rounded-lg text-sm font-black text-black transition-all active:scale-[0.97] hover:brightness-110 disabled:opacity-40"
                 style={{ background: 'linear-gradient(135deg,#713F12,#EAB308)', boxShadow: '0 4px 16px rgba(161,98,7,0.38)' }}
               >
                 ยืนยัน
               </button>
-            </form>
+            </form>}
             {isExitView ? (
               <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full self-start"
                 style={{ background: 'rgba(217,119,6,0.1)', color: '#92400E' }}>
@@ -1186,9 +1196,9 @@ export default function OperatorPage() {
         duplicateSessions={sessions.filter(s => s.plate === ciPlate)}
         customEntryTime={ciCustomTime}
         onCustomEntryTimeChange={setCiCustomTime}
-        onSelectType={t => { setCiType(t); setCiStep('confirm') }}
+        onSelectType={t => { if (ciUid) { setCiType(t); setCiStep('confirm') } }}
         onPlateChange={setCiPlate}
-        onBack={() => setCiStep('scan')}
+        onBack={() => { setCheckInOpen(false); resetCI() }}
         onConfirm={handleCheckin}
       />
       <CheckOutDialog

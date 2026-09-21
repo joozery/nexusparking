@@ -24,6 +24,9 @@ async function handlePost(req: NextRequest) {
   const jar     = await cookies()
   const token   = jar.get(COOKIE_NAME)?.value
   const payload = token ? verifyToken(token) : null
+  if (payload?.role === 'operator' && !cardUid?.trim()) {
+    return NextResponse.json({ error: 'กรุณาแตะบัตรก่อนเพิ่มรถเข้าคิว' }, { status: 400 })
+  }
 
   await connectDB()
 
