@@ -27,7 +27,7 @@ export function ClosedShiftDialog({ shift, onLogout, opening = false }: { shift:
         const logo = new Image(); logo.src = '/logo/receipt-logo.png'; await logo.decode()
         const date = (v: string) => new Date(v).toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' })
         const lines = opening ? ['ใบเปิดกะทำงาน', `พนักงาน ${shift.operatorName}`, `เปิดกะ ${date(shift.startTime)}`,
-          `รถค้างจากกะก่อน ${shift.carryoverCars ?? 0} คัน`, ...vehicleCountLines("ค้าง", shift.carryoverByType), `เงินต้นกะ ${shift.openingFloat.toLocaleString('th-TH')} บาท`,
+          ...vehicleCountLines("ค้าง", shift.carryoverByType), `เงินต้นกะ ${shift.openingFloat.toLocaleString('th-TH')} บาท`,
           ...Object.entries(shift.openingBreakdown ?? {}).filter(([, n]) => n > 0).sort((a, b) => Number(b[0]) - Number(a[0])).map(([d, n]) => `${Number(d).toLocaleString('th-TH')} บาท × ${n} = ${(Number(d) * n).toLocaleString('th-TH')} บาท`),
           'ผู้รับเงิน __________________'] : ['ใบปิดกะทำงาน', `พนักงาน ${shift.operatorName}`, `เปิดกะ ${date(shift.startTime)}`, `ปิดกะ ${date(shift.endTime)}`,
           `รถเข้า ${shift.checkinsCount} คัน`, `รถออก ${shift.checkoutsCount} คัน`, `รถค้างในลาน ${shift.closingCarCount} คัน`,

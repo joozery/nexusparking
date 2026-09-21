@@ -20,8 +20,8 @@ interface Props {
 const NAV_MAIN = [
   { key: 'dashboard', href: '/dashboard', icon: LayoutDashboard, label: 'ภาพรวม',       badge: null },
   { key: 'gate',      href: '/gate',      icon: DoorOpen,        label: 'ประตูเข้า-ออก', badge: null },
-  { key: 'history',   href: '/history',   icon: History,         label: 'ประวัติการจอด', badge: '12' },
-  { key: 'cards',     href: '/cards',     icon: CreditCard,      label: 'จัดการบัตร',    badge: '2'  },
+  { key: 'history',   href: '/history',   icon: History,         label: 'ประวัติการจอด', badge: null },
+  { key: 'cards',     href: '/cards',     icon: CreditCard,      label: 'จัดการบัตร',    badge: null },
 ]
 const NAV_SYSTEM = [
   { key: 'shifts',    href: '/shifts',    icon: ClipboardList, label: 'รายงานกะ'          },

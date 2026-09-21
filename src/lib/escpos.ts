@@ -95,7 +95,6 @@ export function buildShiftStartSlip(data: { operatorName: string; startTime: Dat
   parts.push(thaiLine('เปิดกะการทำงาน\n'), BOLD_OFF, NL, ALIGN_LEFT, DIVIDER)
   parts.push(thaiLine(`พนักงาน   : ${data.operatorName}\n`))
   parts.push(thaiLine(`เวลา      : ${thaiDateTime(data.startTime)}\n`))
-  parts.push(thaiLine(`รถค้างในลาน : ${data.carryoverCars} คัน\n`))
   vehicleCountLines("ค้าง", data.carryoverByType).forEach(line => parts.push(thaiLine(line + "\n")))
   parts.push(DIVIDER)
   parts.push(BOLD_ON, thaiLine(`เงินต้นกะ : ${data.openingFloat.toLocaleString('th-TH')} บาท\n`), BOLD_OFF)

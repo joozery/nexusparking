@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/dialog'
 import { normalizeUid } from '@/lib/thaiInput'
 import { hidKey } from '@/lib/hidScan'
+import { BulkCardDialog } from '@/components/parking/BulkCardDialog'
 
 type CardType = 'car' | 'motorcycle' | 'overnight'
 type CardCategory = 'temporary' | 'monthly'
@@ -93,6 +94,7 @@ export default function CardsPage() {
   const [search,    setSearch]    = useState('')
   const [typeTab,   setTypeTab]   = useState('')
   const [page,      setPage]      = useState(1)
+  const [showBulk, setShowBulk] = useState(false)
   const [showForm,  setShowForm]  = useState(false)
   const [saving,    setSaving]    = useState(false)
   const [confirmId, setConfirmId] = useState<string | null>(null)
@@ -328,7 +330,8 @@ export default function CardsPage() {
               className="size-8 rounded-lg flex items-center justify-center hover:bg-slate-100 transition-colors">
               <RefreshCw className={`size-3.5 text-slate-400 ${loading ? 'animate-spin' : ''}`} />
             </button>
-            <button onClick={() => setShowForm(true)}
+            <button onClick={() => { resetAddForm(); setCardCategory('monthly'); setShowForm(true) }} className="h-8 px-3 rounded-lg border text-xs font-semibold">เพิ่มบัตรรายเดือน</button>
+            <button onClick={() => setShowBulk(true)}
               className="h-8 px-4 rounded-lg text-black text-xs font-semibold flex items-center gap-1.5 hover:opacity-90 transition-opacity"
               style={{ background: '#EAB308', boxShadow: '0 1px 8px rgba(161,98,7,0.3)' }}>
               <Plus className="size-3.5" />
@@ -337,6 +340,8 @@ export default function CardsPage() {
           </div>
         </div>
       </header>
+
+      {showBulk && <BulkCardDialog onClose={() => setShowBulk(false)} onSaved={() => { void fetchCards() }} />}
 
       {/* ── ADD CARD DIALOG ── */}
       <Dialog open={showForm} onOpenChange={open => {
@@ -789,7 +794,7 @@ export default function CardsPage() {
               style={{ border: '1px solid #E8ECF4' }}>
               <CreditCard className="size-8 text-slate-200" />
               <p className="text-sm text-slate-400">ยังไม่มีบัตรที่ลงทะเบียน</p>
-              <button onClick={() => setShowForm(true)}
+              <button onClick={() => setShowBulk(true)}
                 className="text-xs font-semibold mt-1" style={{ color: '#A16207' }}>
                 + เพิ่มบัตรแรก
               </button>
