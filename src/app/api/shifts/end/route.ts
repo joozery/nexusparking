@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { parkingMutation } from '@/lib/parkingMutation'
 import { cookies } from 'next/headers'
 import { verifyToken, COOKIE_NAME } from '@/lib/auth'
 import { connectDB } from '@/lib/mongodb'
@@ -12,7 +13,7 @@ import { sendLineMessage, buildShiftEndMessage } from '@/lib/lineNotify'
 import { triggerDrawer, printRaw } from '@/lib/hardware'
 import { buildShiftEndSlip } from '@/lib/escpos'
 
-export async function POST(req: NextRequest) {
+async function handlePost(req: NextRequest) {
   const body = await req.json().catch(() => ({}))
   const closingFloat: number = Number(body.closingFloat ?? 0)
   const closingBreakdown: Record<string, number> = body.closingBreakdown ?? {}
@@ -90,6 +91,7 @@ export async function POST(req: NextRequest) {
       cfg.line.channelToken,
       cfg.line.targets,
       buildShiftEndMessage({
+        cardRefunds: shift.cardRefunds,
         operatorName:   shift.operatorName,
         startTime:      shift.startTime,
         endTime:        shift.endTime!,
@@ -114,3 +116,4 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json(shift)
 }
+export const POST = parkingMutation(handlePost)

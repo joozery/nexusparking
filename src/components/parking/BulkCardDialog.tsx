@@ -58,7 +58,7 @@ export function BulkCardDialog({ onClose, onSaved }: { onClose: () => void; onSa
       <DialogHeader><DialogTitle className="p-5">เพิ่มบัตรชั่วคราวหลายใบ</DialogTitle></DialogHeader>
       <div className="p-5 space-y-4">
         <p className="text-sm text-slate-500">เลือกประเภทรถ แล้วแตะบัตรทีละใบต่อเนื่อง เมื่อสแกนครบ กดบันทึกบัตร หรือกด Enter ขณะช่องสแกนว่าง</p>
-        <div className="flex gap-2">{(['car', 'motorcycle'] as const).map(value => <button type="button" key={value} disabled={busy || uids.length > 0 || !!input} onClick={() => { setType(value); setTimeout(() => inputRef.current?.focus(), 0) }} className={`flex-1 rounded-xl border p-3 ${type === value ? 'bg-yellow-400 font-bold' : 'bg-slate-50'} disabled:opacity-60`}>{value === 'car' ? 'รถยนต์' : 'มอเตอร์ไซค์'}</button>)}</div>
+        <div className="flex gap-2">{(['car', 'motorcycle'] as const).map(value => <button type="button" key={value} disabled={busy || uids.length > 0 || !!input} onClick={() => { setType(value); setTimeout(() => inputRef.current?.focus(), 0) }} className={`flex-1 rounded-xl border p-3 ${type === value ? 'bg-yellow-400 font-bold' : 'bg-slate-50'} disabled:opacity-60`}>{value === 'car' ? 'รถยนต์' : 'รถจักรยานยนต์'}</button>)}</div>
         <input ref={inputRef} aria-label="สแกนรหัสบัตร" value={input} disabled={!type || busy} placeholder="แตะบัตรที่เครื่องอ่าน" className="w-full rounded-xl border p-3 font-mono" onChange={e => change(e.target.value)} onKeyDown={e => {
           if (e.key === 'Enter' || e.code === 'NumpadEnter') {
             e.preventDefault()

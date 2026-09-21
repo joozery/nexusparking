@@ -383,8 +383,8 @@ ${lostFine > 0 ? `<div class="row lost-row"><span>ค่าปรับบัต
         {/* Stats */}
         <div className="shrink-0 grid grid-cols-4 gap-3">
           {[
-            { label: 'รถในลาน',      value: stats?.activeCars,     sub: stats ? `รถ ${stats.car.active} · มอไซค์ ${stats.motorcycle.active}` : `จาก 200 คัน`, icon: CircleParking,   iconBg: 'rgba(161,98,7,0.1)',  iconColor: '#A16207', bar: true },
-            { label: 'ที่จอดว่าง',   value: stats?.availableSlots, sub: stats ? `รถ ${stats.car.available} · มอไซค์ ${stats.motorcycle.available}` : 'ที่ว่าง', icon: Car,             iconBg: 'rgba(16,185,129,0.1)', iconColor: '#10B981', bar: false },
+            { label: 'รถในลาน',      value: stats?.activeCars,     sub: stats ? `รถ ${stats.car.active} · รถจักรยานยนต์ ${stats.motorcycle.active}` : `จาก 200 คัน`, icon: CircleParking,   iconBg: 'rgba(161,98,7,0.1)',  iconColor: '#A16207', bar: true },
+            { label: 'ที่จอดว่าง',   value: stats?.availableSlots, sub: stats ? `รถ ${stats.car.available} · รถจักรยานยนต์ ${stats.motorcycle.available}` : 'ที่ว่าง', icon: Car,             iconBg: 'rgba(16,185,129,0.1)', iconColor: '#10B981', bar: false },
             { label: 'รายได้วันนี้', value: stats ? `฿${stats.todayRevenue.toLocaleString()}` : undefined, sub: 'วันนี้', icon: BadgeDollarSign, iconBg: 'rgba(16,185,129,0.1)', iconColor: '#10B981', bar: false },
             { label: 'แจ้งเตือน',   value: sessions.filter(s => s.status === 'lost' || !s.status).length || undefined, sub: 'รายการผิดปกติ', icon: ShieldAlert, iconBg: 'rgba(245,158,11,0.1)', iconColor: '#F59E0B', bar: false },
           ].map(({ label, value, sub, icon: Icon, iconBg, iconColor, bar }) => (

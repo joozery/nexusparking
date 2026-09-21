@@ -56,18 +56,19 @@ export function buildShiftStartMessage(params: {
     '─────────────────',
     'รถค้างในลานตอนเปิดกะ',
     `รถยนต์: ${carryoverByType.car} คัน`,
-    `มอเตอร์ไซค์: ${carryoverByType.motorcycle} คัน`,
+    `รถจักรยานยนต์: ${carryoverByType.motorcycle} คัน`,
     ...(carryoverByType.car + carryoverByType.motorcycle > 0
       ? [`รวม: ${carryoverByType.car + carryoverByType.motorcycle} คัน`] : []),
     '─────────────────',
     'บัตรชั่วคราวคงเหลือตอนเปิดกะ',
     `รถยนต์: ${params.temporaryCardsRemaining.car} ใบ`,
-    `มอเตอร์ไซค์: ${params.temporaryCardsRemaining.motorcycle} ใบ`,
+    `รถจักรยานยนต์: ${params.temporaryCardsRemaining.motorcycle} ใบ`,
     `รวม: ${params.temporaryCardsRemaining.car + params.temporaryCardsRemaining.motorcycle} ใบ`,
   ].join('\n')
 }
 
 export function buildShiftEndMessage(params: {
+  cardRefunds?: { amount: number; paymentMethod: string }[]
   operatorName: string
   startTime: Date
   endTime: Date
@@ -126,21 +127,27 @@ export function buildShiftEndMessage(params: {
     ] : []),
     'รถเข้าคิวรอในกะนี้ (รวมทุกสถานะ)',
     `รถยนต์: ${params.queuedByType.car} คัน`,
-    `มอเตอร์ไซค์: ${params.queuedByType.motorcycle} คัน`,
+    `รถจักรยานยนต์: ${params.queuedByType.motorcycle} คัน`,
     ...(params.queuedByType.car + params.queuedByType.motorcycle > 0
       ? [`รวม: ${params.queuedByType.car + params.queuedByType.motorcycle} คัน`] : []),
+    ...(params.cardRefunds?.length ? [
+      `คืนค่าปรับบัตรหาย: ${params.cardRefunds.length} รายการ`,
+      `คืนเงินสด: ${money(params.cardRefunds.filter(r => r.paymentMethod === 'cash').reduce((n, r) => n + r.amount, 0))} บาท`,
+      `คืนเงินโอน: ${money(params.cardRefunds.filter(r => r.paymentMethod === 'qr').reduce((n, r) => n + r.amount, 0))} บาท`,
+      'รายรับด้านล่างหักเงินคืนแล้ว',
+    ] : []),
     `รายรับเงินสด: ฿${cashAmount.toLocaleString()}`,
     `รายรับ QR:    ฿${qrAmount.toLocaleString()}`,
     `รวมทั้งหมด:   ฿${totalAmount.toLocaleString()}`,
     '─────────────────',
     'รถค้างในลานตอนปิดกะ',
     `รถยนต์: ${closingByType.car} คัน`,
-    `มอเตอร์ไซค์: ${closingByType.motorcycle} คัน`,
+    `รถจักรยานยนต์: ${closingByType.motorcycle} คัน`,
     ...(closingCarCount > 0 ? [`รวม: ${closingCarCount} คัน`] : []),
     '─────────────────',
     'บัตรชั่วคราวคงเหลือตอนปิดกะ',
     `รถยนต์: ${params.temporaryCardsRemaining.car} ใบ`,
-    `มอเตอร์ไซค์: ${params.temporaryCardsRemaining.motorcycle} ใบ`,
+    `รถจักรยานยนต์: ${params.temporaryCardsRemaining.motorcycle} ใบ`,
     `รวม: ${params.temporaryCardsRemaining.car + params.temporaryCardsRemaining.motorcycle} ใบ`,
   ].join('\n')
 }

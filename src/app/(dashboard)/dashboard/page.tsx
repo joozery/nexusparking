@@ -60,9 +60,9 @@ const REVENUE_METHOD_META = {
 
 const entryTypeChartConfig = {
   car:                 { label: 'รถยนต์',            color: '#A16207' },
-  motorcycle:          { label: 'มอเตอร์ไซค์',        color: '#0891B2' },
+  motorcycle:          { label: 'รถจักรยานยนต์',        color: '#0891B2' },
   overnightCar:        { label: 'ค้างคืนรถยนต์',      color: '#CA8A04' },
-  overnightMotorcycle: { label: 'ค้างคืนมอเตอร์ไซค์', color: '#7C3AED' },
+  overnightMotorcycle: { label: 'ค้างคืนรถจักรยานยนต์', color: '#7C3AED' },
 } satisfies ChartConfig
 
 function fmtTime(iso: string) {
@@ -197,7 +197,7 @@ export default function DashboardPage() {
                 </p>
                 {stats && (
                   <p className="text-xs opacity-60 mt-1">
-                    รถยนต์ {stats.car.available}/{stats.car.capacity} · มอเตอร์ไซค์ {stats.motorcycle.available}/{stats.motorcycle.capacity}
+                    รถยนต์ {stats.car.available}/{stats.car.capacity} · รถจักรยานยนต์ {stats.motorcycle.available}/{stats.motorcycle.capacity}
                   </p>
                 )}
 
@@ -243,7 +243,7 @@ export default function DashboardPage() {
               {
                 label: 'ที่จอดว่าง',
                 value: stats?.availableSlots ?? '—',
-                sub:   stats ? `รถ ${stats.car.available} · มอไซค์ ${stats.motorcycle.available}` : '—',
+                sub:   stats ? `รถ ${stats.car.available} · รถจักรยานยนต์ ${stats.motorcycle.available}` : '—',
                 icon:  CircleParking,
                 grad:  occupancyPct >= 85
                   ? 'linear-gradient(135deg,#7F1D1D,#DC2626)'

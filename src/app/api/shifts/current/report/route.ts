@@ -16,9 +16,10 @@ export async function GET() {
     shiftId: String(shift._id), status: { $in: ['completed', 'lost'] },
     exitTime: { $gte: shift.startTime },
   }).select('plate cardUid cardType entryTime exitTime totalFee paymentMethod status').sort({ exitTime: -1 }).lean()
-  const cash = sessions.filter(s => s.paymentMethod === 'cash').reduce((sum, s) => sum + s.totalFee, 0)
-  const qr = sessions.filter(s => s.paymentMethod === 'qr').reduce((sum, s) => sum + s.totalFee, 0)
+  const refunds = shift.cardRefunds ?? []
+  const cash = sessions.filter(s => s.paymentMethod === 'cash').reduce((sum, s) => sum + s.totalFee, 0) - refunds.filter(r => r.paymentMethod === 'cash').reduce((n, r) => n + r.amount, 0)
+  const qr = sessions.filter(s => s.paymentMethod === 'qr').reduce((sum, s) => sum + s.totalFee, 0) - refunds.filter(r => r.paymentMethod === 'qr').reduce((n, r) => n + r.amount, 0)
   return NextResponse.json({ operatorName: shift.operatorName, startTime: shift.startTime, sessions,
-    count: sessions.length, cash, qr, total: sessions.reduce((sum, s) => sum + s.totalFee, 0),
+    refunds, count: sessions.length, cash, qr, total: cash + qr,
   }, { headers: { 'Cache-Control': 'no-store' } })
 }

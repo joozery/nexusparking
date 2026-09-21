@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { connectDB } from '@/lib/mongodb'
 import { ParkingSession, type IParkingSession } from '@/models/ParkingSession'
 import { ParkingCard } from '@/models/ParkingCard'
+import { getMissingCardUids } from '@/lib/missingCards'
 import { ParkingQueue } from '@/models/ParkingQueue'
 import { getSettings } from '@/models/SystemSettings'
 import { calcFeeBreakdown } from '@/lib/calcFee'
@@ -43,9 +44,10 @@ export async function GET() {
     ...motoActive.map(session => session.cardUid),
     ...waitingCards.map(queue => queue.cardUid),
   ])
+  const missingUids = await getMissingCardUids(enabledCards.map(card => card.uid), occupiedUids)
   function temporaryCounts(types: readonly string[]) {
-    const cards = enabledCards.filter(card => types.includes(card.type) && (!card.cardCategory || card.cardCategory === 'temporary'))
-    const monthlyCards = enabledCards.filter(card => types.includes(card.type) && card.cardCategory === 'monthly')
+    const cards = enabledCards.filter(card => !missingUids.has(card.uid) && types.includes(card.type) && (!card.cardCategory || card.cardCategory === 'temporary'))
+    const monthlyCards = enabledCards.filter(card => !missingUids.has(card.uid) && types.includes(card.type) && card.cardCategory === 'monthly')
     return {
       temporaryCardsRegistered: cards.length,
       temporaryCardsInUse: cards.filter(card => occupiedUids.has(card.uid)).length,

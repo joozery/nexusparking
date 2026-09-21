@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { CreditCard, LogOut, Banknote, Smartphone, Tag, ChevronDown, Timer, Moon, CheckCircle2, Printer, AlertTriangle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -40,6 +40,7 @@ interface Props {
   paidAmount?: number
   entryTime?: Date | null
   customExitTime?: string
+  scannedExitTime?: string
   overnightCfg?: OvernightConfig
   printing?: boolean
   lostCardFine?: number
@@ -72,8 +73,8 @@ function fmtDuration(entryTime: Date | null | undefined, exitTime: Date | null |
 
 export function CheckOutDialog({
   open, onOpenChange, step, plate, cardType, hours, fee, paidAmount, printing, lostCardFine = 300, checkoutSource,
-  entryTime, customExitTime, overnightCfg, onCustomExitTimeChange,
-  onSimulateScan, onBack, onConfirm, onPrintReceipt, onDone, onDownloadPdf, downloadingPdf,
+  entryTime, customExitTime, scannedExitTime, overnightCfg, onCustomExitTimeChange,
+  onSimulateScan, onConfirm, onPrintReceipt, onDone, onDownloadPdf, downloadingPdf,
 }: Props) {
   const isMoto = cardType === 'motorcycle'
   const theme = {
@@ -110,6 +111,14 @@ export function CheckOutDialog({
   const [fines, setFines] = useState<FineOption[]>([])
   const [selectedFineId, setSelectedFineId] = useState<string>('')
   const [cashReceived, setCashReceived] = useState('')
+  const cashInputRef = useRef<HTMLInputElement>(null)
+  const entryTimestamp = entryTime?.getTime()
+  useEffect(() => {
+    if (!open || step !== 'payment' || paymentMethod !== 'cash') return
+    // Allow the dialog focus trap to mount before focusing the payment input.
+    const timer = setTimeout(() => cashInputRef.current?.focus(), 50)
+    return () => clearTimeout(timer)
+  }, [open, step, paymentMethod, plate, entryTimestamp])
   const [isLostCard, setIsLostCard] = useState(checkoutSource === 'plate')
   const lostContext = `${open}:${plate}:${entryTime?.getTime()}:${checkoutSource}`
   const [previousLostContext, setPreviousLostContext] = useState(lostContext)
@@ -126,11 +135,11 @@ export function CheckOutDialog({
 
   const [currentTime, setCurrentTime] = useState(() => Date.now())
   useEffect(() => {
-    if (!open || step !== 'payment' || customExitTime) return
-    const timer = setInterval(() => setCurrentTime(Date.now()), 1000)
-    return () => clearInterval(timer)
-  }, [open, step, customExitTime])
-  const exitTimeDate = customExitTime ? new Date(customExitTime) : new Date(currentTime)
+    if (!open || step !== 'payment' || customExitTime || scannedExitTime) return
+    const timer = setTimeout(() => setCurrentTime(Date.now()), 0)
+    return () => clearTimeout(timer)
+  }, [open, step, plate, entryTimestamp, customExitTime, scannedExitTime])
+  const exitTimeDate = customExitTime ? new Date(customExitTime) : scannedExitTime ? new Date(scannedExitTime) : new Date(currentTime)
   const exitForCalc = exitTimeDate
   const breakdown = entryTime
     ? calcFeeBreakdown(cardType, entryTime, exitForCalc, overnightCfg)
@@ -183,7 +192,13 @@ export function CheckOutDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-5xl max-h-[90vh] overflow-y-auto" showCloseButton>
+      <DialogContent className="sm:max-w-5xl max-h-[90vh] overflow-y-auto" showCloseButton
+        onOpenAutoFocus={e => {
+          if (step === 'payment' && paymentMethod === 'cash') {
+            e.preventDefault()
+            cashInputRef.current?.focus()
+          }
+        }}>
 
         {/* Header */}
         <DialogHeader className={`bg-gradient-to-r ${theme.headerGrad}`}>
@@ -257,7 +272,7 @@ export function CheckOutDialog({
                 <div className={'rounded-lg border overflow-hidden text-base ' + theme.panelBorder}>
                   <dl className="grid grid-cols-[8rem_minmax(0,1fr)] gap-x-3 gap-y-3 p-4 text-base font-medium text-slate-700 [&>dd]:m-0 [&>dd]:break-words [&>dd]:tabular-nums">
                     <dt>ทะเบียน</dt><dd>{plate || '—'}</dd>
-                    <dt>ประเภทรถ</dt><dd>{{ car: 'รถยนต์', motorcycle: 'มอเตอร์ไซค์', overnight: 'รถยนต์ (ค้างคืน)' }[cardType]}</dd>
+                    <dt>ประเภทรถ</dt><dd>{{ car: 'รถยนต์', motorcycle: 'รถจักรยานยนต์', overnight: 'รถยนต์ (ค้างคืน)' }[cardType]}</dd>
                     <dt>เวลาเข้าจอด</dt><dd>{entryTime ? entryTime.toLocaleString('th-TH', { timeZone: 'Asia/Bangkok', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '—'}</dd>
                     <dt>ออกเวลา</dt><dd>{exitTimeDate.toLocaleString('th-TH', { timeZone: 'Asia/Bangkok', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' })}</dd>
                     <dt>จอดเป็นเวลา</dt><dd>{durationStr}</dd>
@@ -352,6 +367,7 @@ export function CheckOutDialog({
                       type="text"
                       inputMode="numeric"
                       placeholder={`≥ ฿${finalFee}`}
+                      ref={cashInputRef}
                       value={cashReceived}
                       onChange={e => setCashReceived(toAsciiNumber(e.target.value))}
                       className="w-full h-14 px-3 rounded-lg text-xl font-black text-slate-800 outline-none tabular-nums"
@@ -469,7 +485,6 @@ export function CheckOutDialog({
             <DialogClose asChild><Button variant="outline" size="sm">ยกเลิก</Button></DialogClose>
           ) : (
             <>
-              <Button variant="outline" size="sm" onClick={onBack}>← สแกนใหม่</Button>
               <Button
                 size="sm"
                 className="flex-1 text-white font-bold"

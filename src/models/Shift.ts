@@ -2,6 +2,7 @@ import mongoose, { Schema, type Document } from 'mongoose'
 
 import type { ShiftVehicleCounts } from '@/lib/shiftVehicleCounts'
 export interface IShift extends Document, ShiftVehicleCounts {
+  cardRefunds?: { sessionId: string; cardUid: string; plate: string; amount: number; paymentMethod: 'cash' | 'qr'; refundedAt: Date; operatorId: string }[]
   operatorId:      string
   operatorName:    string
   startTime:       Date
@@ -22,6 +23,7 @@ export interface IShift extends Document, ShiftVehicleCounts {
 
 const countsSchema = new Schema({ car: { type: Number, required: true }, motorcycle: { type: Number, required: true } }, { _id: false })
 const ShiftSchema = new Schema<IShift>({
+  cardRefunds: { type: [{ sessionId: String, cardUid: String, plate: String, amount: Number, paymentMethod: { type: String, enum: ['cash', 'qr'] }, refundedAt: Date, operatorId: String }], default: [] },
   checkinsByType: { type: countsSchema, default: undefined },
   checkoutsByType: { type: countsSchema, default: undefined },
   carryoverByType: { type: countsSchema, default: undefined },
@@ -45,6 +47,7 @@ const ShiftSchema = new Schema<IShift>({
 }, { timestamps: true })
 
 ShiftSchema.index({ operatorId: 1, status: 1 })
+ShiftSchema.index({ 'cardRefunds.sessionId': 1 })
 
 export const Shift = mongoose.models.Shift as mongoose.Model<IShift>
   ?? mongoose.model<IShift>('Shift', ShiftSchema)

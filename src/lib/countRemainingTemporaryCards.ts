@@ -1,6 +1,7 @@
 import { ParkingCard } from '@/models/ParkingCard'
 import { ParkingSession } from '@/models/ParkingSession'
 import { ParkingQueue } from '@/models/ParkingQueue'
+import { getMissingCardUids } from './missingCards'
 
 // Same definition as the fleet bar: enabled temporary cards, excluding occupied UIDs.
 export async function countRemainingTemporaryCards() {
@@ -10,7 +11,8 @@ export async function countRemainingTemporaryCards() {
     ParkingQueue.find({ status: 'waiting' }).select('cardUid').lean(),
   ])
   const occupied = new Set([...sessions.map(s => s.cardUid), ...queues.map(q => q.cardUid)])
-  const remaining = cards.filter(card => !occupied.has(card.uid))
+  const missing = await getMissingCardUids(cards.map(card => card.uid), occupied)
+  const remaining = cards.filter(card => !occupied.has(card.uid) && !missing.has(card.uid))
   return {
     car: remaining.filter(card => card.type === 'car' || card.type === 'overnight').length,
     motorcycle: remaining.filter(card => card.type === 'motorcycle').length,

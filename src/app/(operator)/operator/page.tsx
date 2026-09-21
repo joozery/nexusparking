@@ -13,7 +13,6 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogBody } from '@/components/ui/dialog'
 import { CheckInDialog } from '@/components/parking/CheckInDialog'
 import { ShiftReportDialog } from '@/components/parking/ShiftReportDialog'
-import { DailyLineTestButton } from '@/components/parking/DailyLineTestButton'
 import { ClosedShiftDialog, type ClosedShift } from '@/components/parking/ClosedShiftDialog'
 import { CheckOutDialog, type PaymentMethod } from '@/components/parking/CheckOutDialog'
 import { LostCardDialog } from '@/components/parking/LostCardDialog'
@@ -32,6 +31,7 @@ import {
 } from '@/lib/serialReader'
 
 interface Session {
+  queueId?: string
   _id: string
   cardUid: string
   cardType: CardType
@@ -81,10 +81,10 @@ interface Shift {
   totalAmount: number
 }
 
-function EntryPhoto({ sessionId, face = false }: { sessionId: string; face?: boolean }) {
+function EntryPhoto({ sessionId, face = false, exit = false }: { sessionId: string; face?: boolean; exit?: boolean }) {
   const [sourceIndex, setSourceIndex] = useState(0)
-  const sources = face ? ['cam-face'] : ['cam-plate', 'entry', 'cam-rear']
-  const label = face ? 'ภาพผู้ขับตอนเข้า' : 'ภาพรถตอนเข้า'
+  const sources = exit ? ['exit'] : face ? ['cam-face'] : ['cam-plate', 'entry', 'cam-rear']
+  const label = exit ? 'ภาพรถตอนออก' : face ? 'ภาพผู้ขับตอนเข้า' : 'ภาพรถตอนเข้า'
   return (
     <span className="flex min-w-0 flex-col gap-1">
       <span className="text-xs font-semibold text-slate-500">{label}</span>
@@ -216,6 +216,7 @@ export default function OperatorPage() {
   const [coQueueId, setCoQueueId] = useState('')
   const [coPlate,       setCoPlate]       = useState('')
   const [coCustomTime,  setCoCustomTime]  = useState('')
+  const [coScannedTime, setCoScannedTime] = useState('')
   const [coEntryTime,   setCoEntryTime]   = useState<Date | null>(null)
   const [coSource,      setCoSource]      = useState<'card' | 'plate'>('card')
 
@@ -226,6 +227,23 @@ export default function OperatorPage() {
 
   // Sidebar quick plate lookup (checkin/checkout auto-route by typed plate)
   const [plateMatches, setPlateMatches] = useState<Session[] | null>(null)
+  const [returnCard, setReturnCard] = useState<{ _id: string; cardUid: string; plate: string; cardType: string; exitTime?: string; lostFine: number } | null>(null)
+  const [refundMethod, setRefundMethod] = useState<'cash' | 'qr'>('cash')
+  const [refunding, setRefunding] = useState(false)
+
+  async function confirmCardReturn() {
+    if (!returnCard || refunding) return
+    setRefunding(true)
+    try {
+      const res = await fetch('/api/sessions/return-card', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: returnCard._id, paymentMethod: refundMethod }) })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'บันทึกไม่สำเร็จ')
+      setReturnCard(null)
+      success('คืนบัตรและคืนค่าปรับแล้ว', `ยอดคืน ฿${data.amount.toLocaleString()} บันทึกในกะปัจจุบัน`)
+      await Promise.all([fetchData(), fetchShift()])
+    } catch (error) { toastError('คืนบัตรไม่สำเร็จ', error instanceof Error ? error.message : 'กรุณาลองใหม่') }
+    finally { setRefunding(false) }
+  }
   const [matchSource, setMatchSource] = useState<'card' | 'plate'>('plate')
   const [plateBusy, setPlateBusy] = useState(false)
   const [plateQuick, setPlateQuick] = useState('')
@@ -313,7 +331,7 @@ export default function OperatorPage() {
   }, [fetchData, fetchSettings])
 
   // ── Scan input focus management ─────────────────────────────────────────
-  const noDialogOpen = !openedShift && !closedShift && !checkInOpen && !checkOutOpen && !lostOpen && !shiftEnding && !plateMatches && !carsListOpen && !shiftReportOpen && !!shift
+  const noDialogOpen = !openedShift && !closedShift && !checkInOpen && !checkOutOpen && !lostOpen && !shiftEnding && !plateMatches && !returnCard && !carsListOpen && !shiftReportOpen && !!shift
   useEffect(() => {
     if (noDialogOpen) {
       setTimeout(() => scanInputRef.current?.focus(), 50)
@@ -511,10 +529,11 @@ export default function OperatorPage() {
   // Keep card taps and plate lookups as explicit, separate checkout paths.
   // Only the plate path is allowed to add the lost-card fine.
   function openCheckout(s: Session, source: 'card' | 'plate') {
-    setCoQueueId('')
+    setCoQueueId(s.queueId ?? '')
     fetchSettings()
     const entry = new Date(s.entryTime)
     const now = new Date()
+    setCoScannedTime(now.toISOString())
     const durationMin = Math.max(1, Math.floor((now.getTime() - entry.getTime()) / 60000))
     const hours = Math.ceil(durationMin / 60)
     setCoType(s.cardType)
@@ -546,9 +565,22 @@ export default function OperatorPage() {
     }
     setPlateBusy(true)
     try {
-      const current = await loadActiveSessions()
+      const [current, queueResponse] = await Promise.all([
+        loadActiveSessions(),
+        fetch('/api/queue', { cache: 'no-store' }),
+      ])
+      if (!queueResponse.ok) throw new Error('โหลดคิวรอไม่สำเร็จ')
+      const waiting: QueueEntry[] = await queueResponse.json()
+      if (!Array.isArray(waiting)) throw new Error('ข้อมูลคิวรอไม่ถูกต้อง')
       setMatchSource('plate')
-      const matches = current.filter(s => s.plate === plate)
+      const matches: Session[] = [
+        ...current.filter(s => s.plate === plate),
+        ...waiting.filter(q => q.status === 'waiting' && q.plate === plate).map(q => ({
+          _id: q._id, queueId: q._id, cardUid: q.cardUid ?? '', cardType: q.cardType,
+          plate: q.plate, entryTime: q.joinedAt, durationMin: 0, fee: 0, totalFee: 0,
+          status: 'active' as const,
+        })),
+      ]
       if (matches.length === 0) {
         setPlateMatches(null)
         warning('ไม่พบข้อมูล')
@@ -574,7 +606,7 @@ export default function OperatorPage() {
       lostCard: isLostCard === true,
       fineId,
     }
-    if (coCustomTime) body.exitTime = new Date(coCustomTime).toISOString()
+    if (coCustomTime || coScannedTime) body.exitTime = new Date(coCustomTime || coScannedTime).toISOString()
     const res = await fetch('/api/sessions/checkout', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -643,7 +675,7 @@ export default function OperatorPage() {
   useEffect(() => {
     onCardScanRef.current = async (uid: string) => {
       // Ignore scan when any dialog is already open — prevents resetting in-progress forms
-      if (openedShift || closedShift || checkInOpen || checkOutOpen || lostOpen || shiftEnding || plateMatches || shiftReportOpen || !shift || cardScanBusy.current) return
+      if (openedShift || closedShift || checkInOpen || checkOutOpen || lostOpen || shiftEnding || plateMatches || returnCard || shiftReportOpen || !shift || cardScanBusy.current) return
       cardScanBusy.current = true
       try {
       setCarsListOpen(false)
@@ -690,6 +722,10 @@ export default function OperatorPage() {
             const cards: Array<{ uid: string; type: CardType; plate: string }> = await res.json()
             const found = cards.find(c => matchUid(c.uid))
             if (found) {
+              const refundRes = await fetch(`/api/sessions/return-card?uid=${encodeURIComponent(found.uid)}`, { cache: 'no-store' })
+              if (!refundRes.ok) { toastError('ตรวจสอบบัตรหายไม่สำเร็จ', 'กรุณาลองแตะบัตรใหม่'); return }
+              const lostVisit = await refundRes.json()
+              if (lostVisit) { setRefundMethod('cash'); setReturnCard(lostVisit); return }
               setCiType(found.type)
               setCiPlate('')
               setCiUid(found.uid)
@@ -739,7 +775,7 @@ export default function OperatorPage() {
         e.preventDefault()
         e.stopPropagation()
         if (e.repeat) return
-        if (checkInOpen || checkOutOpen || lostOpen || shiftEnding || plateMatches) {
+        if (checkInOpen || checkOutOpen || lostOpen || shiftEnding || plateMatches || returnCard) {
           warning('กรุณาปิดหน้ารายการที่กำลังทำก่อนเปิดรายงาน F3')
           return
         }
@@ -751,7 +787,7 @@ export default function OperatorPage() {
         setShiftReportOpen(o => !o)
         return
       }
-      if (checkInOpen || checkOutOpen || lostOpen || shiftEnding || plateMatches) return
+      if (checkInOpen || checkOutOpen || lostOpen || shiftEnding || plateMatches || returnCard) return
       if (shiftReportOpen) return
 
       if (e.key === 'F2') {
@@ -766,7 +802,7 @@ export default function OperatorPage() {
     }
     window.addEventListener('keydown', handleKeyDown, true)
     return () => window.removeEventListener('keydown', handleKeyDown, true)
-  }, [checkInOpen, checkOutOpen, lostOpen, shiftEnding, shift, plateMatches, shiftReportOpen, warning, closedShift, openedShift])
+  }, [checkInOpen, checkOutOpen, lostOpen, shiftEnding, shift, plateMatches, returnCard, shiftReportOpen, warning, closedShift, openedShift])
 
   return (
     <div className="h-screen flex flex-col bg-[#F0F4FF]">
@@ -812,7 +848,7 @@ export default function OperatorPage() {
           // Don't steal focus from a real input the operator clicked (e.g. search box)
           const target = e.relatedTarget as HTMLElement | null
           if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT')) return
-          if (!openedShift && !closedShift && !checkInOpen && !checkOutOpen && !lostOpen && !shiftEnding && !plateMatches && !carsListOpen && !shiftReportOpen && !!shift) {
+          if (!openedShift && !closedShift && !checkInOpen && !checkOutOpen && !lostOpen && !shiftEnding && !plateMatches && !returnCard && !carsListOpen && !shiftReportOpen && !!shift) {
             setTimeout(() => scanInputRef.current?.focus(), 50)
           }
         }}
@@ -972,28 +1008,7 @@ export default function OperatorPage() {
             )}
           </div>
 
-          {/* ── Cars-in-lot trigger — full table lives in the F2 popup (CarsInLotDialog) ── */}
-          <button
-            onClick={() => setCarsListOpen(true)}
-            className="shrink-0 flex items-center gap-2 px-4 rounded-xl transition-colors"
-            style={{ height: '38px', background: 'white', border: '1px solid #E8ECF4', boxShadow: '0 1px 8px rgba(0,0,0,0.05)' }}
-            onMouseEnter={e => { e.currentTarget.style.background = '#F8FAFF' }}
-            onMouseLeave={e => { e.currentTarget.style.background = 'white' }}
-          >
-            <Car className="size-3.5 text-slate-400 shrink-0" />
-            <span className="text-xs font-black text-slate-700">รถในลาน</span>
-            <span className="text-[10px] font-bold px-1.5 py-px rounded-full"
-              style={{ background: 'rgba(161,98,7,0.1)', color: '#A16207' }}>
-              {activeSessions.length} คัน
-            </span>
-            {stats && <span className="text-[10px] text-slate-400">/ {stats.totalCapacity} ที่จอด</span>}
-            <div className="flex-1" />
-            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full text-slate-400" style={{ border: '1px solid #E2E8F0' }}>F2</span>
-          </button>
-
-          <button disabled={!shift} onClick={() => setShiftReportOpen(true)} className="shrink-0 rounded-xl border bg-white px-4 py-2 text-xs font-bold text-slate-700 disabled:opacity-40">รายงานยอดเงิน / รถออกกะนี้ · F3</button>
           {shiftReportOpen && <ShiftReportDialog onClose={() => setShiftReportOpen(false)} />}
-          <DailyLineTestButton />
           <CarsInLotDialog
             open={carsListOpen}
             onOpenChange={setCarsListOpen}
@@ -1052,17 +1067,6 @@ export default function OperatorPage() {
                                 : <LogIn className="size-2.5" style={{ color: '#16A34A' }} />}
                             </button>
                           )}
-                          <button
-                            onClick={() => checkoutFromQueue(q)}
-                            disabled={!!qLoading}
-                            className="flex items-center justify-center size-4 rounded transition-all disabled:opacity-40 shrink-0"
-                            style={{ background: 'rgba(161,98,7,0.1)' }}
-                            title="ไม่รอแล้ว — เช็คเอาต์เลย"
-                          >
-                            {qLoading === q._id
-                              ? <RefreshCw className="size-2.5 text-yellow-700 animate-spin" />
-                              : <LogOut className="size-2.5" style={{ color: '#A16207' }} />}
-                          </button>
                         </div>
                         <span className="text-[8px] text-slate-400">{Math.floor((nowTick - new Date(q.joinedAt).getTime()) / 60000)}น.</span>
                       </div>
@@ -1206,16 +1210,41 @@ export default function OperatorPage() {
         </div>
       )}
 
+      <Dialog open={returnCard !== null} onOpenChange={o => { if (!o && !refunding) setReturnCard(null) }}>
+        <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>พบบัตรที่แจ้งหาย — คืนบัตรและคืนค่าปรับ</DialogTitle>
+            <DialogDescription>ตรวจสอบรถและส่งคืนเงินให้ลูกค้าก่อนยืนยัน รายการจอดเดิมสิ้นสุดแล้ว</DialogDescription></DialogHeader>
+          <DialogBody className="space-y-5 text-lg">
+            {returnCard && <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <EntryPhoto key={`${returnCard._id}-entry`} sessionId={returnCard._id} />
+              <EntryPhoto key={`${returnCard._id}-exit`} sessionId={returnCard._id} exit />
+            </div>}
+            <dl className="grid grid-cols-2 gap-3">
+              <dt>ทะเบียน</dt><dd className="font-bold">{returnCard?.plate}</dd>
+              <dt>ประเภทรถ</dt><dd>{returnCard?.cardType === 'motorcycle' ? 'รถจักรยานยนต์' : 'รถยนต์'}</dd>
+              <dt>เลขบัตร</dt><dd>{returnCard?.cardUid}</dd>
+              <dt>ออกเวลา</dt><dd>{returnCard?.exitTime ? new Date(returnCard.exitTime).toLocaleString('th-TH') : '—'}</dd>
+              <dt>ค่าปรับบัตรหายที่คืน</dt><dd className="font-bold">฿{(returnCard?.lostFine ?? 0).toLocaleString()}</dd>
+            </dl>
+            <label className="block">คืนเงินโดย
+              <select className="ml-4 rounded-lg border p-2" value={refundMethod} disabled={refunding} onChange={e => setRefundMethod(e.target.value as 'cash' | 'qr')}><option value="cash">เงินสด</option><option value="qr">โอน / QR</option></select>
+            </label>
+            <div className="flex gap-3"><button disabled={refunding} className="rounded-xl border px-5 py-3" onClick={() => setReturnCard(null)}>ยกเลิก</button>
+              <button disabled={refunding} className="flex-1 rounded-xl bg-emerald-600 px-5 py-3 font-bold text-white disabled:opacity-50" onClick={confirmCardReturn}>{refunding ? 'กำลังบันทึก…' : 'ยืนยันคืนบัตรและคืนค่าปรับ'}</button></div>
+          </DialogBody>
+        </DialogContent>
+      </Dialog>
       <Dialog open={plateMatches !== null} onOpenChange={o => { if (!o) setPlateMatches(null) }}>
         <DialogContent className="sm:max-w-3xl">
           <DialogHeader><DialogTitle>{matchSource === 'card' ? 'ตรวจรายการซ้ำของบัตร — เลือกรถขาออก' : `เลือกรถขาออก — ${plateQuick}`}</DialogTitle>
             <DialogDescription>ตรวจภาพ เวลาเข้า และเลขบัตรให้ตรงกับรถจริงก่อนเลือก</DialogDescription></DialogHeader>
           <DialogBody className="max-h-[65vh] overflow-y-auto space-y-3">
             {plateMatches?.map(s => <button key={s._id} className="w-full rounded-xl border p-3 text-left flex flex-col gap-3 hover:border-emerald-500 focus-visible:outline-2 focus-visible:outline-emerald-600" onClick={() => { setPlateMatches(null); setPlateQuick(''); openCheckout(s, matchSource) }}>
-              <span className="grid w-full grid-cols-1 gap-3 sm:grid-cols-2">
+              <span className="text-sm font-semibold text-slate-600">{s.queueId ? 'อยู่ในคิวรอ' : 'อยู่ในลานจอด'}</span>
+              {!s.queueId && <span className="grid w-full grid-cols-1 gap-3 sm:grid-cols-2">
                 <EntryPhoto sessionId={s._id} />
                 <EntryPhoto sessionId={s._id} face />
-              </span>
+              </span>}
               <span><strong>{s.plate} · {s.cardType === 'motorcycle' ? 'จักรยานยนต์' : 'รถยนต์'}</strong><br />
                 เข้า {new Date(s.entryTime).toLocaleString('th-TH')}<br />บัตร {s.cardUid}<br /><span className="text-xs text-slate-500">รายการ {s._id}</span></span>
               <span className="self-end rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white">เลือกรถคันนี้</span>
@@ -1247,6 +1276,7 @@ export default function OperatorPage() {
         lostCardFine={lostCardFine}
         checkoutSource={coSource}
         entryTime={coEntryTime}
+        scannedExitTime={coScannedTime}
         overnightCfg={overnightCfg}
         onBack={() => setCoStep('scan')}
         onConfirm={handleCheckout}

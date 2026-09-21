@@ -13,6 +13,9 @@ export async function buildDailyReport(start: Date, end: Date, partial = false):
     ParkingQueue.find({ joinedAt: { $lt: end }, $or: [{ joinedAt: { $gte: start } }, { status: 'waiting' }, { enteredAt: { $gte: end } }, { cancelledAt: { $gte: end } }] }).lean(),
   ])
   const outgoing = sessions.filter(s => within(s.exitTime) && (s.status === 'completed' || s.status === 'lost'))
+  const refunds = shifts.flatMap(shift => shift.cardRefunds ?? []).filter(refund => within(refund.refundedAt))
+  const cashRefund = refunds.filter(r => r.paymentMethod === 'cash').reduce((sum, r) => sum + r.amount, 0)
+  const qrRefund = refunds.filter(r => r.paymentMethod === 'qr').reduce((sum, r) => sum + r.amount, 0)
   type Paid = typeof outgoing
   const payments = (rows: Paid) => {
     const sum = (key: 'fee' | 'lostFine' | 'fineAmount' | 'discountAmount' | 'totalFee') => rows.reduce((n, s) => n + (s[key] ?? 0), 0)
@@ -24,16 +27,17 @@ export async function buildDailyReport(start: Date, end: Date, partial = false):
       item.count++; item.amount += s.fineAmount; fines.set(name, item)
     })
     return [
-      `รถออก: ${rows.length} คัน (รถยนต์ ${rows.filter(s => s.cardType !== 'motorcycle').length} / มอเตอร์ไซค์ ${rows.filter(s => s.cardType === 'motorcycle').length})`,
+      `รถออก: ${rows.length} คัน (รถยนต์ ${rows.filter(s => s.cardType !== 'motorcycle').length} / รถจักรยานยนต์ ${rows.filter(s => s.cardType === 'motorcycle').length})`,
       `ค่าจอดก่อนส่วนลด: ${money(sum('fee'))} บาท`,
       `ส่วนลด: ${money(sum('discountAmount'))} บาท`,
       `บัตรหาย: ${new Set(lost.map(s => s.cardUid)).size} ใบ / ${lost.length} รายการ`,
       `ค่าปรับบัตรหาย: ${money(sum('lostFine'))} บาท`,
       ...[...fines].map(([name, item]) => `${name}: ${item.count} รายการ / ${money(item.amount)} บาท`),
       `รวมค่าปรับอื่น: ${money(sum('fineAmount'))} บาท`,
-      `รายได้เงินสด: ${money(rows.filter(s => s.paymentMethod === 'cash').reduce((n, s) => n + s.totalFee, 0))} บาท`,
-      `รายได้โอน/QR: ${money(rows.filter(s => s.paymentMethod === 'qr').reduce((n, s) => n + s.totalFee, 0))} บาท`,
-      `รายได้รวมสุทธิ (รวมค่าปรับแล้ว): ${money(sum('totalFee'))} บาท`,
+      `รายได้เงินสด: ${money(rows.filter(s => s.paymentMethod === 'cash').reduce((n, s) => n + s.totalFee, 0) - cashRefund)} บาท`,
+      `รายได้โอน/QR: ${money(rows.filter(s => s.paymentMethod === 'qr').reduce((n, s) => n + s.totalFee, 0) - qrRefund)} บาท`,
+      ...(refunds.length ? [`คืนค่าปรับบัตรหาย: ${refunds.length} รายการ`, `คืนเงินสด: ${money(cashRefund)} บาท / คืนเงินโอน: ${money(qrRefund)} บาท`] : []),
+      `รายได้รวมสุทธิ (รวมค่าปรับแล้ว): ${money(sum('totalFee') - cashRefund - qrRefund)} บาท`,
     ]
   }
   const visitKey = (uid: string | undefined, date: Date) => `${uid ?? ''}:${date.getTime()}`
@@ -46,7 +50,7 @@ export async function buildDailyReport(start: Date, end: Date, partial = false):
   const parked = sessions.filter(s => (!s.exitTime || s.exitTime >= end) && !notAdmitted.has(visitKey(s.cardUid, s.entryTime)))
   const opened = shifts.filter(s => within(s.startTime))
   const closed = shifts.filter(s => within(s.endTime))
-  const types = (values: string[]) => `รถยนต์ ${values.filter(t => t !== 'motorcycle').length} / มอเตอร์ไซค์ ${values.filter(t => t === 'motorcycle').length}`
+  const types = (values: string[]) => `รถยนต์ ${values.filter(t => t !== 'motorcycle').length} / รถจักรยานยนต์ ${values.filter(t => t === 'motorcycle').length}`
   const lines = [
     '📊 สรุปประจำวัน A20 Park',
     ...(partial ? ['🧪 ทดสอบรายงาน ณ เวลาที่กด'] : []),

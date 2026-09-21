@@ -379,7 +379,7 @@ export default function ReportsPage() {
             <div className="grid grid-cols-2 gap-3">
               {([
                 { key: 'car' as const,        label: 'รถยนต์',       icon: Car,  color: '#A16207', bg: 'rgba(161,98,7,0.08)'  },
-                { key: 'motorcycle' as const, label: 'มอเตอร์ไซค์', icon: Bike, color: '#0891B2', bg: 'rgba(8,145,178,0.08)' },
+                { key: 'motorcycle' as const, label: 'รถจักรยานยนต์', icon: Bike, color: '#0891B2', bg: 'rgba(8,145,178,0.08)' },
               ]).map(({ key, label, icon: Icon, color, bg }) => (
                 <div key={key} className="bg-white rounded-xl p-4 flex items-center gap-3.5"
                   style={{ border: '1px solid #E8ECF4' }}>

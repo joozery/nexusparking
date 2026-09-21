@@ -72,7 +72,7 @@ export async function GET(req: NextRequest) {
       { $match: matchFilter },
       { $group: { _id: null, total: { $sum: '$totalFee' }, count: { $sum: 1 }, avg: { $avg: '$totalFee' }, lostFines: { $sum: '$lostFine' }, maxFee: { $max: '$totalFee' } } },
     ]),
-    // ค่าเฉลี่ยจำนวนรถในลาน แยกรถยนต์/มอเตอร์ไซค์ — เฉลี่ยจาก "vehicle-hours" ที่ทับซ้อนกับช่วงเวลาที่เลือก
+    // ค่าเฉลี่ยจำนวนรถในลาน แยกรถยนต์/รถจักรยานยนต์ — เฉลี่ยจาก "vehicle-hours" ที่ทับซ้อนกับช่วงเวลาที่เลือก
     // หารด้วยความยาวของช่วงเวลานั้น (รวม session ที่ยังจอดอยู่ด้วย ไม่ใช่แค่ completed/lost)
     ParkingSession.aggregate([
       {
@@ -140,7 +140,7 @@ export async function GET(req: NextRequest) {
     monthly,
     byType,
     summary: summary[0] ?? { total: 0, count: 0, avg: 0, lostFines: 0, maxFee: 0 },
-    avgOccupancy, // ค่าเฉลี่ยจำนวนรถในลาน (คัน) แยกรถยนต์/มอเตอร์ไซค์ ตลอดช่วงเวลาที่เลือก
+    avgOccupancy, // ค่าเฉลี่ยจำนวนรถในลาน (คัน) แยกรถยนต์/รถจักรยานยนต์ ตลอดช่วงเวลาที่เลือก
     hourly,       // รายได้/จำนวนคันแยกตามชั่วโมง (0-23) รวมทุกวันในช่วงที่เลือก + ค่าเฉลี่ยต่อวัน
     periodDays,
   })

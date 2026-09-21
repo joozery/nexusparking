@@ -33,7 +33,7 @@ const { buildDailyReport } = load('src/lib/dailyReport.ts', {
   '@/models/ParkingQueue': { ParkingQueue: query(queues) },
   './dailyReportFormat': format,
 })
-buildDailyReport(start, end).then(text => {
+buildDailyReport(start, end).then(async text => {
   assert.ok(text.includes('รายได้เงินสด: 320.00 บาท'))
   assert.ok(text.includes('รายได้โอน/QR: 0.00 บาท'))
   assert.ok(text.includes('รถเข้าพื้นที่วันนี้ (รวมคิว ไม่นับซ้ำ): 3 คัน'))
@@ -44,5 +44,16 @@ buildDailyReport(start, end).then(text => {
   assert.ok(!text.includes('ผู้เปิด:'))
   assert.equal(text.split('รายได้เงินสด:').length - 1, 1)
   assert.ok(text.includes('ค่าปรับบัตรหาย: 300.00 บาท'))
+  // Refunds belong to the day money is returned, even if the visit was in an older shift.
+  shifts[0].cardRefunds = [
+    { sessionId: 'older-visit', amount: 100, paymentMethod: 'cash', refundedAt: date('2026-09-21T03:00:00Z') },
+    { sessionId: 'older-qr', amount: 50, paymentMethod: 'qr', refundedAt: date('2026-09-21T04:00:00Z') },
+    { sessionId: 'tomorrow', amount: 999, paymentMethod: 'cash', refundedAt: end },
+  ]
+  const refunded = await buildDailyReport(start, end)
+  assert.ok(refunded.includes('รายได้เงินสด: 220.00 บาท'))
+  assert.ok(refunded.includes('รายได้โอน/QR: -50.00 บาท'))
+  assert.ok(refunded.includes('รายได้รวมสุทธิ (รวมค่าปรับแล้ว): 170.00 บาท'))
+  assert.ok(refunded.includes('ค่าปรับบัตรหาย: 300.00 บาท'))
   console.log('Daily report tests passed: Thai midnight, chunking, denominations, queue deduplication, boundary occupancy, cross-day payments.')
 }).catch(error => { console.error(error); process.exitCode = 1 })

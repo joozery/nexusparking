@@ -10,9 +10,9 @@ import { calcFeeBreakdown, type OvernightConfig } from '@/lib/calcFee'
 
 const ENTRY_TYPE_META = {
   car:                 { label: 'รถยนต์',            icon: Car,  color: '#A16207' },
-  motorcycle:          { label: 'มอเตอร์ไซค์',        icon: Bike, color: '#0891B2' },
+  motorcycle:          { label: 'รถจักรยานยนต์',        icon: Bike, color: '#0891B2' },
   overnightCar:        { label: 'ค้างคืนรถยนต์',      icon: Moon, color: '#CA8A04' },
-  overnightMotorcycle: { label: 'ค้างคืนมอเตอร์ไซค์', icon: Moon, color: '#7C3AED' },
+  overnightMotorcycle: { label: 'ค้างคืนรถจักรยานยนต์', icon: Moon, color: '#7C3AED' },
 } as const
 
 type EntryTypeKey = keyof typeof ENTRY_TYPE_META
