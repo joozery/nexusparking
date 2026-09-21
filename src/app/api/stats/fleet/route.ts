@@ -43,13 +43,12 @@ export async function GET() {
     ...motoActive.map(session => session.cardUid),
     ...waitingCards.map(queue => queue.cardUid),
   ])
-  function temporaryCounts(types: readonly string[], sessions: IParkingSession[]) {
+  function temporaryCounts(types: readonly string[]) {
     const cards = enabledCards.filter(card => types.includes(card.type) && (!card.cardCategory || card.cardCategory === 'temporary'))
     const monthlyCards = enabledCards.filter(card => types.includes(card.type) && card.cardCategory === 'monthly')
-    const parkedUids = new Set(sessions.map(session => session.cardUid))
     return {
       temporaryCardsRegistered: cards.length,
-      temporaryCardsInUse: cards.filter(card => parkedUids.has(card.uid)).length,
+      temporaryCardsInUse: cards.filter(card => occupiedUids.has(card.uid)).length,
       temporaryCardsRemaining: cards.filter(card => !occupiedUids.has(card.uid)).length,
       monthlyCardsRemaining: monthlyCards.filter(card => !occupiedUids.has(card.uid)).length,
     }
@@ -106,7 +105,7 @@ export async function GET() {
 
   return NextResponse.json({
     car: {
-      ...temporaryCounts(CAR_TYPES, carActive),
+      ...temporaryCounts(CAR_TYPES),
       ...lostByCategory(carLost),
       inToday:           carInToday,
       outToday:          carOutToday,
@@ -126,7 +125,7 @@ export async function GET() {
       lostToday:         lostToday(carLost),
     },
     motorcycle: {
-      ...temporaryCounts(['motorcycle'], motoActive),
+      ...temporaryCounts(['motorcycle']),
       ...lostByCategory(motoLost),
       inToday:           motoInToday,
       outToday:          motoOutToday,

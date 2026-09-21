@@ -11,7 +11,7 @@ interface Report {
   cash: number
   qr: number
   total: number
-  sessions: { _id: string; plate: string; cardUid: string; entryTime: string; exitTime: string; totalFee: number; paymentMethod: string }[]
+  sessions: { _id: string; plate: string; cardUid: string; cardType: 'car' | 'motorcycle' | 'overnight'; entryTime: string; exitTime: string; totalFee: number; paymentMethod: string }[]
 }
 
 export function ShiftReportDialog({ onClose }: { onClose: () => void }) {
@@ -61,8 +61,8 @@ export function ShiftReportDialog({ onClose }: { onClose: () => void }) {
         <button className="rounded-lg border px-3 py-2 text-sm" onClick={() => { setReport(null); setError(''); setVersion(v => v + 1) }}>รีเฟรชรายงาน</button>
         {error ? <p role="alert" className="text-red-600">{error}</p> : !report ? <p role="status">กำลังโหลดรายงาน…</p> : <>
           {report.sessions.length === 0 ? <p className="py-6 text-center text-slate-500">ยังไม่มีรายการรถออกในกะนี้</p> : <div className="overflow-x-auto"><table className="w-full text-sm text-left">
-            <thead><tr className="border-b"><th className="p-2">ทะเบียน</th><th className="p-2">เวลาออก</th><th className="p-2">ใบเสร็จ</th></tr></thead>
-            <tbody>{report.sessions.map(s => <tr key={s._id} className="border-b"><td className="p-2"><strong>{s.plate}</strong></td><td className="p-2">{new Date(s.exitTime).toLocaleString('th-TH')}</td><td className="p-2"><div className="flex gap-2 whitespace-nowrap">
+            <thead><tr className="border-b"><th className="p-2">ทะเบียน</th><th className="p-2">ประเภทรถ</th><th className="p-2">เวลาออก</th><th className="p-2">ใบเสร็จ</th></tr></thead>
+            <tbody>{report.sessions.map(s => <tr key={s._id} className="border-b"><td className="p-2"><strong>{s.plate}</strong></td><td className="p-2 whitespace-nowrap">{{ car: 'รถยนต์', motorcycle: 'มอเตอร์ไซค์', overnight: 'รถยนต์ (ค้างคืน)' }[s.cardType] ?? '—'}</td><td className="p-2">{new Date(s.exitTime).toLocaleString('th-TH')}</td><td className="p-2"><div className="flex gap-2 whitespace-nowrap">
               <button disabled={receiptAction !== null} onClick={() => receipt(s._id)} className="rounded-lg border px-3 py-2 text-xs font-bold disabled:opacity-40">{receiptAction === s._id ? 'กำลังพิมพ์…' : 'พิมพ์ใบเสร็จ'}</button>
             </div></td></tr>)}</tbody>
           </table></div>}

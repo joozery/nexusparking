@@ -37,6 +37,17 @@ export function CheckInDialog({
   onSimulateScan, onSelectType, onPlateChange, onBack, onConfirm,
 }: Props) {
   const plateRef = useRef<HTMLInputElement>(null)
+  const isMoto = cardType === 'motorcycle'
+  const theme = {
+    header: isMoto ? 'from-sky-600 to-sky-500' : 'from-yellow-600 to-yellow-500',
+    description: isMoto ? 'text-sky-100' : 'text-yellow-100',
+    scan: isMoto ? 'border-sky-200 bg-sky-50 hover:bg-sky-100 hover:border-sky-400' : 'border-yellow-200 bg-yellow-50 hover:bg-yellow-100 hover:border-yellow-400',
+    icon: isMoto ? 'bg-sky-600 shadow-sky-500/30' : 'bg-yellow-600 shadow-yellow-500/30',
+    title: isMoto ? 'text-sky-800' : 'text-yellow-800',
+    text: isMoto ? 'text-sky-700' : 'text-yellow-700',
+    hint: isMoto ? 'text-sky-400 border-sky-200' : 'text-yellow-400 border-yellow-200',
+    button: isMoto ? 'bg-sky-600 hover:bg-sky-700' : 'bg-yellow-600 hover:bg-yellow-700',
+  }
 
   // Focus plate input whenever we land on the confirm step (card tap or simulate)
   useEffect(() => {
@@ -49,7 +60,7 @@ export function CheckInDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="sm:max-w-sm"
+        className="sm:max-w-3xl max-h-[90vh] overflow-y-auto"
         showCloseButton
         onOpenAutoFocus={e => {
           // Prevent Radix from picking an arbitrary first element;
@@ -58,20 +69,20 @@ export function CheckInDialog({
         }}
       >
 
-        <DialogHeader className="bg-gradient-to-r from-yellow-600 to-yellow-500">
-          <div className="flex items-center gap-3 px-4 py-3">
+        <DialogHeader className={`bg-gradient-to-r ${theme.header}`}>
+          <div className="flex items-center gap-4 px-6 py-5">
             <div className="flex size-8 items-center justify-center rounded-lg bg-black/10 shrink-0">
-              <LogIn className="size-4 text-black" />
+              <LogIn className="size-4 text-white" />
             </div>
             <div>
-              <DialogTitle className="text-black text-sm">ขาเข้า</DialogTitle>
-              <DialogDescription className="text-black/70 text-xs mt-0">แตะบัตรที่เครื่องอ่าน แล้วกรอกทะเบียน</DialogDescription>
+              <DialogTitle className="text-white text-lg">ขาเข้า</DialogTitle>
+              <DialogDescription className={`${theme.description} text-base mt-0`}>แตะบัตรที่เครื่องอ่าน แล้วกรอกทะเบียน</DialogDescription>
             </div>
           </div>
         </DialogHeader>
 
-        <DialogBody className="space-y-3 py-3">
-          {step === 'confirm' && duplicateSessions.length > 0 && <div className="rounded-lg bg-amber-50 p-2 text-xs text-amber-900">
+        <DialogBody className="space-y-5 px-6 py-6">
+          {step === 'confirm' && duplicateSessions.length > 0 && <div className="rounded-lg bg-amber-50 p-2 text-base text-amber-900">
             <p className="font-bold">ทะเบียนนี้อยู่ในลานแล้ว {duplicateSessions.length} คัน — ตรวจว่าเป็นรถอีกคันก่อนยืนยัน</p>
             <div className="max-h-40 overflow-y-auto">
               {duplicateSessions.map(s => <div key={s._id} className="flex gap-2 mt-2">
@@ -84,15 +95,15 @@ export function CheckInDialog({
             <div className="flex flex-col items-center gap-3">
               <div
                 onClick={onSimulateScan}
-                className="w-full cursor-pointer flex flex-col items-center gap-2 p-5 rounded-lg border-2 border-dashed border-yellow-200 bg-yellow-50 hover:bg-yellow-100 hover:border-yellow-400 transition-all active:scale-[0.98]"
+                className={`w-full cursor-pointer flex flex-col items-center gap-2 p-5 rounded-lg border-2 border-dashed ${theme.scan} transition-all active:scale-[0.98]`}
               >
-                <div className="flex size-12 items-center justify-center rounded-lg bg-yellow-600 shadow-md shadow-yellow-500/30 animate-pulse">
-                  <CreditCard className="size-6 text-black" />
+                <div className={`flex size-12 items-center justify-center rounded-lg shadow-md ${theme.icon} animate-pulse`}>
+                  <CreditCard className="size-6 text-white" />
                 </div>
                 <div className="text-center">
-                  <p className="text-sm font-bold text-yellow-800">รอการสแกนบัตร...</p>
-                  <p className="text-xs text-yellow-700 mt-0.5">แตะบัตรที่เครื่องอ่านบัตร (Card Reader)</p>
-                  {onSimulateScan && <p className="text-[10px] text-yellow-400 mt-1.5 border border-yellow-200 px-2 py-0.5 rounded-full bg-white/60 inline-block">คลิกจำลองการสแกน</p>}
+                  <p className={`text-lg font-bold ${theme.title}`}>รอการสแกนบัตร...</p>
+                  <p className={`text-base ${theme.text} mt-0.5`}>แตะบัตรที่เครื่องอ่านบัตร (Card Reader)</p>
+                  {onSimulateScan && <p className={`text-sm ${theme.hint} mt-1.5 border px-2 py-0.5 rounded-full bg-white/60 inline-block`}>คลิกจำลองการสแกน</p>}
                 </div>
               </div>
 
@@ -104,22 +115,22 @@ export function CheckInDialog({
                     <button key={t} onClick={() => onSelectType(t)}
                       className={`flex flex-col items-center gap-1 p-2 rounded-lg border-2 transition-all hover:border-current ${m.bg} ${m.color}`}>
                       <Icon className="size-4" />
-                      <span className="text-[10px] font-bold">{m.label}</span>
+                      <span className="text-sm font-bold">{m.label}</span>
                     </button>
                   )
                 })}
               </div>
-              <p className="text-[10px] text-slate-400">หรือเลือกประเภทบัตรด้านบน</p>
+              <p className="text-sm text-slate-400">หรือเลือกประเภทบัตรด้านบน</p>
             </div>
           ) : (
             <div className="space-y-3">
               <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-slate-50 border border-slate-200">
-                <span className="text-xs text-slate-600 font-medium">ประเภทบัตร</span>
-                <CardBadge type={cardType} />
+                <span className="text-base text-slate-600 font-medium">ประเภทบัตร</span>
+                <span className="[&>span]:text-base"><CardBadge type={cardType} /></span>
               </div>
 
               <div className="space-y-1">
-                <Label htmlFor="plate-in" className="text-xs">เลขทะเบียน 4 หลัก</Label>
+                <Label htmlFor="plate-in" className="text-base">เลขทะเบียน 4 หลัก</Label>
                 <Input
                   ref={plateRef}
                   id="plate-in"
@@ -128,9 +139,9 @@ export function CheckInDialog({
                   value={plate}
                   onChange={(e) => onPlateChange(toAsciiPlate(e.target.value))}
                   onKeyDown={(e) => { if (e.key === 'Enter' && plate.length === 4) onConfirm() }}
-                  className="text-xl font-mono text-center tracking-[0.4em] h-10"
+                  className="text-3xl font-mono text-center tracking-[0.4em] h-14"
                 />
-                <p className="text-[10px] text-slate-400">กรอกเฉพาะตัวเลข 4 หลักท้าย</p>
+                <p className="text-sm text-slate-400">กรอกเฉพาะตัวเลข 4 หลักท้าย</p>
               </div>
 
               {/* Custom entry time */}
@@ -142,20 +153,20 @@ export function CheckInDialog({
                     onClick={() => onCustomEntryTimeChange(customEntryTime ? '' : new Date().toISOString().slice(0, 19))}
                   >
                     <Clock className="size-3.5 shrink-0" style={{ color: customEntryTime ? '#6D28D9' : '#94A3B8' }} />
-                    <span className="text-[10px] font-bold flex-1" style={{ color: customEntryTime ? '#6D28D9' : '#94A3B8' }}>
+                    <span className="text-sm font-bold flex-1" style={{ color: customEntryTime ? '#6D28D9' : '#94A3B8' }}>
                       {customEntryTime ? 'กำหนดเวลาเข้าเอง' : 'ใช้เวลาจริง (คลิกเพื่อกำหนดเอง)'}
                     </span>
                     {customEntryTime && (
-                      <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full"
+                      <span className="text-sm font-black px-1.5 py-0.5 rounded-full"
                         style={{ background: 'rgba(109,40,217,0.1)', color: '#6D28D9' }}>SIM</span>
                     )}
                   </button>
                   {customEntryTime && (
                     <div className="px-3 pb-2.5 pt-1" style={{ background: 'rgba(109,40,217,0.03)' }}>
-                      <label className="text-[9px] font-black text-slate-400 uppercase block mb-1">วัน-เวลาเข้า (วินาทีได้)</label>
+                      <label className="text-sm font-black text-slate-400 uppercase block mb-1">วัน-เวลาเข้า (วินาทีได้)</label>
                       <input type="datetime-local" step="1" value={customEntryTime}
                         onChange={e => onCustomEntryTimeChange(e.target.value)}
-                        className="w-full h-9 px-3 rounded-lg text-xs text-slate-800 outline-none"
+                        className="w-full h-9 px-3 rounded-lg text-base text-slate-800 outline-none"
                         style={{ border: '1.5px solid rgba(109,40,217,0.3)', background: 'white' }}
                         onFocus={e => e.currentTarget.style.borderColor = '#6D28D9'}
                         onBlur={e => e.currentTarget.style.borderColor = 'rgba(109,40,217,0.3)'} />
@@ -166,7 +177,7 @@ export function CheckInDialog({
 
               <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-50 border border-emerald-200">
                 <CheckCircle2 className="size-3.5 text-emerald-600 shrink-0" />
-                <p className="text-[10px] text-emerald-700 font-medium">เมื่อยืนยัน: กล้องถ่ายภาพ + ไม้กั้นเปิดอัตโนมัติ</p>
+                <p className="text-sm text-emerald-700 font-medium">เมื่อยืนยัน: กล้องถ่ายภาพ + ไม้กั้นเปิดอัตโนมัติ</p>
               </div>
             </div>
           )}
@@ -175,14 +186,14 @@ export function CheckInDialog({
         <DialogFooter>
           {step === 'scan' ? (
             <DialogClose asChild>
-              <Button variant="outline" size="sm">ยกเลิก</Button>
+              <Button variant="outline" size="sm" className="h-12 text-base">ยกเลิก</Button>
             </DialogClose>
           ) : (
             <>
-              <Button variant="outline" size="sm" onClick={onBack}>← ย้อนกลับ</Button>
+              <Button variant="outline" size="sm" className="h-12 text-base" onClick={onBack}>← ย้อนกลับ</Button>
               <Button
                 size="sm"
-                className="bg-yellow-600 hover:bg-yellow-700 text-black flex-1"
+                className={`${theme.button} text-white flex-1 h-12 text-base`}
                 disabled={plate.length !== 4}
                 onClick={onConfirm}
               >

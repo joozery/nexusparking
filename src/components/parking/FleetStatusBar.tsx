@@ -76,30 +76,30 @@ function FleetRow({ type, label, accent, bg, stats }: {
         <Divider />
         <Stat label="ช่องจอด" value={`${stats.activeTotal}/${stats.capacityTotal}`} icon={CircleParking} color={accent} />
         <Divider />
-        <Stat label="เหลือ" value={stats.capacityAvailable} icon={CircleParking} color={stats.capacityAvailable > 0 ? '#059669' : '#DC2626'} />
+        <Stat label="ว่าง" value={stats.capacityAvailable} icon={CircleParking} color={stats.capacityAvailable > 0 ? '#059669' : '#DC2626'} />
         <Divider />
-        <Stat label="คิวรอ" value={stats.queueWaiting} icon={Users} color="#7C3AED" />
+        <Stat label="รอคิว" value={stats.queueWaiting} icon={Users} color="#7C3AED" />
         <Divider />
-        <div title="บัตรชั่วคราวที่รถอยู่ในลาน / บัตรชั่วคราวที่เปิดใช้งานทั้งหมด">
-          <Stat label="บัตรชั่วคราว" value={`${stats.temporaryCardsInUse ?? '—'}/${stats.temporaryCardsRegistered ?? '—'}`} icon={IdCard} color="#334155" />
+        <div title="บัตรชั่วคราวที่แจกแล้ว (รถในลานและคิวรอ) / บัตรชั่วคราวที่เปิดใช้งานทั้งหมด">
+          <Stat label="จำนวนบัตร" value={`${stats.temporaryCardsInUse ?? '—'}/${stats.temporaryCardsRegistered ?? '—'}`} icon={IdCard} color="#334155" />
         </div>
         <Divider />
         <div title="บัตรชั่วคราวที่เปิดใช้งาน หักบัตรของรถในลานและคิวรอ">
-          <Stat label="บัตรเหลือชั่วคราว" value={stats.temporaryCardsRemaining ?? '—'} icon={IdCard} color={(stats.temporaryCardsRemaining ?? 0) > 0 ? '#059669' : '#DC2626'} />
+          <Stat label="บัตรคงเหลือ" value={stats.temporaryCardsRemaining ?? '—'} icon={IdCard} color={(stats.temporaryCardsRemaining ?? 0) > 0 ? '#059669' : '#DC2626'} />
         </div>
-        {stats.monthlyCardsRegistered !== 0 && <><Divider />
-        <div title="จำนวนบัตรรายเดือนที่เปิดใช้งาน รวมบัตรที่เลยวันหมดอายุแต่ยังไม่ได้ปิดใช้งาน">
-          <Stat label="บัตรรายเดือน" value={stats.monthlyCardsRegistered ?? '—'} icon={IdCard} color="#7C3AED" />
-        </div></>}
-        {stats.monthlyCardsRemaining !== 0 && <><Divider />
-        <div title="บัตรรายเดือนที่เปิดใช้งาน หักบัตรของรถในลานและคิวรอ รวมบัตรที่เลยวันหมดอายุแต่ยังไม่ได้ปิดใช้งาน">
-          <Stat label="บัตรเหลือรายเดือน" value={stats.monthlyCardsRemaining ?? '—'} icon={IdCard} color={(stats.monthlyCardsRemaining ?? 0) > 0 ? '#059669' : '#DC2626'} />
-        </div></>}
+        {(stats.monthlyCardsRegistered ?? 0) > 0 && <><Divider />
+          <div title="จำนวนบัตรรายเดือนที่เปิดใช้งาน รวมบัตรที่เลยวันหมดอายุแต่ยังไม่ได้ปิดใช้งาน">
+            <Stat label="บัตรรายเดือน" value={stats.monthlyCardsRegistered ?? '—'} icon={IdCard} color="#7C3AED" />
+          </div></>}
+        {(stats.monthlyCardsRegistered ?? 0) > 0 && <><Divider />
+          <div title="บัตรรายเดือนที่เปิดใช้งาน หักบัตรของรถในลานและคิวรอ รวมบัตรที่เลยวันหมดอายุแต่ยังไม่ได้ปิดใช้งาน">
+            <Stat label="บัตรเหลือรายเดือน" value={stats.monthlyCardsRemaining ?? '—'} icon={IdCard} color={(stats.monthlyCardsRemaining ?? 0) > 0 ? '#059669' : '#DC2626'} />
+          </div></>}
         <Divider />
         <div title="รายการเสียค่าบัตรหายวันนี้ แยกตามประเภทบัตรที่ลงทะเบียนปัจจุบัน — หมายถึงข้อมูลประเภทบัตรไม่ครบ">
-          <Stat label="บัตรหายชั่วคราว" value={stats.lostTemporaryToday ?? '—'} icon={AlertTriangle} color="#DC2626" />
+          <Stat label="บัตรหาย" value={stats.lostTemporaryToday ?? '—'} icon={AlertTriangle} color="#DC2626" />
         </div>
-        {stats.lostMonthlyToday !== 0 && <><Divider />
+        {(stats.monthlyCardsRegistered ?? 0) > 0 && <><Divider />
           <div title="รายการเสียค่าบัตรหายวันนี้ แยกตามประเภทบัตรที่ลงทะเบียนปัจจุบัน — หมายถึงข้อมูลประเภทบัตรไม่ครบ">
             <Stat label="บัตรหายรายเดือน" value={stats.lostMonthlyToday ?? '—'} icon={AlertTriangle} color="#DC2626" />
           </div>
@@ -114,8 +114,8 @@ export function FleetStatusBar({ stats }: { stats: FleetStats | null }) {
 
   return (
     <div className="shrink-0 flex flex-col gap-1">
-      <FleetRow type="car" label="รถยนต์" accent="#DC2626" bg="linear-gradient(135deg,#991B1B,#DC2626)" stats={stats.car} />
-      <FleetRow type="motorcycle" label="รถจักรยานยนต์" accent="#059669" bg="linear-gradient(135deg,#065F46,#059669)" stats={stats.motorcycle} />
+      <FleetRow type="car" label="รถยนต์" accent="#CA8A04" bg="linear-gradient(135deg,#CA8A04,#EAB308)" stats={stats.car} />
+      <FleetRow type="motorcycle" label="รถจักรยานยนต์" accent="#0284C7" bg="linear-gradient(135deg,#0284C7,#0EA5E9)" stats={stats.motorcycle} />
     </div>
   )
 }
