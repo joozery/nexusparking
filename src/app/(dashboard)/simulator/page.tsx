@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo, Fragment } from 'react'
+import { useState, useEffect, useMemo, useRef, Fragment } from 'react'
 import {
   FlaskConical, Car, Bike, Moon, Plus, Trash2,
   Play, RefreshCw, CheckCircle2, AlertTriangle, X, Info,
@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { calcFeeBreakdown, type CardType, type FeeSegment, type OvernightConfig } from '@/lib/calcFee'
+import { nowLocal, parseDateTimeSplit, importDiscounts } from '@/lib/simulatorImport'
 import { useToast } from '@/components/ui/Toast'
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -30,12 +31,6 @@ function fmtDuration(min: number) {
   if (h > 0) return `${h} ชม.`
   if (min < 1) return `${s} วิ.`
   return `${m} น.`
-}
-
-function nowLocal() {
-  const d = new Date()
-  d.setSeconds(0, 0)
-  return d.toISOString().slice(0, 19)
 }
 
 function toMin(hhmm: string) {
@@ -313,7 +308,7 @@ function BatchSeed({ overnightCfg }: { overnightCfg: OvernightConfig | null }) {
   const [rows, setRows] = useState<SeedRow[]>([])
   const [seeding, setSeeding] = useState(false)
   const [clearing, setClearing] = useState(false)
-  const [confirmClear, setConfirmClear] = useState(false)
+  const [confirmClear, setConfirmClear] = useState<{ count: number; token: string } | null>(null)
 
   // form state for new row
   const [plate,         setPlate]         = useState('')
@@ -344,7 +339,7 @@ function BatchSeed({ overnightCfg }: { overnightCfg: OvernightConfig | null }) {
     try {
       const body = rows.map(r => ({
         plate: r.plate, cardType: r.cardType,
-        entryTime: r.entryTime, exitTime: r.exitTime,
+        entryTime: new Date(r.entryTime).toISOString(), exitTime: new Date(r.exitTime).toISOString(),
         paymentMethod: r.paymentMethod,
       }))
       const res = await fetch('/api/simulate', {
@@ -353,26 +348,39 @@ function BatchSeed({ overnightCfg }: { overnightCfg: OvernightConfig | null }) {
       })
       if (res.ok) {
         const data = await res.json()
-        success(`Seed สำเร็จ`, `บันทึก ${data.created} sessions เข้า DB แล้ว`)
+        success(`Seed สำเร็จ`, `บันทึก ${data.created} รายการ ข้ามรายการซ้ำ ${data.duplicates ?? 0} รายการ`)
         setRows([])
       } else {
         const err = await res.json()
         toastError('Seed ไม่สำเร็จ', err.error)
       }
-    } finally { setSeeding(false) }
+    } catch { toastError('บันทึกไม่สำเร็จ', 'เชื่อมต่อระบบไม่ได้ กรุณาลองใหม่') } finally { setSeeding(false) }
+  }
+
+  async function previewClear() {
+    setClearing(true)
+    try {
+      const res = await fetch('/api/simulate')
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      setConfirmClear(data)
+    } catch (err) { toastError('ตรวจสอบไม่สำเร็จ', err instanceof Error ? err.message : 'กรุณาลองใหม่') }
+    finally { setClearing(false) }
   }
 
   async function clearSimulated() {
+    if (!confirmClear) return
     setClearing(true)
     try {
-      const res = await fetch('/api/simulate', { method: 'DELETE' })
-      if (res.ok) {
-        const data = await res.json()
-        warning('ล้างข้อมูลแล้ว', `ลบ ${data.deleted} simulated sessions`)
-      } else {
-        toastError('ล้างไม่สำเร็จ', 'กรุณาลองใหม่')
-      }
-    } finally { setClearing(false); setConfirmClear(false) }
+      const res = await fetch('/api/simulate', {
+        method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: confirmClear.token, confirmation: 'CLEAR_COMPLETED_HISTORY' }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      warning('ล้างประวัติแล้ว', 'ลบ ' + data.deleted + ' รายการ โดยเก็บข้อมูลบัตร รถที่ยังไม่ออก และรายการบัตรหายไว้')
+    } catch (err) { toastError('ล้างไม่สำเร็จ', err instanceof Error ? err.message : 'กรุณาลองใหม่') }
+    finally { setClearing(false); setConfirmClear(null) }
   }
 
   function previewFee(r: SeedRow) {
@@ -395,25 +403,25 @@ function BatchSeed({ overnightCfg }: { overnightCfg: OvernightConfig | null }) {
             <Play className="size-4" style={{ color: '#059669' }} />
           </div>
           <div>
-            <p className="text-sm font-black text-slate-900">Seed ข้อมูลเข้า DB</p>
-            <p className="text-[10px] text-slate-400">เพิ่มรายการแล้วกด Seed ทั้งหมด — บันทึกเป็น session จริงในระบบ</p>
+            <p className="text-sm font-black text-slate-900">บันทึกรายการจอดย้อนหลัง</p>
+            <p className="text-[10px] text-slate-400">บันทึกรายการปกติ · ล้างเฉพาะรถที่ออกแล้ว เก็บบัตรและรายการบัตรหายไว้</p>
           </div>
         </div>
         {!confirmClear ? (
-          <button onClick={() => setConfirmClear(true)} disabled={clearing}
+          <button onClick={previewClear} disabled={clearing}
             className="h-8 px-3 rounded-lg text-xs font-bold flex items-center gap-1.5 disabled:opacity-40"
             style={{ background: 'rgba(220,38,38,0.06)', color: '#991B1B', border: '1px solid rgba(220,38,38,0.2)' }}>
-            <Trash2 className="size-3.5" />ล้างข้อมูลทดสอบ
+            <Trash2 className="size-3.5" />ล้างประวัติการจอด
           </button>
         ) : (
           <div className="flex items-center gap-2">
-            <span className="text-xs font-bold text-red-700">ยืนยันลบทั้งหมด?</span>
-            <button onClick={clearSimulated} disabled={clearing}
+            <span className="text-xs font-bold text-red-700">ลบประวัติ {confirmClear.count.toLocaleString()} รายการถาวร?</span>
+            <button onClick={clearSimulated} disabled={clearing || confirmClear.count === 0}
               className="h-7 px-2.5 rounded-lg text-xs font-black text-white"
               style={{ background: '#DC2626' }}>
               {clearing ? <RefreshCw className="size-3 animate-spin" /> : 'ลบ'}
             </button>
-            <button onClick={() => setConfirmClear(false)}
+            <button onClick={() => setConfirmClear(null)} disabled={clearing}
               className="h-7 px-2 rounded-lg text-xs font-bold text-slate-500"
               style={{ background: '#F1F5F9' }}>ยกเลิก</button>
           </div>
@@ -597,33 +605,13 @@ interface TestRow {
   error:             string | null
 }
 
-function parseExcelDate(val: unknown): Date | null {
-  if (!val) return null
-  if (val instanceof Date) return isNaN(val.getTime()) ? null : val
-  if (typeof val === 'number') {
-    try {
-      const p = XLSX.SSF.parse_date_code(val)
-      return new Date(p.y, p.m - 1, p.d, p.H, p.M, p.S)
-    } catch { return null }
-  }
-  if (typeof val === 'string') {
-    const s = val.trim()
-    // ISO string
-    const d0 = new Date(s)
-    if (!isNaN(d0.getTime())) return d0
-    // DD/MM/YYYY HH:mm[:ss]
-    const m1 = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?$/)
-    if (m1) {
-      let y = parseInt(m1[3]); if (y < 100) y += 2000; if (y > 2500) y -= 543
-      return new Date(y, parseInt(m1[2]) - 1, parseInt(m1[1]), parseInt(m1[4]), parseInt(m1[5]), parseInt(m1[6] ?? '0'))
-    }
-    // YYYY-MM-DD HH:mm (space-separated, not ISO)
-    const m2 = s.match(/^(\d{4})[\/\-](\d{2})[\/\-](\d{2})\s+(\d{2}):(\d{2})(?::(\d{2}))?$/)
-    if (m2) {
-      return new Date(parseInt(m2[1]), parseInt(m2[2]) - 1, parseInt(m2[3]), parseInt(m2[4]), parseInt(m2[5]), parseInt(m2[6] ?? '0'))
-    }
-  }
-  return null
+interface ImportPreview {
+  token: string
+  ready: number
+  duplicates: number
+  errors: number
+  total: number
+  results: { rowNum: number; plate: string; fee: number; discount: number; total: number; duplicate: boolean; error?: string; warning?: string }[]
 }
 
 function normalizeCardType(val: unknown): CardType | null {
@@ -632,63 +620,6 @@ function normalizeCardType(val: unknown): CardType | null {
   if (['motorcycle', 'มอเตอร์ไซค์', 'รถจักรยานยนต์', 'moto', 'bike', 'm', 'motor'].includes(s)) return 'motorcycle'
   if (['overnight', 'ค้างคืน', 'o', 'night'].includes(s)) return 'overnight'
   return null
-}
-
-// รวมคอลัมน์ วันที่ (C/E) + เวลา (D/F) ให้เป็น Date เดียว
-function parseDateTimeSplit(dateCol: unknown, timeCol: unknown): Date | null {
-  if (!dateCol) return null
-
-  // เมื่อ XLSX.read ใช้ cellDates:true, Date column มาเป็น Date object (UTC-based)
-  // Time-only fraction มาเป็น Date ที่ anchor ที่ 1899-12-30 UTC
-  let base: Date | null
-
-  if (dateCol instanceof Date) {
-    const d = dateCol
-    if (isNaN(d.getTime())) return null
-    // Date จาก cellDates=true จะถูกแปลงใน local timezone
-    base = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0)
-    // ถ้าวันที่เป็น 1899 แสดงว่าเป็น time-only fraction → ไม่ใช่ date column จริง
-    if (d.getFullYear() === 1899 || d.getFullYear() === 1900) return null
-  } else if (typeof dateCol === 'number') {
-    try {
-      const p = XLSX.SSF.parse_date_code(dateCol)
-      base = new Date(p.y, p.m - 1, p.d, 0, 0, 0)
-    } catch { return null }
-  } else {
-    base = parseExcelDate(dateCol)
-    if (!base) return null
-    base = new Date(base.getFullYear(), base.getMonth(), base.getDate(), 0, 0, 0)
-  }
-
-  // parse timeCol
-  if (timeCol != null && timeCol !== '') {
-    if (timeCol instanceof Date) {
-      // cellDates=true: time fraction → Date anchored at 1899-12-30 local time
-      // ต้องใช้ getHours() แทน getUTCHours() เพราะ JS มี historical timezones (เช่น +6:42:04 ก่อนปี 1900)
-      const t = timeCol as Date
-      if (!isNaN(t.getTime())) {
-        base.setHours(t.getHours(), t.getMinutes(), t.getSeconds(), 0)
-      }
-    } else if (typeof timeCol === 'number') {
-      // Excel time fraction: 0.5 = 12:00
-      const totalSec = Math.round(timeCol * 86400)
-      base.setHours(Math.floor(totalSec / 3600), Math.floor((totalSec % 3600) / 60), totalSec % 60, 0)
-    } else {
-      const t = String(timeCol).trim()
-      const m = t.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/)
-      if (m) base.setHours(parseInt(m[1]), parseInt(m[2]), parseInt(m[3] ?? '0'), 0)
-    }
-  }
-  return base
-}
-
-// ค้นหา discount จากชื่อ (ตรงทันที, พอ partial match)
-function findDiscountByName(name: string, list: DiscountDoc[]): DiscountDoc | null {
-  if (!name.trim()) return null
-  const n = name.trim().toLowerCase()
-  return list.find(d => d.name.toLowerCase() === n)
-      ?? list.find(d => d.name.toLowerCase().includes(n) || n.includes(d.name.toLowerCase()))
-      ?? null
 }
 
 function downloadTemplate() {
@@ -721,42 +652,93 @@ function downloadTemplate() {
 }
 
 function ExcelTester({ overnightCfg, discounts }: { overnightCfg: OvernightConfig | null; discounts: DiscountDoc[] }) {
+  const { success, error: toastError } = useToast()
   const [rows,      setRows]      = useState<TestRow[]>([])
   const [fileName,  setFileName]  = useState('')
   const [expandedId,setExpandedId]= useState<string | null>(null)
   const [dragging,  setDragging]  = useState(false)
+  const [paymentMethod, setPaymentMethod] = useState<'' | 'cash' | 'qr'>('')
+  const [importPreview, setImportPreview] = useState<ImportPreview | null>(null)
+  const [importing, setImporting] = useState(false)
+  const [reading, setReading] = useState(false)
+  const fileVersion = useRef(0)
+  const [page, setPage] = useState(1)
+  const pageSize = 100
+  const pageCount = Math.max(1, Math.ceil(rows.length / pageSize))
+  const visibleRows = rows.slice((page - 1) * pageSize, page * pageSize)
+  const [discountMapping, setDiscountMapping] = useState<Record<string, string | null>>({})
+  const mappedName = (name: string, kind: 'shop' | 'hotel') => {
+    const mapping = discountMapping[`${kind}:${name}`]
+    return mapping === null ? '' : mapping || name
+  }
+  const unmatchedDiscounts = (['shop', 'hotel'] as const).flatMap(kind => {
+    const names = [...new Set(rows.map(r => kind === 'shop' ? r.shopDiscountName : r.hotelDiscountName).filter(Boolean))]
+    return names.filter(name => !discounts.some(d => d.name.trim().toLowerCase() === name.toLowerCase()
+      && (d.discountType === 'per_day') === (kind === 'hotel'))).map(name => ({ kind, name }))
+  })
 
-  // คำนวณ discount ราย row โดย match ชื่อจาก DB
+  async function submitImport(mode: 'preview' | 'commit') {
+    if (!paymentMethod || rows.some(r => r.error) || (mode === 'commit' && !importPreview)) return
+    setImporting(true)
+    try {
+      const res = await fetch('/api/simulate', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode, token: importPreview?.token, rows: rows.map(r => ({
+          rowNum: r.rowNum, plate: r.plate, cardType: r.cardType,
+          entryTime: r.entryTime, exitTime: r.exitTime, paymentMethod,
+          shopDiscountName: mappedName(r.shopDiscountName, 'shop'), hotelDiscountName: mappedName(r.hotelDiscountName, 'hotel'),
+        })) }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'ไม่สามารถบันทึกได้')
+      if (mode === 'preview') setImportPreview(data)
+      else {
+        success('นำเข้าสำเร็จ', `บันทึก ${data.created} รายการ ข้ามรายการซ้ำ ${data.duplicates} รายการ`)
+        setImportPreview(null)
+        setRows([])
+        setFileName('')
+      }
+    } catch (err) {
+      setImportPreview(null)
+      toastError('นำเข้าไม่สำเร็จ', err instanceof Error ? err.message : 'กรุณาลองใหม่')
+    } finally { setImporting(false) }
+  }
+
   function rowDiscounts(r: TestRow) {
-    const empty = { shopDisc: null as DiscountDoc|null, hotelDisc: null as DiscountDoc|null, shopAmt: 0, hotelAmt: 0, total: 0, final: r.calculatedFee }
-    if (r.error || !r.calculatedFee) return empty
-    const nightCount = r.segments.filter(s => s.kind === 'overnight').length
-    const shopDisc   = findDiscountByName(r.shopDiscountName, discounts)
-    const hotelDisc  = findDiscountByName(r.hotelDiscountName, discounts)
-    const shopAmt    = calcDiscount(r.calculatedFee, shopDisc, nightCount)
-    const hotelAmt   = calcDiscount(r.calculatedFee, hotelDisc, nightCount)
-    const total      = Math.min(shopAmt + hotelAmt, r.calculatedFee)
-    const final      = Math.max(0, r.calculatedFee - total)
-    return { shopDisc, hotelDisc, shopAmt, hotelAmt, total, final }
+    try {
+      return importDiscounts(r.calculatedFee, r.segments.filter(s => s.kind === 'overnight').length,
+        mappedName(r.shopDiscountName, 'shop'), mappedName(r.hotelDiscountName, 'hotel'), discounts)
+    } catch {
+      return { shopDisc: null, hotelDisc: null, shopAmt: 0, hotelAmt: 0, total: 0, final: r.calculatedFee, warning: '' }
+    }
   }
 
   function processFile(file: File) {
+    if (importing) return
+    const version = ++fileVersion.current
     setFileName(file.name)
+    setRows([])
+    setImportPreview(null)
+    setDiscountMapping({})
+    setPage(1)
+    if (file.size > 10 * 1024 * 1024) { setReading(false); toastError('ไฟล์ใหญ่เกินไป', 'รองรับไฟล์สูงสุด 10 MB'); return }
+    setReading(true)
     const reader = new FileReader()
     reader.onload = e => {
+      if (version !== fileVersion.current) return
       try {
         const data = new Uint8Array(e.target!.result as ArrayBuffer)
         const wb   = XLSX.read(data, { type: 'array' })
         const ws   = wb.Sheets[wb.SheetNames[0]]
         const raw  = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: null }) as unknown[][]
-        const dataRows = raw.slice(1).filter(r => r && (r as unknown[]).some(c => c !== null && c !== ''))
+        const dataRows = raw.slice(1).map((r, i) => ({ r, rowNum: i + 2 })).filter(({ r }) => r && r.some(c => c !== null && c !== ''))
+        if (dataRows.length > 10000) throw new Error('รองรับสูงสุด 10,000 รายการต่อไฟล์')
 
-        const parsed: TestRow[] = dataRows.map((r, i) => {
-          const rowNum    = i + 2
+        const parsed: TestRow[] = dataRows.map(({ r, rowNum }) => {
           const plate     = String(r[0] ?? '').trim().toUpperCase()
           const cardType  = normalizeCardType(r[1])
-          const entryDate = parseDateTimeSplit(r[2], r[3])
-          const exitDate  = parseDateTimeSplit(r[4], r[5])
+          const entryDate = parseDateTimeSplit(r[2], r[3], Boolean(wb.Workbook?.WBProps?.date1904))
+          const exitDate  = parseDateTimeSplit(r[4], r[5], Boolean(wb.Workbook?.WBProps?.date1904))
           // G = ชื่อส่วนลดร้านค้า, H = ชื่อส่วนลดรถโรงแรม
           const shopDiscountName  = String(r[6] ?? '').trim()
           const hotelDiscountName = String(r[7] ?? '').trim()
@@ -788,8 +770,13 @@ function ExcelTester({ overnightCfg, discounts }: { overnightCfg: OvernightConfi
         setRows(parsed)
         setExpandedId(null)
       } catch (err) {
-        alert(`อ่านไฟล์ไม่ได้: ${err}`)
-      }
+        toastError('อ่านไฟล์ไม่ได้', String(err))
+      } finally { setReading(false) }
+    }
+    reader.onerror = () => {
+      if (version !== fileVersion.current) return
+      setReading(false)
+      toastError('อ่านไฟล์ไม่ได้', 'กรุณาเลือกไฟล์อีกครั้ง')
     }
     reader.readAsArrayBuffer(file)
   }
@@ -859,8 +846,8 @@ function ExcelTester({ overnightCfg, discounts }: { overnightCfg: OvernightConfi
             <FileSpreadsheet className="size-4" style={{ color: '#B45309' }} />
           </div>
           <div>
-            <p className="text-sm font-black text-slate-900">ทดสอบจาก Excel</p>
-            <p className="text-[10px] text-slate-400">import .xlsx แล้วเช็คผลคำนวณ vs ค่าที่คาดหวัง — คลิกแถวเพื่อดู breakdown</p>
+            <p className="text-sm font-black text-slate-900">นำเข้า Excel</p>
+            <p className="text-[10px] text-slate-400">ตรวจค่าจอดจาก Excel แล้วบันทึกเป็นรายการจริง — คลิกแถวเพื่อดูรายละเอียด</p>
           </div>
         </div>
         <button onClick={downloadTemplate}
@@ -887,14 +874,73 @@ function ExcelTester({ overnightCfg, discounts }: { overnightCfg: OvernightConfi
           </div>
           <div className="text-center">
             <p className="text-xs font-bold text-slate-700">
-              {fileName ? `✓ ${fileName}` : 'วาง .xlsx ที่นี่ หรือคลิกเพื่อเลือกไฟล์'}
+              {reading ? 'กำลังอ่านไฟล์…' : fileName || 'วาง .xlsx ที่นี่ หรือคลิกเพื่อเลือกไฟล์'}
             </p>
             <p className="text-[10px] text-slate-400 mt-1">รองรับ .xlsx, .xls, .csv — แถวแรกเป็น header ข้ามอัตโนมัติ</p>
           </div>
-          <input type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={onFileInput} />
+          <input type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={onFileInput} disabled={importing} />
         </label>
       </div>
 
+      {rows.length > pageSize && (
+        <div className="px-5 py-3 flex items-center gap-3 text-sm border-b border-slate-200">
+          <button className="border rounded px-3 py-1 disabled:opacity-40" disabled={page === 1} onClick={() => { setPage(p => p - 1); setExpandedId(null) }}>ก่อนหน้า</button>
+          <span>หน้า {page} / {pageCount} · แสดงครั้งละ {pageSize} แถว การบันทึกและ Export ใช้ทุกแถว</span>
+          <button className="border rounded px-3 py-1 disabled:opacity-40" disabled={page === pageCount} onClick={() => { setPage(p => p + 1); setExpandedId(null) }}>ถัดไป</button>
+        </div>
+      )}
+
+      {rows.length > 0 && (
+        <div className="p-5 space-y-3 border-b border-slate-200 bg-slate-50">
+          <p className="text-sm font-bold text-slate-800">บันทึกเป็นรายการปกติในฐานข้อมูลจริง</p>
+          <p className="text-xs text-slate-600">ใช้เวลาเข้า–ออกตามไฟล์ รวมในประวัติและรายงาน · เลือกช่องทางชำระเงินสำหรับทุกแถวในไฟล์นี้</p>
+          <p className="text-xs text-slate-600">ส่วนลดร้านค้าใช้กับรายการรายชั่วโมง ส่วนลดโรงแรมใช้ตามจำนวนคืนที่คิดค่าเหมา เลือกจับคู่ชื่อหรือ “ไม่ใช้ส่วนลด” เพื่อข้ามส่วนลดนั้นทุกแถว</p>
+          {unmatchedDiscounts.map(({ kind, name }) => (
+            <label key={`${kind}:${name}`} className="block text-sm text-amber-800">
+              จับคู่ส่วนลด{kind === 'hotel' ? 'โรงแรม' : 'ร้านค้า'}ใน Excel: <strong>{name}</strong>
+              <select className="ml-2 border rounded-lg p-2 bg-white" disabled={importing}
+                value={discountMapping[`${kind}:${name}`] === null ? '__no_discount__' : discountMapping[`${kind}:${name}`] ?? ''}
+                onChange={e => { setDiscountMapping(m => ({ ...m, [`${kind}:${name}`]: e.target.value === '__no_discount__' ? null : e.target.value })); setImportPreview(null) }}>
+                <option value="">เลือกชื่อส่วนลดในระบบ</option>
+                <option value="__no_discount__">ไม่ใช้ส่วนลด (ข้ามการจับคู่)</option>
+                {discounts.filter(d => (d.discountType === 'per_day') === (kind === 'hotel')).map(d => <option key={d._id} value={d.name}>{d.name} — {d.discountValue}{d.discountType === 'percent' ? '%' : d.discountType === 'per_day' ? ' บาท/คืน' : ' บาท'}</option>)}
+              </select>
+            </label>
+          ))}
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="text-sm">ช่องทางชำระเงิน
+              <select className="ml-2 border rounded-lg p-2 bg-white" value={paymentMethod} disabled={importing}
+                onChange={e => { setPaymentMethod(e.target.value as '' | 'cash' | 'qr'); setImportPreview(null) }}>
+                <option value="">เลือกช่องทาง</option><option value="cash">เงินสด</option><option value="qr">QR</option>
+              </select>
+            </label>
+            <button className="rounded-lg px-4 py-2 text-sm font-bold bg-violet-700 text-white disabled:opacity-40"
+              disabled={importing || !paymentMethod || errorCount > 0} onClick={() => submitImport('preview')}>
+              {importing ? 'กำลังดำเนินการ…' : 'ตรวจสอบก่อนบันทึก'}
+            </button>
+          </div>
+          {errorCount > 0 && <p className="text-sm text-red-700">แก้ไขข้อมูลผิดพลาด {errorCount} แถวในไฟล์แล้วเลือกไฟล์อีกครั้ง</p>}
+          {importPreview && (
+            <div className="space-y-3">
+              <p className="text-sm font-bold">พร้อมบันทึก {importPreview.ready.toLocaleString()} รายการ · ซ้ำ {importPreview.duplicates.toLocaleString()} · ผิดพลาด {importPreview.errors.toLocaleString()} · ยอดที่จะบันทึก ฿{importPreview.total.toLocaleString()}</p>
+              <div className="max-h-72 overflow-auto border rounded-lg bg-white">
+                <table className="w-full text-xs">
+                  <thead className="sticky top-0 bg-slate-100"><tr>{['แถว', 'ทะเบียน', 'ค่าจอด', 'ส่วนลด', 'สุทธิ', 'ผลตรวจจากเซิร์ฟเวอร์'].map(h => <th key={h} className="p-2 text-left">{h}</th>)}</tr></thead>
+                  <tbody>{importPreview.results.slice((page - 1) * pageSize, page * pageSize).map((r, i) => <tr key={i} className="border-t">
+                    <td className="p-2">{r.rowNum}</td><td className="p-2">{r.plate}</td><td className="p-2">{r.fee}</td>
+                    <td className="p-2">{r.discount}</td><td className="p-2">{r.total}</td>
+                    <td className={`p-2 ${r.error ? 'text-red-700' : r.warning ? 'text-amber-700' : 'text-slate-600'}`}>{r.error || (r.duplicate ? 'ซ้ำ — จะข้ามรายการนี้' : r.warning || 'พร้อมบันทึก')}</td>
+                  </tr>)}</tbody>
+                </table>
+              </div>
+              <button className="rounded-lg px-4 py-2 text-sm font-bold bg-emerald-700 text-white disabled:opacity-40"
+                disabled={importing || importPreview.errors > 0 || importPreview.ready === 0} onClick={() => submitImport('commit')}>
+                ยืนยันบันทึก {importPreview.ready.toLocaleString()} รายการลงฐานข้อมูล
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* summary bar */}
       {rows.length > 0 && (() => {
@@ -942,7 +988,7 @@ function ExcelTester({ overnightCfg, discounts }: { overnightCfg: OvernightConfi
               </tr>
             </thead>
             <tbody>
-              {rows.map(r => {
+              {visibleRows.map(r => {
                 const meta = TYPE_META[r.cardType]; const Icon = meta.icon
                 const durMin = r.entryTime && r.exitTime
                   ? (new Date(r.exitTime).getTime() - new Date(r.entryTime).getTime()) / 60000 : 0
@@ -979,7 +1025,9 @@ function ExcelTester({ overnightCfg, discounts }: { overnightCfg: OvernightConfi
                       </td>
                       {hasShopDiscount && (
                         <td className="px-3 py-2.5 text-[10px]">
-                          {r.shopDiscountName
+                          {r.shopDiscountName && !mappedName(r.shopDiscountName, 'shop')
+                            ? <span className="text-slate-500">ไม่ใช้ส่วนลด</span>
+                            : r.shopDiscountName
                             ? disc.shopDisc
                               ? <span style={{ color: '#6D28D9' }}>-฿{disc.shopAmt} <span className="font-normal opacity-60">({disc.shopDisc.name})</span></span>
                               : <span className="px-1 py-0.5 rounded text-[9px] font-black" style={{ background: 'rgba(220,38,38,0.08)', color: '#DC2626' }}>ไม่พบ: {r.shopDiscountName}</span>
@@ -988,7 +1036,9 @@ function ExcelTester({ overnightCfg, discounts }: { overnightCfg: OvernightConfi
                       )}
                       {hasHotelDiscount && (
                         <td className="px-3 py-2.5 text-[10px]">
-                          {r.hotelDiscountName
+                          {r.hotelDiscountName && !mappedName(r.hotelDiscountName, 'hotel')
+                            ? <span className="text-slate-500">ไม่ใช้ส่วนลด</span>
+                            : r.hotelDiscountName
                             ? disc.hotelDisc
                               ? <span style={{ color: '#B45309' }}>-฿{disc.hotelAmt} <span className="font-normal opacity-60">({disc.hotelDisc.name})</span></span>
                               : <span className="px-1 py-0.5 rounded text-[9px] font-black" style={{ background: 'rgba(220,38,38,0.08)', color: '#DC2626' }}>ไม่พบ: {r.hotelDiscountName}</span>
@@ -1106,16 +1156,20 @@ function ExcelTester({ overnightCfg, discounts }: { overnightCfg: OvernightConfi
 export default function SimulatorPage() {
   const [overnightCfg, setOvernightCfg] = useState<OvernightConfig | null>(null)
   const [discounts,    setDiscounts]    = useState<DiscountDoc[]>([])
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
 
   useEffect(() => {
-    fetch('/api/settings')
-      .then(r => r.json())
-      .then(s => { if (s?.rates?.overnight) setOvernightCfg(s.rates.overnight) })
-      .catch(() => {})
-    fetch('/api/discounts?active=1')
-      .then(r => r.json())
-      .then(d => { if (Array.isArray(d)) setDiscounts(d) })
-      .catch(() => {})
+    Promise.all(['/api/settings', '/api/discounts?active=1'].map(async url => {
+      const res = await fetch(url)
+      if (!res.ok) throw new Error('โหลดอัตราค่าจอดและส่วนลดไม่สำเร็จ')
+      return res.json()
+    })).then(([settings, discounts]) => {
+      if (!settings?.rates?.overnight || !Array.isArray(discounts)) throw new Error('ข้อมูลการตั้งค่าไม่ครบ')
+      setOvernightCfg(settings.rates.overnight)
+      setDiscounts(discounts)
+    }).catch(err => setLoadError(err instanceof Error ? err.message : 'โหลดข้อมูลไม่สำเร็จ'))
+      .finally(() => setLoading(false))
   }, [])
 
   return (
@@ -1129,7 +1183,7 @@ export default function SimulatorPage() {
           </div>
           <div>
             <h1 className="text-sm font-black text-slate-900 leading-none">จำลองข้อมูล / Simulator</h1>
-            <p className="text-[10px] text-slate-400 mt-0.5">ทดสอบสูตรคำนวณ · seed ข้อมูลข้ามวัน · ล้างข้อมูลทดสอบ</p>
+            <p className="text-[10px] text-slate-400 mt-0.5">ทดสอบสูตรคำนวณ · seed ข้อมูลข้ามวัน · ล้างประวัติการจอด</p>
           </div>
         </div>
         <span className="ml-3 text-[9px] font-black px-2 py-0.5 rounded-full"
@@ -1139,9 +1193,13 @@ export default function SimulatorPage() {
       </header>
 
       <div className="flex-1 overflow-auto p-5 space-y-5">
+        {loading ? <p role="status">กำลังโหลดอัตราค่าจอดและส่วนลด…</p> : loadError ? (
+          <div role="alert" className="p-4 bg-red-50 text-red-700 rounded-lg">{loadError} <button className="underline" onClick={() => window.location.reload()}>ลองใหม่</button></div>
+        ) : <>
         <FeeCalculator overnightCfg={overnightCfg} discounts={discounts} />
         <ExcelTester overnightCfg={overnightCfg} discounts={discounts} />
         <BatchSeed overnightCfg={overnightCfg} />
+        </>}
       </div>
     </>
   )
