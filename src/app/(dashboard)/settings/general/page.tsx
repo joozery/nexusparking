@@ -41,6 +41,22 @@ export default function GeneralSettingsPage() {
   const [showResetConfirm, setShowResetConfirm] = useState(false)
   const [confirmText, setConfirmText]           = useState('')
   const [resetting,   setResetting]             = useState(false)
+  const [resetPreview, setResetPreview] = useState<{ count: number; token: string } | null>(null)
+
+  async function previewReset() {
+    setResetting(true)
+    setResetPreview(null)
+    setConfirmText('')
+    try {
+      const res = await fetch('/api/reset')
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'ตรวจสอบรายการไม่สำเร็จ')
+      setResetPreview(data)
+      setShowResetConfirm(true)
+    } catch (err) {
+      toastError('ตรวจสอบรายการไม่สำเร็จ', err instanceof Error ? err.message : 'กรุณาลองใหม่')
+    } finally { setResetting(false) }
+  }
 
   useEffect(() => {
     fetch('/api/settings')
@@ -74,17 +90,23 @@ export default function GeneralSettingsPage() {
   }
 
   async function handleReset() {
+    if (!resetPreview || confirmText !== 'ลบข้อมูล' || resetPreview.count === 0) return
     setResetting(true)
     try {
-      const res = await fetch('/api/reset', { method: 'DELETE' })
+      const res = await fetch('/api/reset', {
+        method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: resetPreview.token, confirmation: 'CLEAR_COMPLETED_HISTORY' }),
+      })
+      const data = await res.json()
       if (res.ok) {
-        success('ลบข้อมูลทั้งหมดสำเร็จ')
+        success('ล้างประวัติการจอดสำเร็จ', `ลบ ${data.deleted} รายการ โดยเก็บบัตร ส่วนลด และการตั้งค่าไว้`)
         setShowResetConfirm(false)
         setConfirmText('')
       } else {
-        toastError('ลบข้อมูลไม่สำเร็จ', 'กรุณาลองใหม่อีกครั้ง')
+        toastError('ล้างประวัติไม่สำเร็จ', data.error ?? 'กรุณาลองใหม่อีกครั้ง')
       }
-    } finally { setResetting(false) }
+    } catch { toastError('ล้างประวัติไม่สำเร็จ', 'เชื่อมต่อระบบไม่ได้ กรุณาลองใหม่') }
+    finally { setResetting(false); setResetPreview(null); setShowResetConfirm(false) }
   }
 
   if (loading) return <div className="flex-1 flex items-center justify-center p-10"><RefreshCw className="size-5 text-slate-300 animate-spin" /></div>
@@ -302,14 +324,14 @@ export default function GeneralSettingsPage() {
         <div className="p-5">
           <div className="flex items-center justify-between p-4 rounded-lg" style={{ background: 'rgba(220,38,38,0.04)', border: '1px solid rgba(220,38,38,0.12)' }}>
             <div>
-              <p className="text-xs font-black text-slate-800">ลบข้อมูลทั้งหมด</p>
-              <p className="text-[10px] text-slate-400 mt-0.5">ลบ Sessions, บัตร, คิว, กะ, ส่วนลด, Logs ทั้งหมด · ข้อมูลผู้ดูแลและการตั้งค่าจะยังคงอยู่</p>
+              <p className="text-xs font-black text-slate-800">ล้างประวัติการจอด</p>
+              <p className="text-[10px] text-slate-400 mt-0.5">ลบเฉพาะประวัติรถที่ออกแล้ว · เก็บรายการบัตรหาย บัตร คูปอง/ส่วนลด ค่าปรับ และการตั้งค่าทั้งหมด</p>
             </div>
-            <button onClick={() => { setShowResetConfirm(true); setConfirmText('') }}
+            <button onClick={previewReset} disabled={resetting}
               className="h-8 px-4 rounded-lg text-white text-xs font-bold flex items-center gap-1.5 hover:opacity-90 shrink-0 ml-4"
               style={{ background: '#DC2626' }}>
               <Trash2 className="size-3.5" />
-              ลบข้อมูลทั้งหมด
+              {resetting ? 'กำลังตรวจสอบ…' : 'ล้างประวัติการจอด'}
             </button>
           </div>
         </div>
@@ -324,22 +346,22 @@ export default function GeneralSettingsPage() {
                 <Trash2 className="size-4.5" style={{ color: '#DC2626' }} />
               </div>
               <div>
-                <p className="text-sm font-black text-slate-900">ยืนยันการลบข้อมูลทั้งหมด</p>
+                <p className="text-sm font-black text-slate-900">ยืนยันล้างประวัติ {resetPreview?.count.toLocaleString()} รายการ</p>
                 <p className="text-[10px] text-slate-400">การกระทำนี้ไม่สามารถย้อนกลับได้</p>
               </div>
             </div>
             <div className="p-6 space-y-4">
               <div className="rounded-lg p-3 text-[11px] text-slate-600 space-y-1" style={{ background: '#FFF7F7', border: '1px solid rgba(220,38,38,0.12)' }}>
                 <p className="font-bold text-red-700">ข้อมูลที่จะถูกลบ:</p>
-                <p>• Sessions การจอดรถทั้งหมด</p>
-                <p>• บัตรจอดรถทั้งหมด</p>
-                <p>• คิวรอทั้งหมด</p>
-                <p>• กะการทำงานทั้งหมด</p>
-                <p>• ส่วนลดทั้งหมด</p>
-                <p>• Hardware Logs ทั้งหมด</p>
+                <p>• ประวัติการจอดที่มีเวลาออกแล้วและไม่ได้แจ้งบัตรหาย</p>
+                <p>• รวมรายการปกติและรายการนำเข้าจาก Excel</p>
               </div>
               <div className="rounded-lg p-3 text-[11px] text-slate-600" style={{ background: '#F0FDF4', border: '1px solid rgba(5,150,105,0.15)' }}>
                 <p className="font-bold text-green-700">ข้อมูลที่จะยังคงอยู่:</p>
+                <p>• บัตรที่ลงทะเบียนทั้งหมด</p>
+                <p>• รถที่ยังไม่ออก และรายการบัตรหายพร้อมข้อมูลเข้า–ออก</p>
+                <p>• คูปอง/ส่วนลด และรายการค่าปรับที่ตั้งไว้</p>
+                <p>• คิว กะการทำงาน และ Hardware Logs</p>
                 <p>• บัญชีผู้ดูแลระบบ (Admin)</p>
                 <p>• การตั้งค่าระบบทั้งหมด</p>
               </div>
@@ -356,12 +378,12 @@ export default function GeneralSettingsPage() {
               </div>
             </div>
             <div className="px-6 pb-6 flex gap-2">
-              <button onClick={() => { setShowResetConfirm(false); setConfirmText('') }}
+              <button onClick={() => { setShowResetConfirm(false); setConfirmText('') }} disabled={resetting}
                 className="flex-1 h-10 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-50"
                 style={{ border: '1.5px solid #E8ECF4' }}>
                 ยกเลิก
               </button>
-              <button onClick={handleReset} disabled={confirmText !== 'ลบข้อมูล' || resetting}
+              <button onClick={handleReset} disabled={confirmText !== 'ลบข้อมูล' || resetting || !resetPreview?.count}
                 className="flex-1 h-10 rounded-xl text-sm font-bold text-white flex items-center justify-center gap-1.5 disabled:opacity-40 hover:opacity-90"
                 style={{ background: '#DC2626' }}>
                 {resetting ? <RefreshCw className="size-3.5 animate-spin" /> : <Trash2 className="size-3.5" />}

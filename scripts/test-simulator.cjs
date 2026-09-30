@@ -73,6 +73,7 @@ const route = load('src/app/api/simulate/route.ts', {
   } },
 })
 const request = body => ({ json: async () => body })
+const resetRoute = load('src/app/api/reset/route.ts', { '@/app/api/simulate/route': route })
 async function main() {
   const before = JSON.stringify(visits)
   const preview = await route.GET()
@@ -88,6 +89,25 @@ async function main() {
   const refreshed = await route.GET()
   assert.equal((await route.DELETE(request({ token: refreshed.body.token, confirmation: 'CLEAR_COMPLETED_HISTORY' }))).body.deleted, 3)
   assert.deepEqual(visits, protectedVisits, 'preserve full lost-card/active records including entry and exit times')
+
+  // The general-settings reset must have exactly the same protection as Simulator.
+  visits.push({ ...base, _id: 'settings-completed' })
+  const settingsBefore = JSON.stringify(visits)
+  const discountBefore = JSON.stringify(discounts)
+  const configurationBefore = JSON.stringify(settings)
+  assert.equal((await resetRoute.DELETE({ json: async () => { throw new SyntaxError('Empty body from old client') } })).status, 400)
+  assert.equal(JSON.stringify(visits), settingsBefore, 'old reset clients cannot erase data without a preview')
+  role = 'operator'
+  assert.equal((await resetRoute.GET()).status, 403)
+  assert.equal((await resetRoute.DELETE(request({}))).status, 403)
+  role = 'admin'
+  const resetPreview = await resetRoute.GET()
+  assert.equal(resetPreview.body.count, 1)
+  assert.equal((await resetRoute.DELETE(request({ token: 'stale', confirmation: 'CLEAR_COMPLETED_HISTORY' }))).status, 409)
+  assert.equal((await resetRoute.DELETE(request({ token: resetPreview.body.token, confirmation: 'CLEAR_COMPLETED_HISTORY' }))).body.deleted, 1)
+  assert.deepEqual(visits, protectedVisits, 'settings reset preserves every protected visit')
+  assert.equal(JSON.stringify(discounts), discountBefore)
+  assert.equal(JSON.stringify(settings), configurationBefore)
 
   visits = []
   const row = { plate: 'TEST', cardType: 'car', entryTime: '2026-01-01T09:00:00+07:00', exitTime: '2026-01-01T10:00:00+07:00', paymentMethod: 'cash', shopDiscountName: 'Shop' }
