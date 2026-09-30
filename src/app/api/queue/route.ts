@@ -1,4 +1,5 @@
 import { parkingMutation } from '@/lib/parkingMutation'
+import { validateRegisteredVisit } from '@/lib/cardAvailability'
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { verifyToken, COOKIE_NAME } from '@/lib/auth'
@@ -31,6 +32,10 @@ async function handlePost(req: NextRequest) {
   await connectDB()
 
   // A card already in the lot cannot join another queue.
+  if (cardUid?.trim()) {
+    const conflict = await validateRegisteredVisit({ cardUid: cardUid.trim(), entryTime: new Date() }, cardType)
+    if (conflict) return NextResponse.json({ error: conflict }, { status: 409 })
+  }
   if (cardUid && await ParkingSession.exists({ cardUid: cardUid.trim(), status: 'active' })) {
     return NextResponse.json({ error: 'บัตรนี้มีรถอยู่ในลานแล้ว กรุณาทำรายการขาออก' }, { status: 409 })
   }

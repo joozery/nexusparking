@@ -1,4 +1,6 @@
 import { parkingMutation } from '@/lib/parkingMutation'
+import { loadCardTimeline } from '@/lib/cardAvailability'
+import { cardVisitError } from '@/lib/cardTimeline'
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { verifyToken, COOKIE_NAME } from '@/lib/auth'
@@ -46,7 +48,7 @@ async function handlePost(req: NextRequest) {
   }
   const session = queue ? new ParkingSession({
     _id: queue._id, cardUid: queue.cardUid ?? `WALKIN-Q-${queue._id}`, cardType: queue.cardType,
-    plate: queue.plate, entryTime: queue.joinedAt,
+    plate: queue.plate, entryTime: queue.joinedAt, lostCard: queue.lostCard, neverParked: true,
   }) : sessionId
     ? await ParkingSession.findOne({ _id: sessionId, status: 'active' as const })
     : await ParkingSession.findOne({ cardUid: uid?.trim(), status: 'active' as const })
@@ -55,6 +57,17 @@ async function handlePost(req: NextRequest) {
 
   const settings = await getSettings()
   const now = exitTimeRaw ? new Date(exitTimeRaw) : new Date()
+  if (!Number.isFinite(now.getTime()) || now <= session.entryTime) {
+    return NextResponse.json({ error: 'เวลาออกต้องมากกว่าเวลาเข้า' }, { status: 400 })
+  }
+  if (session.parkingStartedAt && now <= session.parkingStartedAt) {
+    return NextResponse.json({ error: 'เวลาออกต้องมากกว่าเวลาที่เรียกคิวเข้าช่องจอด' }, { status: 400 })
+  }
+  if (!['cash', 'qr'].includes(paymentMethod)) return NextResponse.json({ error: 'ช่องทางชำระเงินไม่ถูกต้อง' }, { status: 400 })
+  const isLostCard = session.lostCard === true || session.lostFine > 0 || lostCard === true
+  const timeline = await loadCardTimeline([session.cardUid], queue ? String(queue._id) : undefined)
+  const conflict = cardVisitError({ _id: session._id, cardUid: session.cardUid, entryTime: session.entryTime, exitTime: now, lostCard: isLostCard }, timeline.history, timeline.returns)
+  if (conflict) return NextResponse.json({ error: conflict }, { status: 409 })
   const durationMin = calcDurationMinutes(session.entryTime, now)
   const fee = calcFeeFromMinutes(session.cardType, durationMin, session.entryTime, now, settings.rates.overnight)
 
@@ -108,14 +121,14 @@ async function handlePost(req: NextRequest) {
     }
   }
 
-  const lostFine = lostCard ? settings.lostCardFine : 0
+  const lostFine = isLostCard ? settings.lostCardFine : 0
   const totalFee = Math.max(0, fee - discountAmount) + fineAmount + lostFine
 
   session.exitTime       = now
   session.durationMin    = durationMin
   session.fee            = fee
   session.lostFine       = lostFine
-  session.lostCard       = Boolean(lostCard)
+  session.lostCard       = isLostCard
   session.totalFee       = totalFee
   session.discountId     = appliedDiscountId ?? appliedDailyDiscountId
   session.discountName   = discountName
@@ -146,6 +159,7 @@ async function handlePost(req: NextRequest) {
 
   await session.save()
   if (queue) {
+    queue.sessionId = String(session._id)
     queue.status = 'cancelled'
     queue.cancelledAt = now
     await queue.save()

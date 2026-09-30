@@ -5,6 +5,8 @@ export interface IParkingSession extends Document {
   cardType:      'car' | 'motorcycle' | 'overnight'
   plate:         string        // last 4 digits
   entryTime:     Date
+  parkingStartedAt?: Date
+  neverParked?: boolean
   exitTime?:     Date
   durationMin:   number        // minutes (updated on checkout)
   fee:           number        // parking fee
@@ -36,6 +38,8 @@ const ParkingSessionSchema = new Schema<IParkingSession>({
   cardType:    { type: String, required: true, enum: ['car', 'motorcycle', 'overnight'] },
   plate:       { type: String, required: true },
   entryTime:   { type: Date, required: true },
+  parkingStartedAt: { type: Date },
+  neverParked: { type: Boolean },
   exitTime:    { type: Date },
   durationMin: { type: Number, default: 0 },
   fee:         { type: Number, default: 0 },

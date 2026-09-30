@@ -31,6 +31,8 @@ import {
 } from '@/lib/serialReader'
 
 interface Session {
+  lostCard?: boolean
+  lostFine?: number
   queueId?: string
   _id: string
   cardUid: string
@@ -59,10 +61,11 @@ interface Stats {
 }
 
 interface QueueEntry {
+  lostCard?: boolean
   _id: string
   cardUid?: string
   plate: string
-  cardType: 'car' | 'motorcycle'
+  cardType: CardType
   joinedAt: string
   status: 'waiting'
 }
@@ -215,6 +218,7 @@ export default function OperatorPage() {
   const [coSessionId,   setCoSessionId]   = useState('')
   const [coQueueId, setCoQueueId] = useState('')
   const [coPlate,       setCoPlate]       = useState('')
+  const [coLockedLost, setCoLockedLost] = useState(false)
   const [coCustomTime,  setCoCustomTime]  = useState('')
   const [coScannedTime, setCoScannedTime] = useState('')
   const [coEntryTime,   setCoEntryTime]   = useState<Date | null>(null)
@@ -273,7 +277,7 @@ export default function OperatorPage() {
   const [serialBaud, setSerialBaudState] = useState(9600)
 
   function resetCI() { setCiStep('scan'); setCiPlate(''); setCiType('car'); setCiUid(''); setCiCustomTime('') }
-  function resetCO() { setCoQueueId(''); setCoStep('scan'); setCoSessionId(''); setCoPlate(''); setCoCustomTime(''); setCoEntryTime(null); setCoPaidAmount(0); setCoSource('card') }
+  function resetCO() { setCoLockedLost(false); setCoQueueId(''); setCoStep('scan'); setCoSessionId(''); setCoPlate(''); setCoCustomTime(''); setCoEntryTime(null); setCoPaidAmount(0); setCoSource('card') }
 
   const fetchShift = useCallback(async () => {
     try {
@@ -384,7 +388,7 @@ export default function OperatorPage() {
   // Preview only: the queue remains waiting until payment is confirmed.
   async function checkoutFromQueue(q: QueueEntry) {
     openCheckout({ _id: '', cardUid: q.cardUid ?? '', cardType: q.cardType, plate: q.plate,
-      entryTime: q.joinedAt, durationMin: 0, fee: 0, totalFee: 0, status: 'active' }, 'card')
+      entryTime: q.joinedAt, lostCard: q.lostCard, durationMin: 0, fee: 0, totalFee: 0, status: 'active' }, 'card')
     setCoQueueId(q._id)
   }
 
@@ -490,10 +494,6 @@ export default function OperatorPage() {
 
     // Lot full (car or motorcycle lot, checked separately server-side) → same popup, but fall back to the queue instead of failing outright
     if (res.status === 409 && typeof err.error === 'string' && err.error.includes('เต็มแล้ว')) {
-      if (ciType === 'overnight') {
-        toastError('เข้าคิวไม่ได้', 'ลานเต็ม และบัตรค้างคืนไม่รองรับระบบคิวรอ')
-        return
-      }
       const qRes = await fetch('/api/queue', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -515,10 +515,10 @@ export default function OperatorPage() {
 
   function handleCoCustomTimeChange(v: string) {
     setCoCustomTime(v)
-    if (!v || !coEntryTime) {
+    if (!coEntryTime) {
       setCoHours(0); setCoFee(0); return
     }
-    const exit = new Date(v)
+    const exit = new Date(v || coScannedTime)
     const durationMin = Math.max(1, Math.floor((exit.getTime() - coEntryTime.getTime()) / 60000))
     const hours = Math.ceil(durationMin / 60)
     setCoHours(hours)
@@ -542,6 +542,7 @@ export default function OperatorPage() {
     setCoSessionId(s._id); setCoPlate(s.plate); setCoEntryTime(entry); setCoStep('payment'); setCheckOutOpen(true)
     setLastExitSessionId(s._id); setLastExitPlate(s.plate)
     setCoSource(source)
+    setCoLockedLost(s.lostCard === true || (s.lostFine ?? 0) > 0)
   }
 
   // Sidebar plate input → auto-route:
@@ -577,7 +578,7 @@ export default function OperatorPage() {
         ...current.filter(s => s.plate === plate),
         ...waiting.filter(q => q.status === 'waiting' && q.plate === plate).map(q => ({
           _id: q._id, queueId: q._id, cardUid: q.cardUid ?? '', cardType: q.cardType,
-          plate: q.plate, entryTime: q.joinedAt, durationMin: 0, fee: 0, totalFee: 0,
+          plate: q.plate, lostCard: q.lostCard, entryTime: q.joinedAt, durationMin: 0, fee: 0, totalFee: 0,
           status: 'active' as const,
         })),
       ]
@@ -1027,7 +1028,7 @@ export default function OperatorPage() {
 
             <div className="flex-1 min-h-0 flex">
               {([
-                { type: 'car' as const, label: 'รถยนต์', icon: Car, list: queues.filter(q => q.cardType === 'car') },
+                { type: 'car' as const, label: 'รถยนต์', icon: Car, list: queues.filter(q => q.cardType !== 'motorcycle') },
                 { type: 'motorcycle' as const, label: 'รถจักรยานยนต์', icon: Bike, list: queues.filter(q => q.cardType === 'motorcycle') },
               ]).map((col, colIdx) => (
                 <div key={col.type}
@@ -1276,6 +1277,9 @@ export default function OperatorPage() {
         lostCardFine={lostCardFine}
         checkoutSource={coSource}
         entryTime={coEntryTime}
+        lockedLostCard={coLockedLost}
+        customExitTime={coCustomTime}
+        onCustomExitTimeChange={handleCoCustomTimeChange}
         scannedExitTime={coScannedTime}
         overnightCfg={overnightCfg}
         onBack={() => setCoStep('scan')}

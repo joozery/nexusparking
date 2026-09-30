@@ -2,7 +2,9 @@ import mongoose, { Schema, type Document } from 'mongoose'
 
 export interface IParkingQueue extends Document {
   plate:        string
-  cardType:     'car' | 'motorcycle'
+  cardType:     'car' | 'motorcycle' | 'overnight'
+  lostCard?:    boolean
+  sessionId?:   string
   cardUid?:     string
   joinedAt:     Date
   status:       'waiting' | 'entered' | 'cancelled'
@@ -14,7 +16,9 @@ export interface IParkingQueue extends Document {
 
 const ParkingQueueSchema = new Schema<IParkingQueue>({
   plate:       { type: String, required: true },
-  cardType:    { type: String, required: true, enum: ['car', 'motorcycle'] },
+  cardType:    { type: String, required: true, enum: ['car', 'motorcycle', 'overnight'] },
+  lostCard:    { type: Boolean },
+  sessionId:   { type: String },
   cardUid:     { type: String },
   joinedAt:    { type: Date, required: true, default: Date.now },
   status:      { type: String, required: true, enum: ['waiting', 'entered', 'cancelled'], default: 'waiting' },

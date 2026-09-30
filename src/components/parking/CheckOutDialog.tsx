@@ -10,6 +10,7 @@ import {
 import { type CardType } from './types'
 import { calcFeeBreakdown, type OvernightConfig } from '@/lib/calcFee'
 import { toAsciiNumber } from '@/lib/thaiInput'
+import { nowLocal } from '@/lib/simulatorImport'
 
 export type PaymentMethod = 'cash' | 'qr'
 
@@ -30,6 +31,8 @@ interface FineOption {
 }
 
 interface Props {
+  lockedLostCard?: boolean
+  submitting?: boolean
   open: boolean
   onOpenChange: (open: boolean) => void
   step: 'scan' | 'payment' | 'done'
@@ -74,7 +77,7 @@ function fmtDuration(entryTime: Date | null | undefined, exitTime: Date | null |
 export function CheckOutDialog({
   open, onOpenChange, step, plate, cardType, hours, fee, paidAmount, printing, lostCardFine = 300, checkoutSource,
   entryTime, customExitTime, scannedExitTime, overnightCfg, onCustomExitTimeChange,
-  onSimulateScan, onConfirm, onPrintReceipt, onDone, onDownloadPdf, downloadingPdf,
+  onSimulateScan, onConfirm, onPrintReceipt, onDone, onDownloadPdf, downloadingPdf, lockedLostCard = false, submitting = false,
 }: Props) {
   const isMoto = cardType === 'motorcycle'
   const theme = {
@@ -160,7 +163,7 @@ export function CheckOutDialog({
   const fineAmount = selectedFine?.amount ?? 0
 
   const totalDiscountAmount = discountAmount + dailyDiscountAmount
-  const finalFee = Math.max(0, fee - totalDiscountAmount) + fineAmount + (isLostCard ? lostCardFine : 0)
+  const finalFee = Math.max(0, fee - totalDiscountAmount) + fineAmount + ((isLostCard || lockedLostCard) ? lostCardFine : 0)
   const cashNum = parseFloat(cashReceived) || 0
   const change = cashNum - finalFee
 
@@ -283,24 +286,27 @@ export function CheckOutDialog({
                     <dt>เวลาเข้าจอด</dt><dd>{entryTime ? entryTime.toLocaleString('th-TH', { timeZone: 'Asia/Bangkok', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '—'}</dd>
                     <dt>ออกเวลา</dt><dd>{exitTimeDate.toLocaleString('th-TH', { timeZone: 'Asia/Bangkok', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' })}</dd>
                     <dt>จอดเป็นเวลา</dt><dd>{durationStr}</dd>
-                    <dt>คิดค่าจอด</dt><dd>{onCustomExitTimeChange && !customExitTime ? 'กรุณากำหนดเวลาออก' : '฿' + fee.toLocaleString('th-TH')}</dd>
+                    <dt>คิดค่าจอด</dt><dd>{'฿' + fee.toLocaleString('th-TH')}</dd>
                     {discountAmount > 0 && <><dt>ส่วนลด</dt><dd>{selectedDiscount?.name} −฿{discountAmount.toLocaleString('th-TH')}</dd></>}
                     {dailyDiscountAmount > 0 && <><dt>ส่วนลดรายวัน</dt><dd>{selectedDailyDiscount?.name} ×{nights} −฿{dailyDiscountAmount.toLocaleString('th-TH')}</dd></>}
                     {fineAmount > 0 && <><dt>{selectedFine?.name || 'ค่าปรับอื่น'}</dt><dd>฿{fineAmount.toLocaleString('th-TH')}</dd></>}
-                    {isLostCard && <><dt>ค่าปรับบัตรหาย</dt><dd>฿{lostCardFine.toLocaleString('th-TH')}</dd></>}
+                    {(isLostCard || lockedLostCard) && <><dt>ค่าปรับบัตรหาย</dt><dd>฿{lostCardFine.toLocaleString('th-TH')}</dd></>}
                   </dl>
                   <div className="grid grid-cols-[8rem_minmax(0,1fr)] gap-3 px-4 py-3 text-base font-semibold text-white" style={{ background: theme.hex600 }}>
                     <span>ยอดชำระ</span><span className="tabular-nums">฿{finalFee.toLocaleString('th-TH')}</span>
                   </div>
                 </div>
 
-                {/* Plate lookup is a dedicated lost-card path; card taps never enter it. */}
-                {checkoutSource === 'plate' && (
+                {entryTime && (!Number.isFinite(exitTimeDate.getTime()) || exitTimeDate <= entryTime) && (
+                  <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-700">เวลาออกต้องมากกว่าเวลาเข้า กรุณากำหนดเวลาออกใหม่</p>
+                )}
+                {/* Preserve a recorded loss even when the checkout is opened by card. */}
+                {(checkoutSource === 'plate' || lockedLostCard) && (
                   <div
                     className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-left"
                     style={{ background: 'rgba(217,119,6,0.1)', border: '1.5px solid rgba(217,119,6,0.4)' }}
                   >
-                    <input aria-label="ยืนยันบัตรหาย" type="checkbox" checked={isLostCard} onChange={e => setIsLostCard(e.target.checked)} />
+                    <input aria-label="ยืนยันบัตรหาย" type="checkbox" checked={isLostCard || lockedLostCard} disabled={lockedLostCard || submitting} onChange={e => setIsLostCard(e.target.checked)} />
                     <AlertTriangle className="size-3.5 shrink-0 text-amber-700" />
                     <span className="text-sm font-bold flex-1 text-amber-800">
                       ยืนยันว่าบัตรหาย — เพิ่ม ฿{lostCardFine}
@@ -315,7 +321,7 @@ export function CheckOutDialog({
                       type="button"
                       className="w-full flex items-center gap-2 px-2.5 py-1.5 text-left"
                       style={{ background: customExitTime ? 'rgba(109,40,217,0.05)' : '#FAFBFF' }}
-                      onClick={() => onCustomExitTimeChange(customExitTime ? '' : new Date().toISOString().slice(0, 19))}
+                      onClick={() => onCustomExitTimeChange(customExitTime ? '' : nowLocal())}
                     >
                       <Timer className="size-3 shrink-0" style={{ color: customExitTime ? '#6D28D9' : '#94A3B8' }} />
                       <span className="text-sm font-bold flex-1" style={{ color: customExitTime ? '#6D28D9' : '#94A3B8' }}>
@@ -496,11 +502,12 @@ export function CheckOutDialog({
                 size="sm"
                 className="flex-1 text-white font-bold"
                 disabled={
-                  (!!onCustomExitTimeChange && !customExitTime) ||
+                  submitting ||
+                  (!!entryTime && (!Number.isFinite(exitTimeDate.getTime()) || exitTimeDate <= entryTime)) ||
                   (paymentMethod === 'cash' && cashReceived !== '' && change < 0)
                 }
                 style={paymentMethod === 'qr' ? { background: '#7C3AED' } : { background: theme.hex600 }}
-                onClick={() => onConfirm(paymentMethod, selectedDiscount?._id, selectedDailyDiscount?._id, isLostCard, selectedFineId || undefined)}
+                onClick={() => onConfirm(paymentMethod, selectedDiscount?._id, selectedDailyDiscount?._id, isLostCard || lockedLostCard, selectedFineId || undefined)}
               >
                 {paymentMethod === 'cash'
                   ? <><Banknote className="size-4" /> รับเงินสด ฿{finalFee}</>

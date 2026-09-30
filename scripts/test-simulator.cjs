@@ -53,8 +53,12 @@ assert.equal(sift(filter)(base), true)
 assert.equal(sift(filter)({ ...base, isSimulated: true }), true)
 
 let visits = protectedVisits.concat([{ ...base, _id: 'normal' }, { ...base, _id: 'simulation', isSimulated: true }])
+let queues = []
 let role = 'admin'
-let settings = { rates: { overnight: { windowStart: '18:00', windowEnd: '07:00', flatRateStart: '22:00', flatRate: 100, extraHour: 20 } } }
+let settings = { capacity: { car: 10, motorcycle: 5 }, lostCardFine: 300, rates: { overnight: { windowStart: '18:00', windowEnd: '07:00', flatRateStart: '22:00', flatRate: 100, extraHour: 20 } } }
+const registeredCards = [{ uid: 'REGISTERED', type: 'car', isActive: true }, { uid: 'DISABLED', type: 'car', isActive: false }]
+const timeline = load('src/lib/cardTimeline.ts')
+const availability = { loadCardTimeline: async uids => ({ history: visits.filter(v => uids.includes(v.cardUid)).map(v => ({ ...v })), returns: new Map() }) }
 const route = load('src/app/api/simulate/route.ts', {
   'next/server': { NextResponse: { json: (body, options = {}) => ({ body, status: options.status ?? 200 }) } },
   'next/headers': { cookies: async () => ({ get: () => ({ value: 'token' }) }) },
@@ -62,6 +66,15 @@ const route = load('src/app/api/simulate/route.ts', {
   '@/lib/mongodb': { connectDB: async () => {} },
   '@/lib/parkingMutation': { parkingMutation: fn => fn },
   '@/lib/simulatorImport': helpers,
+  '@/lib/simulatorCapacity': load('src/lib/simulatorCapacity.ts'),
+  '@/models/ParkingQueue': { ParkingQueue: {
+    find: query => ({ lean: async () => queues.filter(sift(query)) }),
+    insertMany: async docs => { queues.push(...docs); return docs },
+    deleteMany: async query => { queues = queues.filter(q => !sift(query)(q)); return {} },
+  } },
+  '@/lib/cardAvailability': availability,
+  '@/lib/cardTimeline': timeline,
+  '@/models/ParkingCard': { ParkingCard: { find: query => ({ lean: async () => registeredCards.filter(sift(query)) }) } },
   '@/lib/clearParkingHistory': filterModule,
   '@/lib/calcFee': load('src/lib/calcFee.ts'),
   '@/models/SystemSettings': { getSettings: async () => settings },
@@ -69,7 +82,7 @@ const route = load('src/app/api/simulate/route.ts', {
   '@/models/ParkingSession': { ParkingSession: {
     find: query => ({ select() { return this }, sort() { return this }, lean: async () => visits.filter(sift(query)) }),
     deleteMany: async query => { const removed = visits.filter(sift(query)); visits = visits.filter(v => !removed.includes(v)); return { deletedCount: removed.length } },
-    insertMany: async docs => { const added = docs.map((doc, i) => ({ ...doc, _id: 'import-' + i })); visits.push(...added); return added },
+    insertMany: async docs => { const added = docs.map((doc, i) => ({ ...doc, _id: doc._id ?? 'import-' + i })); visits.push(...added); return added },
   } },
 })
 const request = body => ({ json: async () => body })
@@ -110,7 +123,7 @@ async function main() {
   assert.equal(JSON.stringify(settings), configurationBefore)
 
   visits = []
-  const row = { plate: 'TEST', cardType: 'car', entryTime: '2026-01-01T09:00:00+07:00', exitTime: '2026-01-01T10:00:00+07:00', paymentMethod: 'cash', shopDiscountName: 'Shop' }
+  const row = { cardUid: 'REGISTERED', plate: 'TEST', cardType: 'car', entryTime: '2026-01-01T09:00:00+07:00', exitTime: '2026-01-01T10:00:00+07:00', paymentMethod: 'cash', shopDiscountName: 'Shop' }
   let result = await route.POST(request({ mode: 'preview', rows: [row, row] }))
   assert.equal(result.body.ready, 1); assert.equal(result.body.duplicates, 1); assert.equal(result.body.total, 26)
   assert.equal(visits.length, 0, 'import preview does not insert')
@@ -134,6 +147,79 @@ async function main() {
   assert.equal((await route.POST(request({ mode: 'commit', rows: [hotel], token: hotelPreview.body.token }))).status, 409)
   assert.equal(visits.length, 1)
   assert.equal((await route.POST(request({ mode: 'preview', rows: [{ ...row, entryTime: '2026-01-01T09:00:00' }] }))).body.errors, 1)
+
+  visits = []
+  const previewRows = async rows => (await route.POST(request({ mode: 'preview', rows }))).body
+  const thirty = Array.from({ length: 30 }, (_, i) => ({ ...row, rowNum: i + 2, plate: String(1000 + i),
+    entryTime: new Date(Date.parse(row.entryTime) + i * 7200000).toISOString(),
+    exitTime: i === 29 ? '' : new Date(Date.parse(row.exitTime) + i * 7200000).toISOString(), lostCard: i === 29,
+  }))
+  const thirtyPreview = await previewRows([...thirty].reverse())
+  assert.equal(thirtyPreview.ready, 30); assert.equal(thirtyPreview.errors, 0)
+  assert.equal(thirtyPreview.results[29].status, 'active')
+  assert.equal(thirtyPreview.results[29].rowNum, 31)
+  assert.equal((await previewRows([{ ...row, cardUid: '' }])).errors, 1)
+  assert.equal((await previewRows([{ ...row, cardUid: 'DISABLED' }])).errors, 1)
+  assert.equal((await previewRows([{ ...row, cardType: 'motorcycle' }])).errors, 1)
+  const later = { ...row, plate: 'LATER', entryTime: '2026-01-01T10:01:00+07:00', exitTime: '2026-01-01T11:00:00+07:00' }
+  assert.equal((await previewRows([later, row])).ready, 2, 'unordered Excel rows are validated chronologically')
+  assert.equal((await previewRows([row, { ...later, entryTime: row.exitTime }])).errors, 1, 'exact boundary is not reusable')
+  assert.equal((await previewRows([{ ...row, exitTime: '' }, later])).errors, 1, 'open visit reserves card')
+  assert.equal((await previewRows([{ ...row, lostCard: true }, later])).errors, 1, 'lost card cannot be reused after exit')
+  for (const unavailable of [{ ...row, cardUid: '' }, { ...row, cardUid: 'DISABLED' }, { ...row, cardType: 'motorcycle' }]) {
+    assert.equal((await previewRows([unavailable])).results[0].cardUnavailable, true)
+  }
+  const pruneInput = [{ ...row, rowNum: 2, exitTime: '' }, { ...later, rowNum: 3 }]
+  const prunePreview = await previewRows(pruneInput)
+  const removedNumbers = new Set(prunePreview.results.filter(r => r.cardUnavailable).map(r => r.rowNum))
+  assert.deepEqual([...removedNumbers], [3], 'only unavailable card row is removed')
+  const remainingInput = pruneInput.filter(r => !removedNumbers.has(r.rowNum))
+  const remainingPreview = await previewRows(remainingInput)
+  assert.equal(remainingPreview.ready, 1)
+  assert.equal(remainingPreview.errors, 0)
+  assert.notEqual(remainingPreview.token, prunePreview.token, 'remaining rows need a new confirmation token')
+  assert.equal((await previewRows([{ ...row, exitTime: 'bad-date' }])).results[0].cardUnavailable, false, 'other errors must not remove rows')
+  const openRow = { ...row, exitTime: '', lostCard: true }
+  const openPreview = await previewRows([openRow])
+  assert.equal(openPreview.ready, 1); assert.equal(openPreview.total, 0)
+  assert.equal((await route.POST(request({ mode: 'commit', token: openPreview.token, rows: [openRow] }))).body.created, 1)
+  assert.equal(visits[0].cardUid, 'REGISTERED'); assert.equal(visits[0].status, 'active')
+  assert.equal(visits[0].exitTime, undefined); assert.equal(visits[0].lostCard, true)
+  assert.equal((await previewRows([later])).errors, 1)
+  assert.equal((await route.GET()).body.count, 0, 'cleanup keeps open and lost imports')
+
+  const checkout = load('src/app/api/sessions/checkout/route.ts', {
+    'next/server': { NextResponse: { json: (body, options = {}) => ({ body, status: options.status ?? 200 }) } },
+    'next/headers': { cookies: async () => ({ get: () => ({ value: 'token' }) }) },
+    '@/lib/auth': { COOKIE_NAME: 'auth', verifyToken: () => ({ role: 'admin', sub: 'test' }) },
+    '@/lib/mongodb': { connectDB: async () => {} }, '@/lib/parkingMutation': { parkingMutation: fn => fn },
+    '@/lib/cardAvailability': availability, '@/lib/cardTimeline': timeline,
+    '@/lib/calcFee': load('src/lib/calcFee.ts'), '@/lib/hardware': { runCheckoutSequence: async () => {} },
+    '@/models/SystemSettings': { getSettings: async () => settings },
+    '@/models/ParkingQueue': { ParkingQueue: {} }, '@/models/Shift': { Shift: { findOne: async () => null } },
+    '@/models/Discount': { Discount: {} }, '@/models/Fine': { Fine: {} },
+    '@/models/ParkingSession': { ParkingSession: { findOne: async query => {
+      const visit = visits.find(sift(query)); if (!visit) return null
+      return Object.assign(visit, { save: async () => {} })
+    } } },
+  })
+  const exitRequest = exitTime => request({ sessionId: visits[0]._id, exitTime, paymentMethod: 'cash', lostCard: false })
+  assert.equal((await checkout.POST(exitRequest('bad-date'))).status, 400)
+  assert.equal((await checkout.POST(exitRequest(row.entryTime))).status, 400)
+  const checkedOut = await checkout.POST(exitRequest(row.exitTime))
+  assert.equal(checkedOut.status, 200)
+  assert.equal(visits[0].status, 'completed'); assert.equal(visits[0].lostCard, true)
+  assert.equal(visits[0].lostFine, 300); assert.equal(visits[0].totalFee, 330)
+  assert.equal(visits.length, 1, 'checkout updates imported visit rather than creating another')
+  assert.equal((await route.GET()).body.count, 0, 'completed lost history survives cleanup')
+  assert.equal((await previewRows([later])).errors, 1)
+  visits = []
+  const normalOpen = { ...row, exitTime: '' }
+  const normalPreview = await previewRows([normalOpen])
+  await route.POST(request({ mode: 'commit', token: normalPreview.token, rows: [normalOpen] }))
+  assert.equal((await checkout.POST(exitRequest(row.exitTime))).status, 200)
+  assert.equal((await previewRows([later])).ready, 1, 'normal checkout frees the registered card after its exit time')
+  assert.equal((await previewRows([{ ...later, entryTime: row.exitTime }])).errors, 1)
 
   if (process.argv[2]) {
     const wb = XLSX.readFile(process.argv[2])

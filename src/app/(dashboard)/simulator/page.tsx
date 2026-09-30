@@ -10,6 +10,7 @@ import {
 import * as XLSX from 'xlsx'
 import { calcFeeBreakdown, type CardType, type FeeSegment, type OvernightConfig } from '@/lib/calcFee'
 import { nowLocal, parseDateTimeSplit, importDiscounts } from '@/lib/simulatorImport'
+import { SimulatorCheckout } from '@/components/parking/SimulatorCheckout'
 import { useToast } from '@/components/ui/Toast'
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -70,7 +71,11 @@ interface DiscountDoc {
   description?:  string
 }
 
+interface RegisteredCard { uid: string; type: CardType; label: string; isActive: boolean }
+
 interface SeedRow {
+  cardUid: string
+  lostCard: boolean
   id:            string
   plate:         string
   cardType:      CardType
@@ -303,13 +308,15 @@ function FeeCalculator({ overnightCfg, discounts }: { overnightCfg: OvernightCon
 
 // ── Batch Seed ────────────────────────────────────────────────────────────────
 
-function BatchSeed({ overnightCfg }: { overnightCfg: OvernightConfig | null }) {
+function BatchSeed({ overnightCfg, cards, lostCardFine }: { overnightCfg: OvernightConfig | null; cards: RegisteredCard[]; lostCardFine: number }) {
   const { success, error: toastError, warning } = useToast()
   const [rows, setRows] = useState<SeedRow[]>([])
   const [seeding, setSeeding] = useState(false)
   const [clearing, setClearing] = useState(false)
   const [confirmClear, setConfirmClear] = useState<{ count: number; token: string } | null>(null)
 
+  const [cardUid, setCardUid] = useState('')
+  const [lostCard, setLostCard] = useState(false)
   // form state for new row
   const [plate,         setPlate]         = useState('')
   const [cardType,      setCardType]      = useState<CardType>('car')
@@ -318,12 +325,12 @@ function BatchSeed({ overnightCfg }: { overnightCfg: OvernightConfig | null }) {
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'qr'>('cash')
 
   function addRow() {
-    if (!plate || !entryTime || !exitTime) return
+    if (!plate.trim() || !entryTime || !cards.some(c => c.uid === cardUid && c.type === cardType && c.isActive)) return
     const entry = new Date(entryTime), exit = new Date(exitTime)
-    if (isNaN(entry.getTime()) || isNaN(exit.getTime()) || exit <= entry) return
+    if (isNaN(entry.getTime()) || (exitTime && (isNaN(exit.getTime()) || exit <= entry))) return
     setRows(r => [...r, {
       id: crypto.randomUUID(), plate: plate.trim(), cardType,
-      entryTime, exitTime, paymentMethod,
+      entryTime, exitTime, paymentMethod, cardUid, lostCard,
     }])
     setPlate('')
     setExitTime('')
@@ -338,8 +345,8 @@ function BatchSeed({ overnightCfg }: { overnightCfg: OvernightConfig | null }) {
     setSeeding(true)
     try {
       const body = rows.map(r => ({
-        plate: r.plate, cardType: r.cardType,
-        entryTime: new Date(r.entryTime).toISOString(), exitTime: new Date(r.exitTime).toISOString(),
+        plate: r.plate, cardType: r.cardType, cardUid: r.cardUid, lostCard: r.lostCard,
+        entryTime: new Date(r.entryTime).toISOString(), exitTime: r.exitTime ? new Date(r.exitTime).toISOString() : '',
         paymentMethod: r.paymentMethod,
       }))
       const res = await fetch('/api/simulate', {
@@ -352,7 +359,7 @@ function BatchSeed({ overnightCfg }: { overnightCfg: OvernightConfig | null }) {
         setRows([])
       } else {
         const err = await res.json()
-        toastError('Seed ไม่สำเร็จ', err.error)
+        toastError('Seed ไม่สำเร็จ', err.results?.filter((r: { error?: string }) => r.error).slice(0, 3).map((r: { rowNum: number; error: string }) => `แถว ${r.rowNum}: ${r.error}`).join(' · ') || err.error)
       }
     } catch { toastError('บันทึกไม่สำเร็จ', 'เชื่อมต่อระบบไม่ได้ กรุณาลองใหม่') } finally { setSeeding(false) }
   }
@@ -384,9 +391,10 @@ function BatchSeed({ overnightCfg }: { overnightCfg: OvernightConfig | null }) {
   }
 
   function previewFee(r: SeedRow) {
+    if (!r.exitTime) return 0
     try {
       const { total } = calcFeeBreakdown(r.cardType, new Date(r.entryTime), new Date(r.exitTime), overnightCfg ?? undefined)
-      return total
+      return total + (r.lostCard ? lostCardFine : 0)
     } catch { return 0 }
   }
 
@@ -491,6 +499,14 @@ function BatchSeed({ overnightCfg }: { overnightCfg: OvernightConfig | null }) {
           </div>
         </div>
 
+        <div className="flex flex-wrap gap-3 items-center">
+          <select aria-label="เลือกบัตรสำหรับรายการ" value={cardUid} onChange={e => setCardUid(e.target.value)} className="border rounded-lg p-2 text-sm">
+            <option value="">เลือกบัตรที่ลงทะเบียน</option>
+            {cards.filter(c => c.isActive && c.type === cardType).map(c => <option key={c.uid} value={c.uid}>{c.label || c.uid} · {c.uid}</option>)}
+          </select>
+          <label className="text-sm flex gap-2"><input type="checkbox" checked={lostCard} onChange={e => setLostCard(e.target.checked)} />บัตรหาย</label>
+          <span className="text-xs text-slate-500">เว้นเวลาออกว่างเพื่อบันทึกเป็นรถอยู่ในลาน</span>
+        </div>
         {formExitIsDaytime && (
           <div className="flex items-center gap-2 px-3 py-2 rounded-lg"
             style={{ background: 'rgba(161,98,7,0.04)', border: '1px solid rgba(161,98,7,0.15)' }}>
@@ -502,7 +518,7 @@ function BatchSeed({ overnightCfg }: { overnightCfg: OvernightConfig | null }) {
         )}
 
         <button onClick={addRow}
-          disabled={!plate || !exitTime || new Date(exitTime) <= new Date(entryTime)}
+          disabled={!plate.trim() || !entryTime || !cards.some(c => c.uid === cardUid && c.type === cardType && c.isActive) || (!!exitTime && new Date(exitTime) <= new Date(entryTime))}
           className="flex items-center gap-2 h-9 px-4 rounded-lg text-xs font-black text-white disabled:opacity-40"
           style={{ background: '#059669' }}>
           <Plus className="size-3.5" />เพิ่มรายการ
@@ -525,13 +541,13 @@ function BatchSeed({ overnightCfg }: { overnightCfg: OvernightConfig | null }) {
                 {rows.map(r => {
                   const fee = previewFee(r)
                   const m = TYPE_META[r.cardType]; const Icon = m.icon
-                  const durMin = (new Date(r.exitTime).getTime() - new Date(r.entryTime).getTime()) / 60000
+                  const durMin = r.exitTime ? (new Date(r.exitTime).getTime() - new Date(r.entryTime).getTime()) / 60000 : 0
                   const daytime = overnightCfg && exitIsDaytime(r.exitTime, overnightCfg) && r.cardType !== 'overnight'
                   return (
                     <tr key={r.id} style={{ borderBottom: '1px solid #F1F5F9' }}
                       onMouseEnter={e => (e.currentTarget.style.background = '#FAFBFF')}
                       onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
-                      <td className="px-3 py-2.5 font-black text-slate-800 tracking-widest">{r.plate}</td>
+                      <td className="px-3 py-2.5 font-black text-slate-800 tracking-widest">{r.plate}<span className="block text-xs font-normal">บัตร {r.cardUid}{r.lostCard ? ' · บัตรหาย' : ''}</span></td>
                       <td className="px-3 py-2.5">
                         <span className="flex items-center gap-1 text-[10px] font-bold" style={{ color: m.color }}>
                           <Icon className="size-3" />{m.label}
@@ -592,6 +608,8 @@ function BatchSeed({ overnightCfg }: { overnightCfg: OvernightConfig | null }) {
 // ── Excel Tester ──────────────────────────────────────────────────────────────
 
 interface TestRow {
+  cardUid: string
+  lostCard: boolean
   id:                string
   rowNum:            number
   plate:             string
@@ -606,12 +624,15 @@ interface TestRow {
 }
 
 interface ImportPreview {
+  waiting?: number
+  active?: number
+  queued?: number
   token: string
   ready: number
   duplicates: number
   errors: number
   total: number
-  results: { rowNum: number; plate: string; fee: number; discount: number; total: number; duplicate: boolean; error?: string; warning?: string }[]
+  results: { cardUid: string; status: string; lostFine: number; rowNum: number; plate: string; fee: number; discount: number; total: number; duplicate: boolean; error?: string; warning?: string }[]
 }
 
 function normalizeCardType(val: unknown): CardType | null {
@@ -634,6 +655,8 @@ function downloadTemplate() {
       'เวลาออก (HH:MM[:SS])',
       'ชื่อส่วนลดร้านค้า (ไม่บังคับ)',
       'ชื่อส่วนลดรถโรงแรม (ไม่บังคับ)',
+      'เลขบัตร UID (เลือกภายหลังได้)',
+      'บัตรหาย (true/false)',
     ],
     ['1234', 'car',        '14/08/2024', '09:00:00', '14/08/2024', '11:30:00', 'คูปองร้านอาหาร', ''],
     ['5678', 'motorcycle', '14/08/2024', '08:00',    '14/08/2024', '09:00',    '', ''],
@@ -651,7 +674,7 @@ function downloadTemplate() {
   XLSX.writeFile(wb, 'fee_test_template.xlsx')
 }
 
-function ExcelTester({ overnightCfg, discounts }: { overnightCfg: OvernightConfig | null; discounts: DiscountDoc[] }) {
+function ExcelTester({ overnightCfg, discounts, cards }: { overnightCfg: OvernightConfig | null; discounts: DiscountDoc[]; cards: RegisteredCard[] }) {
   const { success, error: toastError } = useToast()
   const [rows,      setRows]      = useState<TestRow[]>([])
   const [fileName,  setFileName]  = useState('')
@@ -660,6 +683,7 @@ function ExcelTester({ overnightCfg, discounts }: { overnightCfg: OvernightConfi
   const [paymentMethod, setPaymentMethod] = useState<'' | 'cash' | 'qr'>('')
   const [importPreview, setImportPreview] = useState<ImportPreview | null>(null)
   const [importing, setImporting] = useState(false)
+  const [removedRows, setRemovedRows] = useState<{ rowNum: number; plate: string; error: string }[]>([])
   const [reading, setReading] = useState(false)
   const fileVersion = useRef(0)
   const [page, setPage] = useState(1)
@@ -681,18 +705,37 @@ function ExcelTester({ overnightCfg, discounts }: { overnightCfg: OvernightConfi
     if (!paymentMethod || rows.some(r => r.error) || (mode === 'commit' && !importPreview)) return
     setImporting(true)
     try {
-      const res = await fetch('/api/simulate', {
+      const requestImport = async (source: TestRow[]) => fetch('/api/simulate', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode, token: importPreview?.token, rows: rows.map(r => ({
-          rowNum: r.rowNum, plate: r.plate, cardType: r.cardType,
+        body: JSON.stringify({ mode, token: importPreview?.token, rows: source.map(r => ({
+          rowNum: r.rowNum, plate: r.plate, cardType: r.cardType, cardUid: r.cardUid, lostCard: r.lostCard,
           entryTime: r.entryTime, exitTime: r.exitTime, paymentMethod,
           shopDiscountName: mappedName(r.shopDiscountName, 'shop'), hotelDiscountName: mappedName(r.hotelDiscountName, 'hotel'),
         })) }),
       })
-      const data = await res.json()
+      let res = await requestImport(rows)
+      let data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'ไม่สามารถบันทึกได้')
+      if (mode === 'preview') {
+        const removed = (data.results ?? []).filter((r: { cardUnavailable?: boolean }) => r.cardUnavailable) as { rowNum: number; plate: string; error: string }[]
+        if (removed.length) {
+          const numbers = new Set(removed.map(r => r.rowNum))
+          const remaining = rows.filter(r => !numbers.has(r.rowNum))
+          setRows(remaining)
+          setRemovedRows(old => [...old, ...removed])
+          setImportPreview(null)
+          setExpandedId(null)
+          setPage(old => Math.min(old, Math.max(1, Math.ceil(remaining.length / pageSize))))
+          toastError('นำแถวที่ไม่มีบัตรใช้งานออกแล้ว', `${removed.length} แถว ดูเลขแถวและเหตุผลในรายการแจ้งเตือน`)
+          if (!remaining.length) return
+          res = await requestImport(remaining)
+          data = await res.json()
+          if (!res.ok) throw new Error(data.error ?? 'ตรวจสอบรายการที่เหลือไม่สำเร็จ')
+        }
+      }
       if (mode === 'preview') setImportPreview(data)
       else {
+        window.dispatchEvent(new Event('parking-imported'))
         success('นำเข้าสำเร็จ', `บันทึก ${data.created} รายการ ข้ามรายการซ้ำ ${data.duplicates} รายการ`)
         setImportPreview(null)
         setRows([])
@@ -717,6 +760,7 @@ function ExcelTester({ overnightCfg, discounts }: { overnightCfg: OvernightConfi
     if (importing) return
     const version = ++fileVersion.current
     setFileName(file.name)
+    setRemovedRows([])
     setRows([])
     setImportPreview(null)
     setDiscountMapping({})
@@ -744,6 +788,7 @@ function ExcelTester({ overnightCfg, discounts }: { overnightCfg: OvernightConfi
           const hotelDiscountName = String(r[7] ?? '').trim()
 
           const base = {
+            cardUid: String(r[8] ?? '').trim(), lostCard: ['true', '1', 'ใช่', 'บัตรหาย'].includes(String(r[9] ?? '').trim().toLowerCase()),
             id: crypto.randomUUID(), rowNum, plate, cardType: (cardType ?? 'car') as CardType,
             shopDiscountName, hotelDiscountName,
             calculatedFee: 0, segments: [] as FeeSegment[],
@@ -752,6 +797,8 @@ function ExcelTester({ overnightCfg, discounts }: { overnightCfg: OvernightConfi
           if (!plate)     return { ...base, entryTime: '', exitTime: '', error: 'ไม่มีทะเบียน' }
           if (!cardType)  return { ...base, entryTime: '', exitTime: '', error: `ประเภทไม่ถูกต้อง: "${r[1]}"` }
           if (!entryDate) return { ...base, entryTime: '', exitTime: '', error: 'วันที่/เวลาเข้าไม่ถูกต้อง (col C-D)' }
+          const openVisit = (r[4] == null || r[4] === '') && (r[5] == null || r[5] === '')
+          if (openVisit) return { ...base, entryTime: entryDate.toISOString(), exitTime: '', error: null }
           if (!exitDate)  return { ...base, entryTime: entryDate.toISOString(), exitTime: '', error: 'วันที่/เวลาออกไม่ถูกต้อง (col E-F)' }
           if (exitDate <= entryDate) return { ...base, entryTime: entryDate.toISOString(), exitTime: exitDate.toISOString(), error: 'เวลาออกต้องมากกว่าเวลาเข้า' }
 
@@ -857,6 +904,13 @@ function ExcelTester({ overnightCfg, discounts }: { overnightCfg: OvernightConfi
         </button>
       </div>
 
+      <p className="px-5 py-2 text-xs text-amber-800">เมื่อตรวจสอบก่อนบันทึก ระบบจะนำแถวที่ไม่ได้เลือกบัตรหรือบัตรใช้ไม่ได้ออกจากรายการนำเข้า พร้อมแจ้งเหตุผล</p>
+      {removedRows.length > 0 && <div role="alert" className="mx-5 my-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+        <p className="font-bold">นำออกจากรายการนำเข้า {removedRows.length} แถว — ไม่มีการลบข้อมูลในฐานข้อมูล</p>
+        <ul className="mt-2 max-h-48 overflow-auto">
+          {removedRows.map(r => <li key={r.rowNum}>แถว {r.rowNum} · {r.plate || 'ไม่มีทะเบียน'}: {r.error}</li>)}
+        </ul>
+      </div>}
       {/* drop zone */}
       <div className="p-5" style={{ borderBottom: '1px solid #E8ECF4' }}>
         <label
@@ -893,7 +947,7 @@ function ExcelTester({ overnightCfg, discounts }: { overnightCfg: OvernightConfi
       {rows.length > 0 && (
         <div className="p-5 space-y-3 border-b border-slate-200 bg-slate-50">
           <p className="text-sm font-bold text-slate-800">บันทึกเป็นรายการปกติในฐานข้อมูลจริง</p>
-          <p className="text-xs text-slate-600">ใช้เวลาเข้า–ออกตามไฟล์ รวมในประวัติและรายงาน · เลือกช่องทางชำระเงินสำหรับทุกแถวในไฟล์นี้</p>
+          <p className="text-xs text-slate-600">ลานเต็มจะสร้างคิวรออัตโนมัติ แถวที่มีเวลาออกจะเป็นรอคิวแล้วออก แถวที่ไม่มีเวลาออกจะรอให้เรียกเข้าช่องจอด · เลือกบัตรและบัตรหายในตารางด้านล่างก่อนตรวจสอบ · เว้นวันที่และเวลาออกว่างทั้งคู่สำหรับรถที่ยังอยู่ในลาน · ส่วนลดและค่าปรับของรถที่ยังไม่ออกจะคำนวณตอนรับรถออก</p>
           <p className="text-xs text-slate-600">ส่วนลดร้านค้าใช้กับรายการรายชั่วโมง ส่วนลดโรงแรมใช้ตามจำนวนคืนที่คิดค่าเหมา เลือกจับคู่ชื่อหรือ “ไม่ใช้ส่วนลด” เพื่อข้ามส่วนลดนั้นทุกแถว</p>
           {unmatchedDiscounts.map(({ kind, name }) => (
             <label key={`${kind}:${name}`} className="block text-sm text-amber-800">
@@ -922,13 +976,13 @@ function ExcelTester({ overnightCfg, discounts }: { overnightCfg: OvernightConfi
           {errorCount > 0 && <p className="text-sm text-red-700">แก้ไขข้อมูลผิดพลาด {errorCount} แถวในไฟล์แล้วเลือกไฟล์อีกครั้ง</p>}
           {importPreview && (
             <div className="space-y-3">
-              <p className="text-sm font-bold">พร้อมบันทึก {importPreview.ready.toLocaleString()} รายการ · ซ้ำ {importPreview.duplicates.toLocaleString()} · ผิดพลาด {importPreview.errors.toLocaleString()} · ยอดที่จะบันทึก ฿{importPreview.total.toLocaleString()}</p>
+              <p className="text-sm font-bold">พร้อมบันทึก {importPreview.ready.toLocaleString()} รายการ · อยู่ในลาน {importPreview.active ?? 0} · รอคิว {importPreview.waiting ?? 0} · ซ้ำ {importPreview.duplicates.toLocaleString()} · ผิดพลาด {importPreview.errors.toLocaleString()} · ยอดที่จะบันทึก ฿{importPreview.total.toLocaleString()}</p>
               <div className="max-h-72 overflow-auto border rounded-lg bg-white">
                 <table className="w-full text-xs">
-                  <thead className="sticky top-0 bg-slate-100"><tr>{['แถว', 'ทะเบียน', 'ค่าจอด', 'ส่วนลด', 'สุทธิ', 'ผลตรวจจากเซิร์ฟเวอร์'].map(h => <th key={h} className="p-2 text-left">{h}</th>)}</tr></thead>
+                  <thead className="sticky top-0 bg-slate-100"><tr>{['แถว', 'ทะเบียน', 'บัตร / สถานะ', 'ค่าจอด', 'ส่วนลด', 'ค่าปรับบัตรหาย', 'สุทธิ', 'ผลตรวจจากเซิร์ฟเวอร์'].map(h => <th key={h} className="p-2 text-left">{h}</th>)}</tr></thead>
                   <tbody>{importPreview.results.slice((page - 1) * pageSize, page * pageSize).map((r, i) => <tr key={i} className="border-t">
-                    <td className="p-2">{r.rowNum}</td><td className="p-2">{r.plate}</td><td className="p-2">{r.fee}</td>
-                    <td className="p-2">{r.discount}</td><td className="p-2">{r.total}</td>
+                    <td className="p-2">{r.rowNum}</td><td className="p-2">{r.plate}</td><td className="p-2">{r.cardUid} · {r.status === 'waiting' ? 'รอคิว' : r.status === 'queue_completed' ? 'รอคิวแล้วออก' : r.status === 'active' ? 'อยู่ในลาน' : 'ออกแล้ว'}</td><td className="p-2">{r.fee}</td>
+                    <td className="p-2">{r.discount}</td><td className="p-2">{r.lostFine}</td><td className="p-2">{r.total}</td>
                     <td className={`p-2 ${r.error ? 'text-red-700' : r.warning ? 'text-amber-700' : 'text-slate-600'}`}>{r.error || (r.duplicate ? 'ซ้ำ — จะข้ามรายการนี้' : r.warning || 'พร้อมบันทึก')}</td>
                   </tr>)}</tbody>
                 </table>
@@ -978,7 +1032,7 @@ function ExcelTester({ overnightCfg, discounts }: { overnightCfg: OvernightConfi
           <table className="w-full text-xs">
             <thead>
               <tr style={{ background: '#F8FAFF', borderBottom: '1px solid #E8ECF4' }}>
-                {(['แถว', 'ทะเบียน', 'ประเภท', 'เข้า', 'ออก', 'ระยะ', 'คำนวณ',
+                {(['แถว', 'บัตรที่ลงทะเบียน', 'บัตรหาย', 'ทะเบียน', 'ประเภท', 'เข้า', 'ออก', 'ระยะ', 'คำนวณ',
                   ...(hasShopDiscount  ? ['ส่วนลดร้านค้า'] : []),
                   ...(hasHotelDiscount ? ['ส่วนลดโรงแรม'] : []),
                   ...(hasDiscount      ? ['สุทธิ'] : []),
@@ -1007,6 +1061,15 @@ function ExcelTester({ overnightCfg, discounts }: { overnightCfg: OvernightConfi
                       onMouseEnter={e => { if (!r.error && !isExp) e.currentTarget.style.background = '#FAFBFF' }}
                       onMouseLeave={e => { if (!isExp) e.currentTarget.style.background = r.error ? 'rgba(220,38,38,0.02)' : 'transparent' }}>
                       <td className="px-3 py-2.5 text-slate-400 text-[10px]">#{r.rowNum}</td>
+                      <td className="px-3 py-2" onClick={e => e.stopPropagation()}>
+                        <select aria-label={`บัตรแถว ${r.rowNum}`} disabled={importing} className="border rounded p-2 min-w-40" value={r.cardUid}
+                          onChange={e => { setRows(old => old.map(v => v.id === r.id ? { ...v, cardUid: e.target.value } : v)); setImportPreview(null) }}>
+                          <option value="">เลือกบัตร</option>
+                          {cards.filter(c => c.isActive && c.type === r.cardType).map(c => <option key={c.uid} value={c.uid}>{c.label || c.uid} · {c.uid}</option>)}
+                        </select>
+                      </td>
+                      <td className="px-3 py-2" onClick={e => e.stopPropagation()}><input aria-label={`บัตรหายแถว ${r.rowNum}`} type="checkbox" checked={r.lostCard} disabled={importing}
+                        onChange={e => { setRows(old => old.map(v => v.id === r.id ? { ...v, lostCard: e.target.checked } : v)); setImportPreview(null) }} /></td>
                       <td className="px-3 py-2.5 font-black text-slate-800 tracking-widest">{r.plate || '—'}</td>
                       <td className="px-3 py-2.5">
                         {r.error
@@ -1156,18 +1219,22 @@ function ExcelTester({ overnightCfg, discounts }: { overnightCfg: OvernightConfi
 export default function SimulatorPage() {
   const [overnightCfg, setOvernightCfg] = useState<OvernightConfig | null>(null)
   const [discounts,    setDiscounts]    = useState<DiscountDoc[]>([])
+  const [cards, setCards] = useState<RegisteredCard[]>([])
+  const [lostCardFine, setLostCardFine] = useState(300)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
 
   useEffect(() => {
-    Promise.all(['/api/settings', '/api/discounts?active=1'].map(async url => {
+    Promise.all(['/api/settings', '/api/discounts?active=1', '/api/cards'].map(async url => {
       const res = await fetch(url)
       if (!res.ok) throw new Error('โหลดอัตราค่าจอดและส่วนลดไม่สำเร็จ')
       return res.json()
-    })).then(([settings, discounts]) => {
-      if (!settings?.rates?.overnight || !Array.isArray(discounts)) throw new Error('ข้อมูลการตั้งค่าไม่ครบ')
+    })).then(([settings, discounts, cards]) => {
+      if (!settings?.rates?.overnight || !Array.isArray(discounts) || !Array.isArray(cards)) throw new Error('ข้อมูลการตั้งค่าไม่ครบ')
       setOvernightCfg(settings.rates.overnight)
       setDiscounts(discounts)
+      setCards(cards)
+      setLostCardFine(settings.lostCardFine ?? 300)
     }).catch(err => setLoadError(err instanceof Error ? err.message : 'โหลดข้อมูลไม่สำเร็จ'))
       .finally(() => setLoading(false))
   }, [])
@@ -1197,8 +1264,9 @@ export default function SimulatorPage() {
           <div role="alert" className="p-4 bg-red-50 text-red-700 rounded-lg">{loadError} <button className="underline" onClick={() => window.location.reload()}>ลองใหม่</button></div>
         ) : <>
         <FeeCalculator overnightCfg={overnightCfg} discounts={discounts} />
-        <ExcelTester overnightCfg={overnightCfg} discounts={discounts} />
-        <BatchSeed overnightCfg={overnightCfg} />
+        <ExcelTester overnightCfg={overnightCfg} discounts={discounts} cards={cards} />
+        <SimulatorCheckout config={overnightCfg} lostCardFine={lostCardFine} />
+        <BatchSeed overnightCfg={overnightCfg} cards={cards} lostCardFine={lostCardFine} />
         </>}
       </div>
     </>

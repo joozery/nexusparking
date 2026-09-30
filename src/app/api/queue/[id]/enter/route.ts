@@ -1,4 +1,5 @@
 import { parkingMutation } from '@/lib/parkingMutation'
+import { validateRegisteredVisit } from '@/lib/cardAvailability'
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { verifyToken, COOKIE_NAME } from '@/lib/auth'
@@ -25,6 +26,10 @@ async function handlePost(
 
   const q = await ParkingQueue.findOne({ _id: id, status: 'waiting' })
   if (!q) return NextResponse.json({ error: 'ไม่พบคิว' }, { status: 404 })
+  if (q.cardUid && !q.cardUid.startsWith('WALKIN-')) {
+    const conflict = await validateRegisteredVisit({ cardUid: q.cardUid, entryTime: q.joinedAt, lostCard: q.lostCard }, q.cardType, String(q._id))
+    if (conflict) return NextResponse.json({ error: conflict }, { status: 409 })
+  }
   if (q.cardUid && await ParkingSession.exists({ cardUid: q.cardUid, status: 'active' })) {
     return NextResponse.json({ error: 'บัตรนี้มีรถอยู่ในลานแล้ว กรุณาตรวจรายการรถก่อนย้ายคิว' }, { status: 409 })
   }
@@ -58,16 +63,20 @@ async function handlePost(
   }
 
   const session = await ParkingSession.create({
+    _id:        q._id,
     cardUid:    q.cardUid ?? `WALKIN-${crypto.randomUUID()}`,
     cardType:   q.cardType,
     plate:      q.plate,
     entryTime:  now,
+    parkingStartedAt: new Date(),
+    lostCard: q.lostCard,
     status:     'active',
     operatorId: payload?.sub,
     shiftId,
   })
 
   q.status    = 'entered'
+  q.sessionId = String(session._id)
   q.enteredAt = new Date()
   await q.save()
 

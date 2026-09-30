@@ -10,7 +10,7 @@ import { calcFeeBreakdown } from '@/lib/calcFee'
 import { getTodayStartTH } from '@/lib/dateTh'
 
 // 'overnight' card-type sessions are physically cars, so they're folded into the "car" bucket
-// everywhere in this route — the queue model doesn't have an 'overnight' type at all.
+// everywhere in this route, including the waiting queue.
 const CAR_TYPES = ['car', 'overnight'] as const
 
 export async function GET() {
@@ -29,7 +29,7 @@ export async function GET() {
     ParkingCard.countDocuments({ type: 'car', isActive: true }),
     ParkingCard.countDocuments({ type: 'overnight', isActive: true }),
     ParkingCard.countDocuments({ type: 'motorcycle', isActive: true }),
-    ParkingQueue.countDocuments({ cardType: 'car', status: 'waiting' }),
+    ParkingQueue.countDocuments({ cardType: { $in: CAR_TYPES }, status: 'waiting' }),
     ParkingQueue.countDocuments({ cardType: 'motorcycle', status: 'waiting' }),
     ParkingCard.countDocuments({ type: { $in: CAR_TYPES }, cardCategory: 'monthly', isActive: true }),
     ParkingCard.countDocuments({ type: 'motorcycle', cardCategory: 'monthly', isActive: true }),
@@ -65,8 +65,8 @@ export async function GET() {
     ParkingSession.countDocuments({ cardType: { $in: CAR_TYPES }, status: 'completed', exitTime: { $gte: todayStart } }),
     ParkingSession.countDocuments({ cardType: 'motorcycle', entryTime: { $gte: todayStart } }),
     ParkingSession.countDocuments({ cardType: 'motorcycle', status: 'completed', exitTime: { $gte: todayStart } }),
-    ParkingQueue.countDocuments({ cardType: 'car', status: { $in: ['waiting', 'cancelled'] }, joinedAt: { $gte: todayStart } }),
-    ParkingQueue.countDocuments({ cardType: 'motorcycle', status: { $in: ['waiting', 'cancelled'] }, joinedAt: { $gte: todayStart } }),
+    ParkingQueue.countDocuments({ cardType: { $in: CAR_TYPES }, status: { $in: ['waiting', 'cancelled'] }, sessionId: null, joinedAt: { $gte: todayStart } }),
+    ParkingQueue.countDocuments({ cardType: 'motorcycle', status: { $in: ['waiting', 'cancelled'] }, sessionId: null, joinedAt: { $gte: todayStart } }),
   ])
   const carInToday  = carSessionsToday + carQueueToday
   const motoInToday = motoSessionsToday + motoQueueToday
@@ -111,8 +111,7 @@ export async function GET() {
 
   // จำนวนรถที่ใช้ "บัตร" แต่ละประเภทอยู่ในลานตอนนี้ (แยกตามประเภทบัตรที่ลงทะเบียนไว้จริง
   // ไม่ใช่โหมดคิดค่าบริการแบบ activeNormal/activeOvernight ด้านบน)
-  const activeOvernightCards = carActive.filter(s => s.cardType === 'overnight').length
-  const activeCarCards       = carActive.filter(s => s.cardType === 'car').length
+  const remainingCards = (types: readonly string[]) => enabledCards.filter(card => types.includes(card.type) && !occupiedUids.has(card.uid) && !missingUids.has(card.uid)).length
 
   return NextResponse.json({
     car: {
@@ -128,11 +127,11 @@ export async function GET() {
       queueWaiting:      carQueueWaiting,
       cardsRegistered:   carCards,
       monthlyCardsRegistered: carMonthlyCards,
-      cardsRemaining:    Math.max(0, carCards - carActive.length),
+      cardsRemaining:    remainingCards(CAR_TYPES),
       overnightCardsRegistered: overnightCards,
-      overnightCardsRemaining:  Math.max(0, overnightCards - activeOvernightCards),
+      overnightCardsRemaining:  remainingCards(['overnight']),
       normalCardsRegistered:    carOnlyCards,
-      normalCardsRemaining:     Math.max(0, carOnlyCards - activeCarCards),
+      normalCardsRemaining:     remainingCards(['car']),
       lostToday:         lostToday(carLost),
     },
     motorcycle: {
@@ -148,7 +147,7 @@ export async function GET() {
       queueWaiting:      motoQueueWaiting,
       cardsRegistered:   motoCards,
       monthlyCardsRegistered: motoMonthlyCards,
-      cardsRemaining:    Math.max(0, motoCards - motoActive.length),
+      cardsRemaining:    remainingCards(['motorcycle']),
       lostToday:         lostToday(motoLost),
     },
   })

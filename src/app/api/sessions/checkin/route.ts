@@ -1,4 +1,5 @@
 import { parkingMutation } from '@/lib/parkingMutation'
+import { validateRegisteredVisit } from '@/lib/cardAvailability'
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { verifyToken, COOKIE_NAME } from '@/lib/auth'
@@ -32,6 +33,7 @@ async function handlePost(req: NextRequest) {
   const settings = await getSettings()
 
   const now = customEntryTime ? new Date(customEntryTime) : new Date()
+  if (!Number.isFinite(now.getTime())) return NextResponse.json({ error: 'เวลาเข้าไม่ถูกต้อง' }, { status: 400 })
 
   const [openH, openM]   = settings.businessHours.open.split(':').map(Number)
   const [closeH, closeM] = settings.businessHours.close.split(':').map(Number)
@@ -55,6 +57,8 @@ async function handlePost(req: NextRequest) {
     }
     resolvedUid  = card.uid
     resolvedType = card.type
+    const conflict = await validateRegisteredVisit({ cardUid: card.uid, entryTime: now }, card.type)
+    if (conflict) return NextResponse.json({ error: conflict }, { status: 409 })
     const waiting = await ParkingQueue.findOne({ cardUid: card.uid, status: 'waiting' })
     if (waiting) {
       return NextResponse.json({ error: 'บัตรนี้อยู่ในคิวแล้ว กรุณายืนยันเข้าลานจากรายการคิวรอ' }, { status: 409 })

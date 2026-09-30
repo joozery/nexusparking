@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { connectDB } from '@/lib/mongodb'
 import { ParkingSession } from '@/models/ParkingSession'
+import { ParkingQueue } from '@/models/ParkingQueue'
 import { getSettings } from '@/models/SystemSettings'
 import { getTodayStartTH } from '@/lib/dateTh'
 import { calcFeeBreakdown } from '@/lib/calcFee'
@@ -14,7 +15,7 @@ export async function GET() {
   const todayStart = getTodayStartTH()
   const now = new Date()
 
-  const [carActive, motoActive, todayEntrySessions, todayRevenueByMethod, settings] = await Promise.all([
+  const [carActive, motoActive, todayEntrySessions, todayRevenueByMethod, settings, todayQueues] = await Promise.all([
     ParkingSession.countDocuments({ cardType: { $in: CAR_TYPES }, status: 'active' }),
     ParkingSession.countDocuments({ cardType: 'motorcycle', status: 'active' }),
     // Need the actual rows (not just a count) to classify each by billing mode below.
@@ -24,6 +25,7 @@ export async function GET() {
       { $group: { _id: '$paymentMethod', total: { $sum: '$totalFee' } } },
     ]),
     getSettings(),
+    ParkingQueue.find({ status: { $in: ['waiting', 'cancelled'] }, sessionId: null, joinedAt: { $gte: todayStart } }).lean(),
   ])
 
   const activeSessions = carActive + motoActive
@@ -40,7 +42,8 @@ export async function GET() {
   // Billing mode is worked out from the session's actual fee breakdown (crossing the
   // overnight window), not the stored cardType — a motorcycle can be billed overnight too.
   let carNormal = 0, carOvernight = 0, motoNormal = 0, motoOvernight = 0
-  for (const s of todayEntrySessions) {
+  const todayEntries = [...todayEntrySessions, ...todayQueues.map(q => ({ cardType: q.cardType, entryTime: q.joinedAt, exitTime: q.cancelledAt }))]
+  for (const s of todayEntries) {
     const isCar = (CAR_TYPES as readonly string[]).includes(s.cardType)
     const breakdown = calcFeeBreakdown(s.cardType, s.entryTime, s.exitTime ?? now, settings.rates.overnight)
     const isOvernight = breakdown.segments.some(seg => seg.kind === 'overnight')
@@ -57,7 +60,7 @@ export async function GET() {
     totalCapacity,
     capacityCar:        settings.capacity.car,
     capacityMotorcycle: settings.capacity.motorcycle,
-    todayEntries:  todayEntrySessions.length,
+    todayEntries:  todayEntries.length,
     todayRevenue:  revenue,
     // Per-lot breakdown — car and motorcycle parking are tracked as separate pools.
     car: {

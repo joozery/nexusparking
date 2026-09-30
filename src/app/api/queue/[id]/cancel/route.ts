@@ -13,6 +13,7 @@ async function handlePost(
 
   const q = await ParkingQueue.findOne({ _id: id, status: 'waiting' })
   if (!q) return NextResponse.json({ error: 'ไม่พบคิว' }, { status: 404 })
+  if (q.lostCard) return NextResponse.json({ error: 'บัตรนี้แจ้งหาย กรุณาทำรายการรับรถออกเพื่อเก็บประวัติและค่าปรับ' }, { status: 409 })
 
   q.status      = 'cancelled'
   q.cancelledAt = new Date()
