@@ -1,10 +1,12 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
-import { Search, ChevronLeft, ChevronRight, Camera, ImageOff, X } from 'lucide-react'
+import { useEffect, useState, useCallback, useRef } from 'react'
+import { Search, ChevronLeft, ChevronRight, Camera, ImageOff, X, FileSpreadsheet, FileText } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody } from '@/components/ui/dialog'
+import { useToast } from '@/components/ui/Toast'
+import type { HistoryExportRow } from '@/lib/sessionHistoryExport'
 
-interface SessionRow {
+interface SessionRow extends HistoryExportRow {
   _id:            string
   cardUid:        string
   cardType:       'car' | 'motorcycle' | 'overnight'
@@ -44,6 +46,7 @@ const baht = (n: number) => `฿${n.toLocaleString('th-TH')}`
 const LIMIT = 20
 
 export function SessionHistory() {
+  const { success, error: toastError } = useToast()
   const [rows,    setRows]    = useState<SessionRow[]>([])
   const [total,   setTotal]   = useState(0)
   const [page,    setPage]    = useState(1)
@@ -52,27 +55,82 @@ export function SessionHistory() {
   const [plate,    setPlate]    = useState('')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo,   setDateTo]   = useState('')
+  const [includePhotos, setIncludePhotos] = useState(false)
+  const [exporting, setExporting] = useState(false)
+  const [progress, setProgress] = useState('')
+  const [pendingExport, setPendingExport] = useState<{ rows: HistoryExportRow[]; format: 'pdf' | 'excel'; description: string; photos: boolean } | null>(null)
+  const exportController = useRef<AbortController | null>(null)
+  const listController = useRef<AbortController | null>(null)
+  useEffect(() => () => { exportController.current?.abort(); listController.current?.abort() }, [])
+
+  async function prepareExport(format: 'pdf' | 'excel') {
+    const controller = new AbortController()
+    exportController.current = controller
+    setExporting(true); setProgress('กำลังรวบรวมทุกรายการตามตัวกรอง…')
+    const description = `ทะเบียน: ${plate || 'ทั้งหมด'} · วันที่เข้า: ${dateFrom || 'ไม่จำกัด'} ถึง ${dateTo || 'ไม่จำกัด'}`
+    try {
+      const qs = new URLSearchParams()
+      if (plate) qs.set('plate', plate)
+      if (dateFrom) qs.set('dateFrom', dateFrom)
+      if (dateTo) qs.set('dateTo', dateTo)
+      const response = await fetch(`/api/reports/history?${qs}`, { signal: controller.signal })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error ?? 'โหลดรายการไม่สำเร็จ')
+      controller.signal.throwIfAborted()
+      if (!data.sessions?.length) throw new Error('ไม่มีรายการที่ตรงกับตัวกรอง')
+      setPendingExport({ rows: data.sessions, format, description, photos: includePhotos })
+    } catch (error) {
+      if (!controller.signal.aborted) toastError('ส่งออกไม่สำเร็จ', error instanceof Error ? error.message : 'กรุณาลองใหม่')
+    } finally { setExporting(false); setProgress('') }
+  }
+
+  async function confirmExport() {
+    if (!pendingExport) return
+    const task = pendingExport
+    setPendingExport(null); setExporting(true); setProgress('กำลังเตรียมไฟล์…')
+    const controller = new AbortController()
+    exportController.current = controller
+    try {
+      const { exportHistoryExcel, exportHistoryPDF } = await import('@/lib/sessionHistoryExport')
+      const options = { includePhotos: task.photos, description: task.description, signal: controller.signal, onProgress: setProgress }
+      await (task.format === 'excel' ? exportHistoryExcel(task.rows, options) : exportHistoryPDF(task.rows, options))
+      success('สร้างไฟล์สำเร็จ', `${task.rows.length.toLocaleString()} รายการ ${task.photos ? 'พร้อมภาพขาเข้าและขาออก' : 'ไม่แนบรูปภาพ'}`)
+    } catch (error) {
+      if (!controller.signal.aborted) toastError('ส่งออกไม่สำเร็จ', error instanceof Error ? error.message : 'กรุณาลองใหม่')
+    } finally { setExporting(false); setProgress('') }
+  }
 
   const [selected,  setSelected]  = useState<SessionRow | null>(null)
   const [zoomPhoto, setZoomPhoto] = useState<{ sessionId: string; type: 'entry' | 'exit'; label: string } | null>(null)
 
   const fetchRows = useCallback(async (p: number) => {
+    listController.current?.abort()
+    const controller = new AbortController()
+    listController.current = controller
     setLoading(true)
     try {
       const qs = new URLSearchParams({ page: String(p), limit: String(LIMIT) })
       if (plate)    qs.set('plate',    plate)
       if (dateFrom) qs.set('dateFrom', dateFrom)
       if (dateTo)   qs.set('dateTo',   dateTo)
-      const data = await (await fetch(`/api/sessions?${qs}`)).json()
+      const response = await fetch(`/api/sessions?${qs}`, { signal: controller.signal })
+      if (!response.ok) throw new Error('โหลดรายการไม่สำเร็จ')
+      const data = await response.json()
+      controller.signal.throwIfAborted()
       setRows(data.sessions ?? [])
       setTotal(data.total ?? 0)
       setPage(p)
+    } catch {
+      if (!controller.signal.aborted) { setRows([]); setTotal(0) }
     } finally {
-      setLoading(false)
+      if (!controller.signal.aborted) setLoading(false)
     }
   }, [plate, dateFrom, dateTo])
 
-  useEffect(() => { fetchRows(1) }, [fetchRows])
+  useEffect(() => {
+    const timer = setTimeout(() => { void fetchRows(1) }, 200)
+    return () => { clearTimeout(timer); listController.current?.abort() }
+  }, [fetchRows])
 
   const totalPages = Math.max(1, Math.ceil(total / LIMIT))
 
@@ -104,7 +162,42 @@ export function SessionHistory() {
           style={{ background: '#EAB308' }}>
           <Search className="size-3.5" /> ค้นหา
         </button>
+        <div className="ml-auto flex flex-wrap items-center gap-3">
+          <label className="flex items-center gap-2 text-sm text-slate-700">
+            <input type="checkbox" checked={includePhotos} disabled={exporting}
+              onChange={e => setIncludePhotos(e.target.checked)} className="size-4" />
+            แนบภาพขาเข้าและขาออก
+          </label>
+          <button onClick={() => prepareExport('excel')} disabled={exporting || loading || total === 0}
+            className="h-9 px-3 border rounded-lg text-sm font-semibold flex items-center gap-2 text-emerald-700 disabled:opacity-40">
+            <FileSpreadsheet className="size-4" /> Excel
+          </button>
+          <button onClick={() => prepareExport('pdf')} disabled={exporting || loading || total === 0}
+            className="h-9 px-3 border rounded-lg text-sm font-semibold flex items-center gap-2 text-red-700 disabled:opacity-40">
+            <FileText className="size-4" /> PDF
+          </button>
+        </div>
+        <p className="w-full text-xs text-slate-500">ส่งออกทุกรายการตามตัวกรองวันที่เข้าและทะเบียน ไม่จำกัดเฉพาะหน้าปัจจุบัน</p>
+        {exporting && <div className="w-full flex items-center gap-3 text-sm">
+          <span role="status">{progress}</span>
+          <button className="underline text-red-700" onClick={() => exportController.current?.abort()}>ยกเลิก</button>
+        </div>}
       </div>
+
+      <Dialog open={!!pendingExport} onOpenChange={open => { if (!open) setPendingExport(null) }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader><DialogTitle>ส่งออกประวัติรายการ {pendingExport?.format === 'excel' ? 'Excel' : 'PDF'}</DialogTitle></DialogHeader>
+          <DialogBody className="space-y-4 pb-5">
+            <p className="font-semibold">ทั้งหมด {pendingExport?.rows.length.toLocaleString()} รายการ</p>
+            <p className="text-sm text-slate-600">{pendingExport?.description}</p>
+            <p className="text-sm">{pendingExport?.photos ? 'แนบภาพขาเข้าและขาออก หากไม่มีภาพจะแสดงข้อความแทน การแนบรูปจำนวนมากอาจใช้เวลาสร้างไฟล์นานขึ้น' : 'ส่งออกเฉพาะข้อมูล ไม่แนบรูปภาพ'}</p>
+            <div className="flex gap-3">
+              <button onClick={confirmExport} className="rounded-lg bg-yellow-500 px-4 py-2 text-sm font-bold">สร้างไฟล์และดาวน์โหลด</button>
+              <button onClick={() => setPendingExport(null)} className="rounded-lg border px-4 py-2 text-sm">ยกเลิก</button>
+            </div>
+          </DialogBody>
+        </DialogContent>
+      </Dialog>
 
       {/* ── table ── */}
       <div className="bg-white rounded-xl overflow-hidden" style={{ border: '1px solid #E8ECF4' }}>
