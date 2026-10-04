@@ -23,6 +23,7 @@ interface Session {
   fee: number
   lostFine: number
   totalFee: number
+  lostCard?: boolean
   status: SessionStatus
   entryPhotoPath?: string
   exitPhotoPath?:  string
@@ -109,9 +110,10 @@ export default function HistoryPage() {
   const totalPages = Math.ceil(total / LIMIT)
   const hasFilter  = !!(search || status || dateFrom || dateTo)
 
-  const countActive    = sessions.filter(s => s.status === 'active').length
-  const countCompleted = sessions.filter(s => s.status === 'completed').length
-  const countLost      = sessions.filter(s => s.status === 'lost').length
+  const isLost = (s: Session) => s.status === 'lost' || s.lostCard === true || s.lostFine > 0
+  const countActive    = sessions.filter(s => s.status === 'active' && !isLost(s)).length
+  const countCompleted = sessions.filter(s => s.status === 'completed' && !isLost(s)).length
+  const countLost      = sessions.filter(isLost).length
   const totalRevenue   = sessions.filter(s => s.status !== 'active').reduce((a, s) => a + s.totalFee, 0)
 
   return (
@@ -239,7 +241,8 @@ export default function HistoryPage() {
             <div className="space-y-2">
               {sessions.map(s => {
                 const tm = TYPE_META[s.cardType]
-                const sm = STATUS_META[s.status]
+                const displayStatus: SessionStatus = isLost(s) ? 'lost' : s.status
+                const sm = STATUS_META[displayStatus]
                 const TypeIcon = tm.icon
                 const isConfirm = confirmId === s._id
 
@@ -276,7 +279,7 @@ export default function HistoryPage() {
                           style={{ background: tm.bg, color: tm.color }}>{tm.label}</span>
                         <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full flex items-center gap-1"
                           style={{ background: sm.bg, color: sm.color }}>
-                          {s.status === 'lost' && <AlertTriangle className="size-2.5" />}
+                          {displayStatus === 'lost' && <AlertTriangle className="size-2.5" />}
                           {sm.label}
                         </span>
                       </div>

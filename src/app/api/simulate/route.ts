@@ -8,6 +8,7 @@ import { parkingMutation } from '@/lib/parkingMutation'
 import { ParkingSession } from '@/models/ParkingSession'
 import { ParkingCard } from '@/models/ParkingCard'
 import { ParkingQueue } from '@/models/ParkingQueue'
+import { Shift } from '@/models/Shift'
 import { needsParkingQueue, type CapacityVisit, type CapacityQueue } from '@/lib/simulatorCapacity'
 import { loadCardTimeline } from '@/lib/cardAvailability'
 import { cardVisitError } from '@/lib/cardTimeline'
@@ -26,8 +27,29 @@ async function isAdmin() {
 const digest = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex')
 
 async function deletionPreview() {
-  const candidates = await ParkingSession.find(clearParkingHistoryFilter).select('_id').sort({ _id: 1 }).lean()
-  return { count: candidates.length, token: digest(candidates.map(d => String(d._id))), ids: candidates.map(d => d._id) }
+  const candidates = await ParkingSession.find(clearParkingHistoryFilter)
+    .select('_id lostCard lostFine').sort({ _id: 1 }).lean()
+  const lostIds = candidates
+    .filter(session => session.lostCard === true || session.lostFine > 0)
+    .map(session => String(session._id))
+  const refundedIds = new Set<string>()
+  if (lostIds.length) {
+    const shifts = await Shift.find({ 'cardRefunds.sessionId': { $in: lostIds } })
+      .select('cardRefunds.sessionId').lean()
+    for (const shift of shifts) {
+      for (const refund of shift.cardRefunds ?? []) {
+        const sessionId = String(refund.sessionId)
+        if (lostIds.includes(sessionId)) refundedIds.add(sessionId)
+      }
+    }
+  }
+  const ids = candidates
+    .filter(session =>
+      (session.lostCard !== true && !(session.lostFine > 0))
+      || refundedIds.has(String(session._id))
+    )
+    .map(session => session._id)
+  return { count: ids.length, token: digest(ids.map(String)), ids }
 }
 
 export async function GET() {
@@ -44,8 +66,8 @@ async function handleDelete(req: NextRequest) {
   if (body?.confirmation !== 'CLEAR_COMPLETED_HISTORY' || body?.token !== preview.token) {
     return NextResponse.json({ error: 'รายการเปลี่ยนแปลง กรุณาตรวจสอบจำนวนและยืนยันใหม่' }, { status: 409 })
   }
-  const result = await ParkingSession.deleteMany({ ...clearParkingHistoryFilter, _id: { $in: preview.ids } })
-  await ParkingQueue.deleteMany({ sessionId: { $in: preview.ids.map(String) }, status: { $in: ['entered', 'cancelled'] }, lostCard: { $ne: true } })
+  const result = await ParkingSession.deleteMany({ _id: { $in: preview.ids } })
+  await ParkingQueue.deleteMany({ sessionId: { $in: preview.ids.map(String) }, status: { $in: ['entered', 'cancelled'] } })
   return NextResponse.json({ deleted: result.deletedCount })
 }
 const lockedDelete = parkingMutation(handleDelete)

@@ -325,7 +325,7 @@ export default function GeneralSettingsPage() {
           <div className="flex items-center justify-between p-4 rounded-lg" style={{ background: 'rgba(220,38,38,0.04)', border: '1px solid rgba(220,38,38,0.12)' }}>
             <div>
               <p className="text-xs font-black text-slate-800">ล้างประวัติการจอด</p>
-              <p className="text-[10px] text-slate-400 mt-0.5">ลบเฉพาะประวัติรถที่ออกแล้ว · เก็บรายการบัตรหาย บัตร คูปอง/ส่วนลด ค่าปรับ และการตั้งค่าทั้งหมด</p>
+              <p className="text-[10px] text-slate-400 mt-0.5">ลบประวัติรถที่ออกแล้ว รวมถึงบัตรหายที่คืนเงินแล้ว · เก็บบัตรหายที่ยังไม่คืนเงินและข้อมูลระบบไว้</p>
             </div>
             <button onClick={previewReset} disabled={resetting}
               className="h-8 px-4 rounded-lg text-white text-xs font-bold flex items-center gap-1.5 hover:opacity-90 shrink-0 ml-4"
@@ -353,13 +353,13 @@ export default function GeneralSettingsPage() {
             <div className="p-6 space-y-4">
               <div className="rounded-lg p-3 text-[11px] text-slate-600 space-y-1" style={{ background: '#FFF7F7', border: '1px solid rgba(220,38,38,0.12)' }}>
                 <p className="font-bold text-red-700">ข้อมูลที่จะถูกลบ:</p>
-                <p>• ประวัติการจอดที่มีเวลาออกแล้วและไม่ได้แจ้งบัตรหาย</p>
+                <p>• ประวัติการจอดที่มีเวลาออกแล้ว รวมรายการบัตรหายที่คืนเงินแล้ว</p>
                 <p>• รวมรายการปกติและรายการนำเข้าจาก Excel</p>
               </div>
               <div className="rounded-lg p-3 text-[11px] text-slate-600" style={{ background: '#F0FDF4', border: '1px solid rgba(5,150,105,0.15)' }}>
                 <p className="font-bold text-green-700">ข้อมูลที่จะยังคงอยู่:</p>
                 <p>• บัตรที่ลงทะเบียนทั้งหมด</p>
-                <p>• รถที่ยังไม่ออก และรายการบัตรหายพร้อมข้อมูลเข้า–ออก</p>
+                <p>• รถที่ยังไม่ออก และรายการบัตรหายที่ยังไม่คืนเงิน</p>
                 <p>• คูปอง/ส่วนลด และรายการค่าปรับที่ตั้งไว้</p>
                 <p>• คิว กะการทำงาน และ Hardware Logs</p>
                 <p>• บัญชีผู้ดูแลระบบ (Admin)</p>

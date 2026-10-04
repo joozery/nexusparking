@@ -2,7 +2,15 @@
 export function sessionFilters(params: URLSearchParams): Record<string, unknown> {
   const filter: Record<string, unknown> = { status: { $ne: 'void' } }
   const status = params.get('status'), plate = params.get('plate'), shiftId = params.get('shiftId')
-  if (status) filter.status = status
+  if (status === 'lost') {
+    // A lost-card checkout is usually stored as completed with lostCard/lostFine set.
+    filter.$or = [{ status: 'lost' }, { lostCard: true }, { lostFine: { $gt: 0 } }]
+  } else if (status) {
+    filter.status = status
+    // Keep the status tabs mutually exclusive when a completed visit involved a lost card.
+    filter.lostCard = { $ne: true }
+    filter.lostFine = { $not: { $gt: 0 } }
+  }
   if (plate) filter.plate = { $regex: plate, $options: 'i' }
   if (shiftId) filter.shiftId = shiftId
   const from = params.get('dateFrom'), to = params.get('dateTo')

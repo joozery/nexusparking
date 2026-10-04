@@ -385,7 +385,7 @@ function BatchSeed({ overnightCfg, cards, lostCardFine }: { overnightCfg: Overni
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
-      warning('ล้างประวัติแล้ว', 'ลบ ' + data.deleted + ' รายการ โดยเก็บข้อมูลบัตร รถที่ยังไม่ออก และรายการบัตรหายไว้')
+      warning('ล้างประวัติแล้ว', 'ลบ ' + data.deleted + ' รายการ โดยเก็บบัตรหายที่ยังไม่คืนเงิน รถที่ยังไม่ออก และข้อมูลระบบไว้')
     } catch (err) { toastError('ล้างไม่สำเร็จ', err instanceof Error ? err.message : 'กรุณาลองใหม่') }
     finally { setClearing(false); setConfirmClear(null) }
   }
@@ -412,7 +412,7 @@ function BatchSeed({ overnightCfg, cards, lostCardFine }: { overnightCfg: Overni
           </div>
           <div>
             <p className="text-sm font-black text-slate-900">บันทึกรายการจอดย้อนหลัง</p>
-            <p className="text-[10px] text-slate-400">บันทึกรายการปกติ · ล้างเฉพาะรถที่ออกแล้ว เก็บบัตรและรายการบัตรหายไว้</p>
+            <p className="text-[10px] text-slate-400">บันทึกรายการปกติ · ล้างรถที่ออกแล้วและบัตรหายที่คืนเงินแล้ว</p>
           </div>
         </div>
         {!confirmClear ? (

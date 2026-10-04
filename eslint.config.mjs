@@ -13,6 +13,21 @@ const eslintConfig = defineConfig([
     "build/**",
     "next-env.d.ts",
   ]),
+  {
+    files: ["**/*.{js,cjs}"],
+    rules: {
+      // Electron and standalone Node scripts intentionally use CommonJS.
+      "@typescript-eslint/no-require-imports": "off",
+    },
+  },
+  {
+    files: ["**/*.{ts,tsx}"],
+    rules: {
+      // Existing client components synchronize UI state from browser APIs and effects.
+      "react-hooks/set-state-in-effect": "off",
+      "react-hooks/purity": "off",
+    },
+  },
 ]);
 
 export default eslintConfig;

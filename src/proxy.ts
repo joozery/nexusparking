@@ -43,7 +43,7 @@ async function verifyJWT(token: string): Promise<JWTPayload | null> {
   }
 }
 
-export async function middleware(req: NextRequest) {
+export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl
 
   // Always allow public paths
