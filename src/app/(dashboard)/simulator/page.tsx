@@ -620,7 +620,15 @@ interface TestRow {
   segments:          FeeSegment[]
   shopDiscountName:  string    // col G — ชื่อส่วนลดร้านค้า (ค่าว่าง = ไม่มี)
   hotelDiscountName: string    // col H — ชื่อส่วนลดรถโรงแรม (ค่าว่าง = ไม่มี)
+  fineId:            string    // ค่าปรับทั่วไปที่เลือกก่อนบันทึก
   error:             string | null
+}
+
+interface FineOption {
+  _id: string
+  name: string
+  amount: number
+  isActive: boolean
 }
 
 interface ImportPreview {
@@ -632,7 +640,7 @@ interface ImportPreview {
   duplicates: number
   errors: number
   total: number
-  results: { cardUid: string; status: string; lostFine: number; rowNum: number; plate: string; fee: number; discount: number; total: number; duplicate: boolean; error?: string; warning?: string }[]
+  results: { cardUid: string; status: string; lostFine: number; fineAmount: number; fineName?: string; rowNum: number; plate: string; fee: number; discount: number; total: number; duplicate: boolean; error?: string; warning?: string }[]
 }
 
 function normalizeCardType(val: unknown): CardType | null {
@@ -674,9 +682,10 @@ function downloadTemplate() {
   XLSX.writeFile(wb, 'fee_test_template.xlsx')
 }
 
-function ExcelTester({ overnightCfg, discounts, cards }: { overnightCfg: OvernightConfig | null; discounts: DiscountDoc[]; cards: RegisteredCard[] }) {
+function ExcelTester({ overnightCfg, discounts, cards, lostCardFine }: { overnightCfg: OvernightConfig | null; discounts: DiscountDoc[]; cards: RegisteredCard[]; lostCardFine: number }) {
   const { success, error: toastError } = useToast()
   const [rows,      setRows]      = useState<TestRow[]>([])
+  const [fines,     setFines]     = useState<FineOption[]>([])
   const [fileName,  setFileName]  = useState('')
   const [expandedId,setExpandedId]= useState<string | null>(null)
   const [dragging,  setDragging]  = useState(false)
@@ -691,6 +700,15 @@ function ExcelTester({ overnightCfg, discounts, cards }: { overnightCfg: Overnig
   const pageCount = Math.max(1, Math.ceil(rows.length / pageSize))
   const visibleRows = rows.slice((page - 1) * pageSize, page * pageSize)
   const [discountMapping, setDiscountMapping] = useState<Record<string, string | null>>({})
+
+  useEffect(() => {
+    fetch('/api/fines?active=1')
+      .then(res => res.ok ? res.json() : [])
+      .then(data => setFines(Array.isArray(data) ? data : []))
+      .catch(() => setFines([]))
+  }, [])
+
+  const fineById = (id: string) => fines.find(f => f._id === id)
   const mappedName = (name: string, kind: 'shop' | 'hotel') => {
     const mapping = discountMapping[`${kind}:${name}`]
     return mapping === null ? '' : mapping || name
@@ -710,6 +728,7 @@ function ExcelTester({ overnightCfg, discounts, cards }: { overnightCfg: Overnig
         body: JSON.stringify({ mode, token: importPreview?.token, rows: source.map(r => ({
           rowNum: r.rowNum, plate: r.plate, cardType: r.cardType, cardUid: r.cardUid, lostCard: r.lostCard,
           entryTime: r.entryTime, exitTime: r.exitTime, paymentMethod,
+          fineId: r.fineId || undefined,
           shopDiscountName: mappedName(r.shopDiscountName, 'shop'), hotelDiscountName: mappedName(r.hotelDiscountName, 'hotel'),
         })) }),
       })
@@ -790,7 +809,7 @@ function ExcelTester({ overnightCfg, discounts, cards }: { overnightCfg: Overnig
           const base = {
             cardUid: String(r[8] ?? '').trim(), lostCard: ['true', '1', 'ใช่', 'บัตรหาย'].includes(String(r[9] ?? '').trim().toLowerCase()),
             id: crypto.randomUUID(), rowNum, plate, cardType: (cardType ?? 'car') as CardType,
-            shopDiscountName, hotelDiscountName,
+            shopDiscountName, hotelDiscountName, fineId: '',
             calculatedFee: 0, segments: [] as FeeSegment[],
           }
 
@@ -853,7 +872,10 @@ function ExcelTester({ overnightCfg, discounts, cards }: { overnightCfg: Overnig
         'คำนวณ': r.error ? 'Error' : r.calculatedFee,
         'ส่วนลดร้านค้า': r.error ? 0 : disc.shopAmt,
         'ส่วนลดโรงแรม': r.error ? 0 : disc.hotelAmt,
+        'ค่าปรับทั่วไป': r.error ? 0 : (fineById(r.fineId)?.amount ?? 0),
         'สุทธิ': r.error ? 0 : disc.final
+          + (r.lostCard && r.exitTime ? lostCardFine : 0)
+          + (fineById(r.fineId)?.amount ?? 0)
       }
     })
 
@@ -979,10 +1001,10 @@ function ExcelTester({ overnightCfg, discounts, cards }: { overnightCfg: Overnig
               <p className="text-sm font-bold">พร้อมบันทึก {importPreview.ready.toLocaleString()} รายการ · อยู่ในลาน {importPreview.active ?? 0} · รอคิว {importPreview.waiting ?? 0} · ซ้ำ {importPreview.duplicates.toLocaleString()} · ผิดพลาด {importPreview.errors.toLocaleString()} · ยอดที่จะบันทึก ฿{importPreview.total.toLocaleString()}</p>
               <div className="max-h-72 overflow-auto border rounded-lg bg-white">
                 <table className="w-full text-xs">
-                  <thead className="sticky top-0 bg-slate-100"><tr>{['แถว', 'ทะเบียน', 'บัตร / สถานะ', 'ค่าจอด', 'ส่วนลด', 'ค่าปรับบัตรหาย', 'สุทธิ', 'ผลตรวจจากเซิร์ฟเวอร์'].map(h => <th key={h} className="p-2 text-left">{h}</th>)}</tr></thead>
+                  <thead className="sticky top-0 bg-slate-100"><tr>{['แถว', 'ทะเบียน', 'บัตร / สถานะ', 'ค่าจอด', 'ส่วนลด', 'ค่าปรับบัตรหาย', 'ค่าปรับทั่วไป', 'สุทธิ', 'ผลตรวจจากเซิร์ฟเวอร์'].map(h => <th key={h} className="p-2 text-left">{h}</th>)}</tr></thead>
                   <tbody>{importPreview.results.slice((page - 1) * pageSize, page * pageSize).map((r, i) => <tr key={i} className="border-t">
                     <td className="p-2">{r.rowNum}</td><td className="p-2">{r.plate}</td><td className="p-2">{r.cardUid} · {r.status === 'waiting' ? 'รอคิว' : r.status === 'queue_completed' ? 'รอคิวแล้วออก' : r.status === 'active' ? 'อยู่ในลาน' : 'ออกแล้ว'}</td><td className="p-2">{r.fee}</td>
-                    <td className="p-2">{r.discount}</td><td className="p-2">{r.lostFine}</td><td className="p-2">{r.total}</td>
+                    <td className="p-2">{r.discount}</td><td className="p-2">{r.lostFine}</td><td className="p-2">{r.fineAmount}{r.fineName ? ` (${r.fineName})` : ''}</td><td className="p-2">{r.total}</td>
                     <td className={`p-2 ${r.error ? 'text-red-700' : r.warning ? 'text-amber-700' : 'text-slate-600'}`}>{r.error || (r.duplicate ? 'ซ้ำ — จะข้ามรายการนี้' : r.warning || 'พร้อมบันทึก')}</td>
                   </tr>)}</tbody>
                 </table>
@@ -1000,7 +1022,9 @@ function ExcelTester({ overnightCfg, discounts, cards }: { overnightCfg: Overnig
       {rows.length > 0 && (() => {
         const totalShop  = rows.filter(r => !r.error).reduce((s, r) => s + rowDiscounts(r).shopAmt,  0)
         const totalHotel = rows.filter(r => !r.error).reduce((s, r) => s + rowDiscounts(r).hotelAmt, 0)
-        const totalFinal = rows.filter(r => !r.error).reduce((s, r) => s + rowDiscounts(r).final,    0)
+        const totalFine = rows.filter(r => !r.error).reduce((s, r) => s + (fineById(r.fineId)?.amount ?? 0), 0)
+        const totalLost = rows.filter(r => !r.error && r.exitTime && r.lostCard).length * lostCardFine
+        const totalFinal = rows.filter(r => !r.error).reduce((s, r) => s + rowDiscounts(r).final, 0) + totalFine + totalLost
         return (
           <div className="px-5 py-3 flex items-center gap-4 flex-wrap"
             style={{ borderBottom: '1px solid #E8ECF4', background: '#F8FAFF' }}>
@@ -1032,7 +1056,7 @@ function ExcelTester({ overnightCfg, discounts, cards }: { overnightCfg: Overnig
           <table className="w-full text-xs">
             <thead>
               <tr style={{ background: '#F8FAFF', borderBottom: '1px solid #E8ECF4' }}>
-                {(['แถว', 'บัตรที่ลงทะเบียน', 'บัตรหาย', 'ทะเบียน', 'ประเภท', 'เข้า', 'ออก', 'ระยะ', 'คำนวณ',
+                {(['แถว', 'บัตรที่ลงทะเบียน', 'บัตรหาย', 'ค่าปรับ', 'ทะเบียน', 'ประเภท', 'เข้า', 'ออก', 'ระยะ', 'คำนวณ',
                   ...(hasShopDiscount  ? ['ส่วนลดร้านค้า'] : []),
                   ...(hasHotelDiscount ? ['ส่วนลดโรงแรม'] : []),
                   ...(hasDiscount      ? ['สุทธิ'] : []),
@@ -1070,6 +1094,14 @@ function ExcelTester({ overnightCfg, discounts, cards }: { overnightCfg: Overnig
                       </td>
                       <td className="px-3 py-2" onClick={e => e.stopPropagation()}><input aria-label={`บัตรหายแถว ${r.rowNum}`} type="checkbox" checked={r.lostCard} disabled={importing}
                         onChange={e => { setRows(old => old.map(v => v.id === r.id ? { ...v, lostCard: e.target.checked } : v)); setImportPreview(null) }} /></td>
+                      <td className="px-3 py-2" onClick={e => e.stopPropagation()}>
+                        <select aria-label={`ค่าปรับแถว ${r.rowNum}`} disabled={importing || !r.exitTime}
+                          className="border rounded p-2 min-w-36" value={r.fineId}
+                          onChange={e => { setRows(old => old.map(v => v.id === r.id ? { ...v, fineId: e.target.value } : v)); setImportPreview(null) }}>
+                          <option value="">ไม่คิดค่าปรับ</option>
+                          {fines.map(f => <option key={f._id} value={f._id}>{f.name} · ฿{f.amount}</option>)}
+                        </select>
+                      </td>
                       <td className="px-3 py-2.5 font-black text-slate-800 tracking-widest">{r.plate || '—'}</td>
                       <td className="px-3 py-2.5">
                         {r.error
@@ -1077,6 +1109,9 @@ function ExcelTester({ overnightCfg, discounts, cards }: { overnightCfg: Overnig
                           : <span className="flex items-center gap-1 text-[10px] font-bold" style={{ color: meta.color }}>
                               <Icon className="size-3" />{meta.label}
                             </span>}
+                      </td>
+                      <td className="px-3 py-2.5 text-[10px]">
+                        {r.fineId && fineById(r.fineId) ? <span className="text-red-600">฿{fineById(r.fineId)?.amount} <span className="font-normal opacity-70">({fineById(r.fineId)?.name})</span></span> : <span className="text-slate-300">—</span>}
                       </td>
                       <td className="px-3 py-2.5 text-[10px] text-slate-500 font-mono">{r.entryTime ? fmtDatetime(r.entryTime) : '—'}</td>
                       <td className="px-3 py-2.5 text-[10px] text-slate-500 font-mono">{r.exitTime ? fmtDatetime(r.exitTime) : '—'}</td>
@@ -1264,7 +1299,7 @@ export default function SimulatorPage() {
           <div role="alert" className="p-4 bg-red-50 text-red-700 rounded-lg">{loadError} <button className="underline" onClick={() => window.location.reload()}>ลองใหม่</button></div>
         ) : <>
         <FeeCalculator overnightCfg={overnightCfg} discounts={discounts} />
-        <ExcelTester overnightCfg={overnightCfg} discounts={discounts} cards={cards} />
+        <ExcelTester overnightCfg={overnightCfg} discounts={discounts} cards={cards} lostCardFine={lostCardFine} />
         <SimulatorCheckout config={overnightCfg} lostCardFine={lostCardFine} />
         <BatchSeed overnightCfg={overnightCfg} cards={cards} lostCardFine={lostCardFine} />
         </>}

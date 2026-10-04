@@ -62,9 +62,9 @@ export async function GET() {
   // (status:'entered') จะถูกนับผ่าน ParkingSession ด้านล่างแทน ไม่นับซ้ำตรงนี้
   const [carSessionsToday, carOutToday, motoSessionsToday, motoOutToday, carQueueToday, motoQueueToday] = await Promise.all([
     ParkingSession.countDocuments({ cardType: { $in: CAR_TYPES }, entryTime: { $gte: todayStart } }),
-    ParkingSession.countDocuments({ cardType: { $in: CAR_TYPES }, status: 'completed', exitTime: { $gte: todayStart } }),
+    ParkingSession.countDocuments({ cardType: { $in: CAR_TYPES }, status: { $in: ['completed', 'lost'] }, exitTime: { $gte: todayStart } }),
     ParkingSession.countDocuments({ cardType: 'motorcycle', entryTime: { $gte: todayStart } }),
-    ParkingSession.countDocuments({ cardType: 'motorcycle', status: 'completed', exitTime: { $gte: todayStart } }),
+    ParkingSession.countDocuments({ cardType: 'motorcycle', status: { $in: ['completed', 'lost'] }, exitTime: { $gte: todayStart } }),
     ParkingQueue.countDocuments({ cardType: { $in: CAR_TYPES }, status: { $in: ['waiting', 'cancelled'] }, sessionId: null, joinedAt: { $gte: todayStart } }),
     ParkingQueue.countDocuments({ cardType: 'motorcycle', status: { $in: ['waiting', 'cancelled'] }, sessionId: null, joinedAt: { $gte: todayStart } }),
   ])

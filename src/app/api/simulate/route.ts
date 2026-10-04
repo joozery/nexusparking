@@ -12,6 +12,7 @@ import { needsParkingQueue, type CapacityVisit, type CapacityQueue } from '@/lib
 import { loadCardTimeline } from '@/lib/cardAvailability'
 import { cardVisitError } from '@/lib/cardTimeline'
 import { Discount } from '@/models/Discount'
+import { Fine } from '@/models/Fine'
 import { getSettings } from '@/models/SystemSettings'
 import { calcFeeBreakdown, calcDurationMinutes, type CardType } from '@/lib/calcFee'
 import { importDiscounts } from '@/lib/simulatorImport'
@@ -62,6 +63,7 @@ interface ImportRow {
   entryTime: string
   exitTime: string
   paymentMethod: 'cash' | 'qr'
+  fineId?: string
   shopDiscountName?: string
   hotelDiscountName?: string
 }
@@ -75,7 +77,11 @@ async function handlePost(req: NextRequest) {
   if (!['manual', 'preview', 'commit'].includes(mode) || !Array.isArray(rows) || !rows.length || rows.length > 10000) {
     return NextResponse.json({ error: 'ต้องมีข้อมูล 1–10,000 รายการ' }, { status: 400 })
   }
-  const [settings, discounts] = await Promise.all([getSettings(), Discount.find({ isActive: true }).lean()])
+  const [settings, discounts, fines] = await Promise.all([
+    getSettings(),
+    Discount.find({ isActive: true }).lean(),
+    Fine.find({ isActive: true }).lean(),
+  ])
   const documents: Record<string, unknown>[] = []
   const queueDocuments: Record<string, unknown>[] = []
   const [occupied, queueHistory] = await Promise.all([
@@ -84,7 +90,7 @@ async function handlePost(req: NextRequest) {
   ])
   const capacityVisits: CapacityVisit[] = [...occupied]
   const capacityQueues: CapacityQueue[] = [...queueHistory]
-  const results: { cardUid: string; status: string; lostFine: number; rowNum: number; plate: string; fee: number; discount: number; total: number; duplicate: boolean; error?: string; warning?: string }[] = []
+  const results: { cardUid: string; status: string; lostFine: number; fineAmount: number; fineName?: string; rowNum: number; plate: string; fee: number; discount: number; total: number; duplicate: boolean; error?: string; warning?: string }[] = []
   const seen = new Set<string>()
   const uids = [...new Set(rows.map(r => typeof r?.cardUid === 'string' ? r.cardUid.trim() : '').filter(Boolean))]
   const [cards, timeline] = await Promise.all([ParkingCard.find({ uid: { $in: uids } }).lean(), loadCardTimeline(uids)])
@@ -98,7 +104,7 @@ async function handlePost(req: NextRequest) {
   const ordered = rows.map((r, i) => ({ r, i })).sort((a, b) => (Date.parse(a.r?.entryTime) || 0) - (Date.parse(b.r?.entryTime) || 0))
   for (const { r, i } of ordered) {
     const uid = typeof r?.cardUid === 'string' ? r.cardUid.trim() : ''
-    const result = { cardUid: uid, status: r?.exitTime ? 'completed' : 'active', lostFine: 0, rowNum: r?.rowNum ?? i + 1, plate: typeof r?.plate === 'string' ? r.plate.trim().toUpperCase() : '', fee: 0, discount: 0, total: 0, duplicate: false, error: undefined as string | undefined, warning: undefined as string | undefined, cardUnavailable: false }
+    const result = { cardUid: uid, status: r?.exitTime ? 'completed' : 'active', lostFine: 0, fineAmount: 0, fineName: undefined as string | undefined, rowNum: r?.rowNum ?? i + 1, plate: typeof r?.plate === 'string' ? r.plate.trim().toUpperCase() : '', fee: 0, discount: 0, total: 0, duplicate: false, error: undefined as string | undefined, warning: undefined as string | undefined, cardUnavailable: false }
     results.push(result)
     try {
       if (!result.plate || !['car', 'motorcycle', 'overnight'].includes(r.cardType)) throw new Error('ทะเบียนหรือประเภทรถไม่ถูกต้อง')
@@ -106,6 +112,9 @@ async function handlePost(req: NextRequest) {
       if (!card) { result.cardUnavailable = true; throw new Error('กรุณาเลือกบัตรที่ลงทะเบียนและเปิดใช้งาน') }
       if (card.type !== r.cardType) { result.cardUnavailable = true; throw new Error('ประเภทรถไม่ตรงกับบัตรที่เลือก') }
       if (r.lostCard != null && typeof r.lostCard !== 'boolean') throw new Error('สถานะบัตรหายไม่ถูกต้อง')
+      const selectedFine = r.fineId ? fines.find(f => String(f._id) === r.fineId) : null
+      if (r.fineId && !selectedFine) throw new Error('ไม่พบค่าปรับที่เลือกหรือค่าปรับถูกปิดใช้งาน')
+      if (selectedFine && !r.exitTime) throw new Error('เลือกค่าปรับได้เฉพาะรายการที่มีเวลาออก')
       if (!['cash', 'qr'].includes(r.paymentMethod)) throw new Error('กรุณาระบุช่องทางชำระเงิน')
       if (![r.entryTime, ...(r.exitTime ? [r.exitTime] : [])].every(v => typeof v === 'string' && /(?:Z|[+-]\d{2}:\d{2})$/.test(v))) throw new Error('วันเวลาต้องระบุเขตเวลา')
       const entry = new Date(r.entryTime), exit = r.exitTime ? new Date(r.exitTime) : undefined
@@ -116,7 +125,9 @@ async function handlePost(req: NextRequest) {
       const nights = segments.filter(s => s.kind === 'overnight').length
       const disc = importDiscounts(fee, nights, r.shopDiscountName ?? '', r.hotelDiscountName ?? '', discounts)
       result.lostFine = exit && r.lostCard ? settings.lostCardFine : 0
-      result.fee = fee; result.discount = disc.total; result.total = disc.final + result.lostFine
+      result.fineAmount = exit && selectedFine ? selectedFine.amount : 0
+      result.fineName = exit && selectedFine ? selectedFine.name : undefined
+      result.fee = fee; result.discount = disc.total; result.total = disc.final + result.lostFine + result.fineAmount
       result.warning = exit ? disc.warning : 'รถยังอยู่ในลาน ค่าจอด ส่วนลด และค่าปรับจะคำนวณตอนรับรถออก'
       const visit = { cardUid: uid, plate: result.plate, cardType: r.cardType, entryTime: entry, exitTime: exit, lostCard: Boolean(r.lostCard), status: result.status }
       const fingerprint = key(visit)
@@ -142,6 +153,9 @@ async function handlePost(req: NextRequest) {
         discountId: applied ? String(applied._id) : undefined,
         discountName: applied ? `${applied.name}${nights > 0 ? ` (${nights} คืน)` : ''}` : undefined,
         discountAmount: disc.total,
+        fineId: selectedFine ? String(selectedFine._id) : undefined,
+        fineName: selectedFine ? selectedFine.name : undefined,
+        fineAmount: result.fineAmount,
       })
     } catch (error) { result.error = error instanceof Error ? error.message : 'ข้อมูลไม่ถูกต้อง' }
   }
