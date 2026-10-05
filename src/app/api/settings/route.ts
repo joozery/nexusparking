@@ -46,6 +46,12 @@ export async function PUT(req: NextRequest) {
     for (const k of ['windowStart', 'windowEnd', 'flatRateStart', 'flatRate', 'extraHour'] as const) {
       if (body.rates.overnight[k] !== undefined) $set[`rates.overnight.${k}`] = body.rates.overnight[k]
     }
+    for (const vehicle of ['car', 'motorcycle'] as const) {
+      if (body.rates.overnight[vehicle]) {
+        if (body.rates.overnight[vehicle].flatRate !== undefined) $set[`rates.overnight.${vehicle}.flatRate`] = body.rates.overnight[vehicle].flatRate
+        if (body.rates.overnight[vehicle].extraHour !== undefined) $set[`rates.overnight.${vehicle}.extraHour`] = body.rates.overnight[vehicle].extraHour
+      }
+    }
   }
   if (body.hardware) {
     for (const dev of ['camera', 'barrier', 'reader', 'printer', 'drawer'] as const) {

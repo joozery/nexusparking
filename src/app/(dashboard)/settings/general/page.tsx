@@ -13,7 +13,7 @@ interface GeneralSettings {
   rates: {
     car:        { firstHour: number; extraHour: number }
     motorcycle: { firstHour: number; extraHour: number }
-    overnight:  { windowStart: string; windowEnd: string; flatRateStart?: string; flatRate: number; extraHour: number }
+    overnight:  { windowStart: string; windowEnd: string; flatRateStart?: string; car: { flatRate: number; extraHour: number }; motorcycle: { flatRate: number; extraHour: number }; flatRate?: number; extraHour?: number }
   }
   lostCardFine:   number
   monthlyDeposit: number
@@ -43,6 +43,18 @@ export default function GeneralSettingsPage() {
   const [resetting,   setResetting]             = useState(false)
   const [resetPreview, setResetPreview] = useState<{ count: number; token: string } | null>(null)
 
+  function normalizeSettings(data: GeneralSettings): GeneralSettings {
+    const legacy = data.rates.overnight
+    const fallback = { flatRate: legacy.flatRate ?? 100, extraHour: legacy.extraHour ?? 20 }
+    return {
+      ...data,
+      rates: {
+        ...data.rates,
+        overnight: { ...legacy, car: legacy.car ?? fallback, motorcycle: legacy.motorcycle ?? fallback },
+      },
+    }
+  }
+
   async function previewReset() {
     setResetting(true)
     setResetPreview(null)
@@ -61,6 +73,7 @@ export default function GeneralSettingsPage() {
   useEffect(() => {
     fetch('/api/settings')
       .then(r => r.json())
+      .then(normalizeSettings)
       .then(setSettings)
       .finally(() => setLoading(false))
   }, [])
@@ -262,16 +275,27 @@ export default function GeneralSettingsPage() {
               ))}
             </div>
             <p className="text-xs text-slate-500 mb-3">รถที่เข้าก่อน {settings.rates.overnight.flatRateStart ?? '22:00'} และยังจอดหลังเวลานี้ จะคิดราคาเหมาในช่วงกลางคืน รถที่เข้าตั้งแต่เวลาตัดรอบจะคิดรายชั่วโมงสำหรับคืนนั้น</p>
-            <div className="grid grid-cols-2 gap-3 max-w-xs">
-              {[
-                { label: 'ราคาเหมาจ่าย (฿)', val: settings.rates.overnight.flatRate,  cb: (v: number) => setSettings(s => s ? ({ ...s, rates: { ...s.rates, overnight: { ...s.rates.overnight, flatRate: v } } }) : s) },
-                { label: 'นอกช่วง (฿/ชม.)',   val: settings.rates.overnight.extraHour, cb: (v: number) => setSettings(s => s ? ({ ...s, rates: { ...s.rates, overnight: { ...s.rates.overnight, extraHour: v } } }) : s) },
-              ].map(f => (
-                <div key={f.label}>
-                  <label className="text-[9px] font-black text-slate-500 uppercase block mb-1">{f.label}</label>
-                  <input type="number" value={f.val} onChange={e => f.cb(+e.target.value)}
-                    className="w-full h-9 px-3 rounded-lg text-sm font-black text-slate-800 outline-none"
-                    style={{ border: '1.5px solid #E8ECF4', background: 'white' }} />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-xl">
+              {([
+                ['รถยนต์', 'car'],
+                ['รถจักรยานยนต์', 'motorcycle'],
+              ] as const).map(([label, vehicle]) => (
+                <div key={vehicle} className="rounded-lg p-3" style={{ background: 'white', border: '1px solid #E8ECF4' }}>
+                  <p className="text-[10px] font-black text-slate-600 mb-2">{label}</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {([
+                      ['เหมาจ่าย (฿)', 'flatRate'],
+                      ['นอกช่วง (฿/ชม.)', 'extraHour'],
+                    ] as const).map(([fieldLabel, field]) => (
+                      <div key={field}>
+                        <label className="text-[9px] font-black text-slate-500 uppercase block mb-1">{fieldLabel}</label>
+                        <input type="number" min={0} value={settings.rates.overnight[vehicle][field]}
+                          onChange={e => setSettings(s => s ? ({ ...s, rates: { ...s.rates, overnight: { ...s.rates.overnight, [vehicle]: { ...s.rates.overnight[vehicle], [field]: +e.target.value } } } }) : s)}
+                          className="w-full h-9 px-3 rounded-lg text-sm font-black text-slate-800 outline-none"
+                          style={{ border: '1.5px solid #E8ECF4', background: 'white' }} />
+                      </div>
+                    ))}
+                  </div>
                 </div>
               ))}
             </div>

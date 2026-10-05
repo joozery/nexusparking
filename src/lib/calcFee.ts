@@ -1,11 +1,19 @@
 export type CardType = 'car' | 'motorcycle' | 'overnight'
 
+export interface OvernightRate {
+  flatRate: number
+  extraHour: number
+}
+
 export interface OvernightConfig {
   windowStart:    string   // 'HH:MM' - เริ่มตรวจจับ overnight
   windowEnd:      string   // 'HH:MM' - สิ้นสุดช่วง overnight
   flatRateStart?: string   // 'HH:MM' - เวลาที่ตัดเป็น flatRate (default '22:00')
-  flatRate:       number
-  extraHour:      number
+  car?:           OvernightRate
+  motorcycle?:    OvernightRate
+  // Legacy shared values are kept as a fallback for settings saved before the split.
+  flatRate?:      number
+  extraHour?:     number
 }
 
 export interface FeeSegment {
@@ -22,8 +30,13 @@ const DEFAULT_OVERNIGHT: OvernightConfig = {
   windowStart:    '18:00',
   windowEnd:      '07:00',
   flatRateStart:  '22:00',
-  flatRate:       100,
-  extraHour:      20,
+  car:            { flatRate: 100, extraHour: 20 },
+  motorcycle:     { flatRate: 100, extraHour: 20 },
+}
+
+function overnightRate(cardType: CardType, cfg: OvernightConfig): OvernightRate {
+  const legacy = { flatRate: cfg.flatRate ?? 100, extraHour: cfg.extraHour ?? 20 }
+  return cardType === 'motorcycle' ? (cfg.motorcycle ?? legacy) : (cfg.car ?? legacy)
 }
 
 function ceilHours(minutes: number) {
@@ -90,6 +103,7 @@ export function calcFeeBreakdown(
   overnight?: OvernightConfig,
 ): { segments: FeeSegment[]; total: number } {
   const cfg = overnight ?? DEFAULT_OVERNIGHT
+  const rate = overnightRate(cardType, cfg)
   const graceMin = Math.floor((exitTime.getTime() - entryTime.getTime()) / 60000)
   if (graceMin < 1) {
     return { segments: [{ kind: 'normal', from: entryTime, to: exitTime,
@@ -142,8 +156,8 @@ export function calcFeeBreakdown(
       segments.push({
         kind: 'overnight', from: new Date(w.start), to: new Date(w.end),
         minutes: min, hours: 0,
-        fee: cfg.flatRate,
-        rateLabel: `เหมาจ่าย ฿${cfg.flatRate}`,
+        fee: rate.flatRate,
+        rateLabel: `เหมาจ่าย ฿${rate.flatRate}`,
       })
     } else {
       // รถออกก่อน flatRateStart → คิดชั่วโมง (ยังไม่เกิน ${cfg.flatRateStart ?? '22:00'})
@@ -151,8 +165,8 @@ export function calcFeeBreakdown(
       segments.push({
         kind: 'outside', from: new Date(w.start), to: new Date(w.end),
         minutes: min, hours: h,
-        fee: h * cfg.extraHour,
-        rateLabel: `${h} ชม. × ฿${cfg.extraHour}/ชม.`,
+        fee: h * rate.extraHour,
+        rateLabel: `${h} ชม. × ฿${rate.extraHour}/ชม.`,
       })
     }
 
@@ -166,8 +180,8 @@ export function calcFeeBreakdown(
     segments.push({
       kind: 'outside', from: new Date(cursor), to: new Date(exitTime),
       minutes: min, hours: h,
-      fee: h * cfg.extraHour,
-      rateLabel: `${h} ชม. × ฿${cfg.extraHour}/ชม.`,
+      fee: h * rate.extraHour,
+      rateLabel: `${h} ชม. × ฿${rate.extraHour}/ชม.`,
     })
   }
 
@@ -183,12 +197,13 @@ export function calcFeeFromMinutes(
   overnight?:  OvernightConfig,
 ): number {
   const cfg = overnight ?? DEFAULT_OVERNIGHT
+  const rate = overnightRate(type, cfg)
   const isOvernight =
     type === 'overnight' ||
     (entryTime != null && exitTime != null && spansOvernightWindow(entryTime, exitTime, cfg))
 
   if (isOvernight) {
-    if (!entryTime || !exitTime) return cfg.flatRate
+    if (!entryTime || !exitTime) return rate.flatRate
     return calcFeeBreakdown(type, entryTime, exitTime, cfg).total
   }
 
@@ -199,7 +214,7 @@ export function calcFeeFromMinutes(
 
   if (type === 'car')        return ceilHours(minutes) <= 1 ? 30 : 30 + (ceilHours(minutes) - 1) * 20
   if (type === 'motorcycle') return ceilHours(minutes) <= 1 ? 20 : 20 + (ceilHours(minutes) - 1) * 10
-  return cfg.flatRate
+  return rate.flatRate
 }
 
 export function calcDurationMinutes(entryTime: Date, exitTime: Date): number {
