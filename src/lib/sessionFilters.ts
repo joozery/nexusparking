@@ -7,9 +7,6 @@ export function sessionFilters(params: URLSearchParams): Record<string, unknown>
     filter.$or = [{ status: 'lost' }, { lostCard: true }, { lostFine: { $gt: 0 } }]
   } else if (status) {
     filter.status = status
-    // Keep the status tabs mutually exclusive when a completed visit involved a lost card.
-    filter.lostCard = { $ne: true }
-    filter.lostFine = { $not: { $gt: 0 } }
   }
   if (plate) filter.plate = { $regex: plate, $options: 'i' }
   if (shiftId) filter.shiftId = shiftId

@@ -29,6 +29,24 @@ interface Session {
   exitPhotoPath?:  string
 }
 
+interface RefundRecord {
+  id: string
+  sessionId: string
+  cardUid: string
+  plate: string
+  cardType: CardType
+  amount: number
+  paymentMethod: 'cash' | 'qr'
+  refundedAt: string
+  operatorName?: string
+  originalEntryTime?: string
+  originalExitTime?: string
+}
+
+type TimelineItem =
+  | { kind: 'session'; session: Session; eventTime: string }
+  | { kind: 'refund'; refund: RefundRecord; eventTime: string }
+
 const TYPE_META: Record<CardType, { label: string; icon: typeof Car; color: string; bg: string }> = {
   car:        { label: 'รถยนต์',       icon: Car,  color: '#A16207', bg: 'rgba(161,98,7,0.08)'  },
   motorcycle: { label: 'รถจักรยานยนต์', icon: Bike, color: '#0891B2', bg: 'rgba(8,145,178,0.08)'  },
@@ -62,6 +80,7 @@ function fmtDur(min: number) {
 
 export default function HistoryPage() {
   const [sessions,  setSessions]  = useState<Session[]>([])
+  const [refunds,   setRefunds]   = useState<RefundRecord[]>([])
   const [total,     setTotal]     = useState(0)
   const [loading,   setLoading]   = useState(true)
   const [page,      setPage]      = useState(1)
@@ -95,6 +114,18 @@ export default function HistoryPage() {
 
   useEffect(() => { fetchSessions() }, [fetchSessions])
 
+  const fetchRefunds = useCallback(async () => {
+    const params = new URLSearchParams()
+    if (dateFrom) params.set('dateFrom', dateFrom)
+    if (dateTo) params.set('dateTo', dateTo)
+    const res = await fetch(`/api/history/refunds?${params}`, { cache: 'no-store' })
+    if (!res.ok) return
+    const data = await res.json()
+    setRefunds(data.refunds ?? [])
+  }, [dateFrom, dateTo])
+
+  useEffect(() => { fetchRefunds() }, [fetchRefunds])
+
   async function handleDelete(id: string) {
     setDeleting(id)
     try {
@@ -112,9 +143,20 @@ export default function HistoryPage() {
 
   const isLost = (s: Session) => s.status === 'lost' || s.lostCard === true || s.lostFine > 0
   const countActive    = sessions.filter(s => s.status === 'active' && !isLost(s)).length
-  const countCompleted = sessions.filter(s => s.status === 'completed' && !isLost(s)).length
+  const countCompleted = sessions.filter(s => s.status === 'completed').length
   const countLost      = sessions.filter(isLost).length
   const totalRevenue   = sessions.filter(s => s.status !== 'active').reduce((a, s) => a + s.totalFee, 0)
+  const visibleRefunds = status === 'completed'
+    ? refunds.filter(r => !search || r.plate.toLowerCase().includes(search.toLowerCase()))
+    : []
+  const totalRefunded  = visibleRefunds.reduce((sum, refund) => sum + refund.amount, 0)
+  const netRevenue     = totalRevenue - totalRefunded
+  const timelineItems: TimelineItem[] = [
+    ...sessions.map(session => ({ kind: 'session' as const, session, eventTime: session.exitTime ?? session.entryTime })),
+    ...(status === 'completed'
+      ? visibleRefunds.map(refund => ({ kind: 'refund' as const, refund, eventTime: refund.refundedAt }))
+      : []),
+  ].sort((a, b) => new Date(b.eventTime).getTime() - new Date(a.eventTime).getTime())
 
   return (
     <>
@@ -210,8 +252,8 @@ export default function HistoryPage() {
             { label: 'ในลานตอนนี้', value: countActive,    icon: CircleParking,   color: '#059669', bg: 'rgba(5,150,105,0.08)'  },
             { label: 'เสร็จสิ้น',   value: countCompleted, icon: ArrowUpRight,    color: '#A16207', bg: 'rgba(161,98,7,0.08)'  },
             { label: 'บัตรหาย',     value: countLost,      icon: AlertTriangle,   color: '#D97706', bg: 'rgba(245,158,11,0.08)' },
-            { label: 'รายได้ (หน้านี้)', value: `฿${totalRevenue.toLocaleString('th-TH')}`, icon: BadgeDollarSign, color: '#7C3AED', bg: 'rgba(124,58,237,0.08)' },
-          ].map(({ label, value, icon: Icon, color, bg }) => (
+            { label: 'รายได้สุทธิ (หน้านี้)', value: `฿${netRevenue.toLocaleString('th-TH')}`, detail: `ก่อนคืน ฿${totalRevenue.toLocaleString('th-TH')} · คืนเงิน ฿${totalRefunded.toLocaleString('th-TH')}`, icon: BadgeDollarSign, color: '#7C3AED', bg: 'rgba(124,58,237,0.08)' },
+          ].map(({ label, value, detail, icon: Icon, color, bg }) => (
             <div key={label} className="bg-white rounded-xl px-4 py-3 flex items-center gap-3"
               style={{ border: '1px solid #E8ECF4' }}>
               <div className="size-8 rounded-lg flex items-center justify-center shrink-0" style={{ background: bg }}>
@@ -220,6 +262,7 @@ export default function HistoryPage() {
               <div>
                 <p className="text-[10px] text-slate-400">{label}</p>
                 <p className="text-base font-bold text-slate-900 leading-tight">{value}</p>
+                {detail && <p className="text-[9px] text-slate-400 mt-0.5">{detail}</p>}
               </div>
             </div>
           ))}
@@ -231,7 +274,7 @@ export default function HistoryPage() {
             <div className="flex items-center justify-center h-40">
               <RefreshCw className="size-5 text-slate-300 animate-spin" />
             </div>
-          ) : sessions.length === 0 ? (
+          ) : timelineItems.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-40 gap-2 bg-white rounded-xl"
               style={{ border: '1px solid #E8ECF4' }}>
               <History className="size-8 text-slate-200" />
@@ -239,7 +282,43 @@ export default function HistoryPage() {
             </div>
           ) : (
             <div className="space-y-2">
-              {sessions.map(s => {
+              {timelineItems.map(item => {
+                if (item.kind === 'refund') {
+                  const refund = item.refund
+                  const tm = TYPE_META[refund.cardType]
+                  return (
+                    <div key={refund.id}
+                      className="bg-white rounded-xl overflow-hidden flex"
+                      style={{ border: '1px solid #F5D0A9' }}>
+                      <div className="w-1 shrink-0" style={{ background: '#EA580C' }} />
+                      <div className="flex-1 flex items-center gap-4 px-4 py-3 min-w-0">
+                        <div className="flex items-center gap-3 w-36 shrink-0">
+                          <div className="size-9 rounded-lg flex items-center justify-center shrink-0" style={{ background: tm.bg }}>
+                            <ArrowDownLeft className="size-4" style={{ color: '#EA580C' }} strokeWidth={1.75} />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-bold text-slate-900 truncate">{refund.plate}</p>
+                            <p className="text-[10px] text-slate-400 truncate">คืนบัตร/คืนค่าปรับ</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1.5 w-40 shrink-0">
+                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: 'rgba(234,88,12,0.1)', color: '#EA580C' }}>รายการคืนเงิน</span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-semibold text-slate-700">คืนเงินวันที่ {fmtDate(refund.refundedAt)} เวลา {fmtTime(refund.refundedAt)}</p>
+                          <p className="text-[10px] text-slate-400">{tm.label}{refund.operatorName ? ` · ${refund.operatorName}` : ''}</p>
+                        </div>
+                        <div className="text-right w-20 shrink-0">
+                          <p className="text-sm font-bold" style={{ color: '#EA580C' }}>-{refund.amount.toLocaleString('th-TH')} บาท</p>
+                          <p className="text-[10px] text-slate-400">{refund.paymentMethod === 'cash' ? 'เงินสด' : 'เงินโอน'}</p>
+                        </div>
+                        <div className="w-14 shrink-0" />
+                      </div>
+                    </div>
+                  )
+                }
+
+                const s = item.session
                 const tm = TYPE_META[s.cardType]
                 const displayStatus: SessionStatus = isLost(s) ? 'lost' : s.status
                 const sm = STATUS_META[displayStatus]
