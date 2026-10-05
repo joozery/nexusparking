@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { connectDB } from '@/lib/mongodb'
 import { ParkingSession } from '@/models/ParkingSession'
 import { ParkingQueue } from '@/models/ParkingQueue'
+import { Shift } from '@/models/Shift'
 import { getSettings } from '@/models/SystemSettings'
 import { getTodayStartTH } from '@/lib/dateTh'
 import { calcFeeBreakdown } from '@/lib/calcFee'
@@ -15,7 +16,7 @@ export async function GET() {
   const todayStart = getTodayStartTH()
   const now = new Date()
 
-  const [carActive, motoActive, todayEntrySessions, todayRevenueByMethod, settings, todayQueues] = await Promise.all([
+  const [carActive, motoActive, todayEntrySessions, todayRevenueByMethod, todayRefundsByMethod, settings, todayQueues] = await Promise.all([
     ParkingSession.countDocuments({ cardType: { $in: CAR_TYPES }, status: 'active' }),
     ParkingSession.countDocuments({ cardType: 'motorcycle', status: 'active' }),
     // Need the actual rows (not just a count) to classify each by billing mode below.
@@ -24,6 +25,11 @@ export async function GET() {
       { $match: { status: { $in: ['completed', 'lost'] }, exitTime: { $gte: todayStart } } },
       { $group: { _id: '$paymentMethod', total: { $sum: '$totalFee' } } },
     ]),
+    Shift.aggregate([
+      { $unwind: '$cardRefunds' },
+      { $match: { 'cardRefunds.refundedAt': { $gte: todayStart, $lte: now } } },
+      { $group: { _id: '$cardRefunds.paymentMethod', total: { $sum: '$cardRefunds.amount' } } },
+    ]),
     getSettings(),
     ParkingQueue.find({ status: { $in: ['waiting', 'cancelled'] }, sessionId: null, joinedAt: { $gte: todayStart } }).lean(),
   ])
@@ -31,8 +37,12 @@ export async function GET() {
   const activeSessions = carActive + motoActive
   const totalCapacity  = settings.capacity.car + settings.capacity.motorcycle
 
-  const cashRevenue = (todayRevenueByMethod.find(r => r._id === 'cash')?.total as number) ?? 0
-  const qrRevenue    = (todayRevenueByMethod.find(r => r._id === 'qr')?.total as number) ?? 0
+  const cashGross = (todayRevenueByMethod.find(r => r._id === 'cash')?.total as number) ?? 0
+  const qrGross    = (todayRevenueByMethod.find(r => r._id === 'qr')?.total as number) ?? 0
+  const cashRefund = (todayRefundsByMethod.find(r => r._id === 'cash')?.total as number) ?? 0
+  const qrRefund   = (todayRefundsByMethod.find(r => r._id === 'qr')?.total as number) ?? 0
+  const cashRevenue = Math.max(0, cashGross - cashRefund)
+  const qrRevenue    = Math.max(0, qrGross - qrRefund)
   const otherRevenue = todayRevenueByMethod
     .filter(r => r._id !== 'cash' && r._id !== 'qr')
     .reduce((sum, r) => sum + ((r.total as number) ?? 0), 0)

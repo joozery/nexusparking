@@ -85,6 +85,38 @@ export function buildReceipt(r: ReceiptData): Buffer {
   return Buffer.concat(parts)
 }
 
+export interface RefundReceiptData {
+  plate: string
+  cardUid: string
+  cardType: string
+  exitTime?: string
+  refundedAt: string
+  amount: number
+  paymentMethod: 'cash' | 'qr'
+}
+
+export function buildRefundReceipt(r: RefundReceiptData): Buffer {
+  const parts: Buffer[] = [INIT, THAI_CODEPAGE, ALIGN_CENTER, BOLD_ON]
+  parts.push(receiptLogo, NL)
+  parts.push(thaiLine('ใบรับเงินคืนค่าปรับบัตรหาย\n'), thaiLine('A20 Park\n'), BOLD_OFF, NL)
+  parts.push(ALIGN_CENTER, DIVIDER)
+  parts.push(receiptRow('ทะเบียน', r.plate))
+  parts.push(receiptRow('ประเภทรถ', CARD_TYPE_LABEL[r.cardType] ?? r.cardType))
+  parts.push(receiptRow('เลขบัตร', r.cardUid))
+  parts.push(DIVIDER)
+  if (r.exitTime) parts.push(receiptRow('เวลาออกเดิม', receiptTime(r.exitTime)))
+  parts.push(receiptRow('เวลาคืนเงิน', receiptTime(r.refundedAt)))
+  parts.push(DIVIDER)
+  parts.push(receiptRow('คืนค่าปรับบัตรหาย', `${r.amount.toLocaleString('th-TH')} บาท`))
+  parts.push(BOLD_ON, receiptRow('ยอดคืนเงิน', `${r.amount.toLocaleString('th-TH')} บาท`), BOLD_OFF)
+  parts.push(receiptRow('คืนโดย', r.paymentMethod === 'qr' ? 'เงินโอน' : 'เงินสด'))
+  parts.push(DIVIDER, ALIGN_CENTER,
+    thaiLine('Facebook:A20Park\n'),
+    thaiLine('ขอบคุณที่ใช้บริการครับ\n'))
+  parts.push(NL, NL, NL, CUT)
+  return Buffer.concat(parts)
+}
+
 function thaiDateTime(d: Date): string {
   return d.toLocaleString('th-TH', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' })
 }

@@ -21,6 +21,7 @@ import { FleetStatusBar, type FleetStats } from '@/components/parking/FleetStatu
 import { CarsInLotDialog } from '@/components/parking/CarsInLotDialog'
 import { type CardType } from '@/components/parking/types'
 import { calcFeeFromMinutes, type OvernightConfig } from '@/lib/calcFee'
+import { downloadRefundReceiptPdf } from '@/lib/receiptPdf'
 import { useToast } from '@/components/ui/Toast'
 import { triggerBarrierClient } from '@/lib/barrierClient'
 import { createHidScan, hidKey } from '@/lib/hidScan'
@@ -82,6 +83,17 @@ interface Shift {
   cashAmount: number
   qrAmount: number
   totalAmount: number
+}
+
+interface RefundReceipt {
+  sessionId: string
+  plate: string
+  cardUid: string
+  cardType: string
+  amount: number
+  paymentMethod: 'cash' | 'qr'
+  refundedAt: string
+  exitTime?: string
 }
 
 function EntryPhoto({ sessionId, face = false, exit = false }: { sessionId: string; face?: boolean; exit?: boolean }) {
@@ -182,6 +194,7 @@ export default function OperatorPage() {
   const [stats, setStats] = useState<Stats | null>(null)
   const [fleetStats, setFleetStats] = useState<FleetStats | null>(null)
   const [shift, setShift] = useState<Shift | null | undefined>(undefined) // undefined = loading
+  const [currentUserName, setCurrentUserName] = useState('')
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [shiftEnding, setShiftEnding] = useState(false)
@@ -234,6 +247,9 @@ export default function OperatorPage() {
   // Sidebar quick plate lookup (checkin/checkout auto-route by typed plate)
   const [plateMatches, setPlateMatches] = useState<Session[] | null>(null)
   const [returnCard, setReturnCard] = useState<{ _id: string; cardUid: string; plate: string; cardType: string; exitTime?: string; lostFine: number } | null>(null)
+  const [refundReceipt, setRefundReceipt] = useState<RefundReceipt | null>(null)
+  const [refundPrintBusy, setRefundPrintBusy] = useState(false)
+  const [refundPdfBusy, setRefundPdfBusy] = useState(false)
   const [refundMethod, setRefundMethod] = useState<'cash' | 'qr'>('cash')
   const [refunding, setRefunding] = useState(false)
 
@@ -244,11 +260,33 @@ export default function OperatorPage() {
       const res = await fetch('/api/sessions/return-card', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: returnCard._id, paymentMethod: refundMethod }) })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'บันทึกไม่สำเร็จ')
+      setRefundReceipt({
+        sessionId: returnCard._id,
+        plate: returnCard.plate,
+        cardUid: returnCard.cardUid,
+        cardType: returnCard.cardType,
+        amount: data.amount,
+        paymentMethod: data.paymentMethod,
+        refundedAt: new Date().toISOString(),
+        exitTime: returnCard.exitTime,
+      })
       setReturnCard(null)
       success('คืนบัตรและคืนค่าปรับแล้ว', `ยอดคืน ฿${data.amount.toLocaleString()} บันทึกในกะปัจจุบัน`)
       await Promise.all([fetchData(), fetchShift()])
     } catch (error) { toastError('คืนบัตรไม่สำเร็จ', error instanceof Error ? error.message : 'กรุณาลองใหม่') }
     finally { setRefunding(false) }
+  }
+  async function printRefundReceipt() {
+    if (!refundReceipt || refundPrintBusy) return
+    setRefundPrintBusy(true)
+    try {
+      const res = await fetch(`/api/sessions/${encodeURIComponent(refundReceipt.sessionId)}/refund-print`, { method: 'POST' })
+      const data = await res.json().catch(() => null)
+      if (!res.ok || !data?.success) throw new Error(data?.error ?? 'พิมพ์ใบรับเงินไม่สำเร็จ')
+      success('พิมพ์ใบรับเงินคืนแล้ว')
+    } catch (error) {
+      toastError('พิมพ์ใบรับเงินไม่สำเร็จ', error instanceof Error ? error.message : 'กรุณาตรวจเครื่องพิมพ์')
+    } finally { setRefundPrintBusy(false) }
   }
   const [matchSource, setMatchSource] = useState<'card' | 'plate'>('plate')
   const [plateBusy, setPlateBusy] = useState(false)
@@ -292,6 +330,17 @@ export default function OperatorPage() {
     }
   }, [])
 
+  const fetchCurrentUser = useCallback(async () => {
+    try {
+      const res = await fetch('/api/auth/me', { cache: 'no-store' })
+      if (!res.ok) return
+      const data = await res.json()
+      if (data?.name) setCurrentUserName(data.name)
+    } catch {
+      // Keep the shift name if the profile request is unavailable.
+    }
+  }, [])
+
   const [dataUnavailable, setDataUnavailable] = useState(false)
   const dataRequest = useRef<Promise<void> | null>(null)
   const fetchData = useCallback(() => {
@@ -328,9 +377,10 @@ export default function OperatorPage() {
 
   useEffect(() => {
     fetchShift()
+    fetchCurrentUser()
     fetchData()
     fetchSettings()
-  }, [fetchShift, fetchData, fetchSettings])
+  }, [fetchShift, fetchCurrentUser, fetchData, fetchSettings])
 
   useEffect(() => {
     const t = setInterval(() => { fetchData(); fetchSettings() }, 15000)
@@ -874,10 +924,10 @@ export default function OperatorPage() {
         </div>
 
         <div className="flex items-center gap-3">
-          {shift?.operatorName && (
+          {(currentUserName || shift?.operatorName) && (
             <div className="flex items-center px-3 py-1.5 rounded-lg text-xs font-bold text-slate-600"
               style={{ background: '#F8FAFF', border: '1px solid #E8ECF4' }}>
-              พนักงาน: {shift.operatorName}
+              พนักงาน: {currentUserName || shift?.operatorName}
             </div>
           )}
           <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg"
@@ -1205,6 +1255,35 @@ export default function OperatorPage() {
             <div className="flex gap-3"><button disabled={refunding} className="rounded-xl border px-5 py-3" onClick={() => setReturnCard(null)}>ยกเลิก</button>
               <button disabled={refunding} className="flex-1 rounded-xl bg-emerald-600 px-5 py-3 font-bold text-white disabled:opacity-50" onClick={confirmCardReturn}>{refunding ? 'กำลังบันทึก…' : 'ยืนยันคืนบัตรและคืนค่าปรับ'}</button></div>
           </DialogBody>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={refundReceipt !== null} onOpenChange={o => { if (!o && !refundPdfBusy && !refundPrintBusy) setRefundReceipt(null) }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>คืนบัตรและคืนเงินสำเร็จ</DialogTitle>
+            <DialogDescription>สามารถดาวน์โหลดใบรับเงินคืนในรูปแบบเดียวกับใบเสร็จขาออกได้</DialogDescription>
+          </DialogHeader>
+          {refundReceipt && <DialogBody className="space-y-4">
+            <div className="rounded-xl border border-orange-200 bg-orange-50 p-4 text-sm">
+              <div className="flex justify-between"><span>ทะเบียน</span><strong>{refundReceipt.plate}</strong></div>
+              <div className="flex justify-between"><span>ประเภทรถ</span><span>{refundReceipt.cardType === 'motorcycle' ? 'รถจักรยานยนต์' : 'รถยนต์'}</span></div>
+              <div className="flex justify-between"><span>คืนโดย</span><span>{refundReceipt.paymentMethod === 'cash' ? 'เงินสด' : 'เงินโอน'}</span></div>
+              <div className="mt-2 flex justify-between border-t border-orange-200 pt-2 font-bold text-orange-700"><span>ยอดคืนเงิน</span><span>฿{refundReceipt.amount.toLocaleString('th-TH', { minimumFractionDigits: 2 })}</span></div>
+            </div>
+            <div className="flex gap-3">
+              <button className="flex-1 rounded-xl border px-4 py-3 font-bold" disabled={refundPdfBusy || refundPrintBusy} onClick={() => setRefundReceipt(null)}>ปิด</button>
+              <button className="flex-1 rounded-xl border border-slate-300 px-4 py-3 font-bold disabled:opacity-50" disabled={refundPdfBusy || refundPrintBusy} onClick={() => printRefundReceipt()}>{refundPrintBusy ? 'กำลังพิมพ์...' : 'พิมพ์ใบรับเงิน'}</button>
+              <button className="flex-1 rounded-xl bg-orange-600 px-4 py-3 font-bold text-white disabled:opacity-50" disabled={refundPdfBusy || refundPrintBusy} onClick={async () => {
+                if (!refundReceipt) return
+                setRefundPdfBusy(true)
+                try {
+                  await downloadRefundReceiptPdf(refundReceipt)
+                } catch (error) {
+                  toastError('สร้างใบรับเงินไม่สำเร็จ', error instanceof Error ? error.message : 'กรุณาลองใหม่')
+                } finally { setRefundPdfBusy(false) }
+              }}>{refundPdfBusy ? 'กำลังสร้าง PDF...' : 'ดาวน์โหลดใบรับเงิน PDF'}</button>
+            </div>
+          </DialogBody>}
         </DialogContent>
       </Dialog>
       <Dialog open={plateMatches !== null} onOpenChange={o => { if (!o) setPlateMatches(null) }}>

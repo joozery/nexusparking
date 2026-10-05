@@ -146,14 +146,15 @@ export default function HistoryPage() {
   const countCompleted = sessions.filter(s => s.status === 'completed').length
   const countLost      = sessions.filter(isLost).length
   const totalRevenue   = sessions.filter(s => s.status !== 'active').reduce((a, s) => a + s.totalFee, 0)
-  const visibleRefunds = status === 'completed'
+  const showRefunds    = status === '' || status === 'completed'
+  const visibleRefunds = showRefunds
     ? refunds.filter(r => !search || r.plate.toLowerCase().includes(search.toLowerCase()))
     : []
   const totalRefunded  = visibleRefunds.reduce((sum, refund) => sum + refund.amount, 0)
   const netRevenue     = totalRevenue - totalRefunded
   const timelineItems: TimelineItem[] = [
     ...sessions.map(session => ({ kind: 'session' as const, session, eventTime: session.exitTime ?? session.entryTime })),
-    ...(status === 'completed'
+    ...(showRefunds
       ? visibleRefunds.map(refund => ({ kind: 'refund' as const, refund, eventTime: refund.refundedAt }))
       : []),
   ].sort((a, b) => new Date(b.eventTime).getTime() - new Date(a.eventTime).getTime())

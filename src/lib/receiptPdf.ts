@@ -85,3 +85,93 @@ export async function downloadReceiptPdf(sessionId: string) {
   pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, 80, 100)
   pdf.save(`receipt-${s._id}.pdf`)
 }
+
+export async function downloadRefundReceiptPdf(data: {
+  sessionId: string
+  plate: string
+  cardUid: string
+  cardType: string
+  amount: number
+  paymentMethod: 'cash' | 'qr'
+  refundedAt: string
+  exitTime?: string
+}) {
+  const { jsPDF } = await import('jspdf')
+  await document.fonts.ready
+  const logo = new Image()
+  logo.src = '/logo/receipt-logo.png'
+  await logo.decode()
+  const money = (value: number) => Number(value ?? 0).toLocaleString('th-TH', { minimumFractionDigits: 2 }) + ' บาท'
+  const date = (value: string) => new Date(value).toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' })
+  const vehicle = data.cardType === 'motorcycle' ? 'รถจักรยานยนต์' : data.cardType === 'overnight' ? 'รถยนต์ (ค้างคืน)' : 'รถยนต์'
+  const lines = [
+    'A20 Park',
+    'ใบรับเงินคืนค่าปรับบัตรหาย',
+    `ทะเบียน ${data.plate}`,
+    `ประเภทรถ ${vehicle}`,
+    `เลขบัตร ${data.cardUid}`,
+    '---',
+    data.exitTime ? `เวลาออกเดิม ${date(data.exitTime)}` : 'รายการจอดรถเดิม',
+    `เวลาคืนเงิน ${date(data.refundedAt)}`,
+    '---',
+    `คืนค่าปรับบัตรหาย ${money(data.amount)}`,
+    `คืนโดย ${data.paymentMethod === 'qr' ? 'เงินโอน' : 'เงินสด'}`,
+    `ยอดคืนเงิน ${money(data.amount)}`,
+    '---',
+    'Facebook:A20Park',
+    'ขอบคุณที่ใช้บริการครับ',
+  ]
+  const canvas = document.createElement('canvas')
+  canvas.width = 1200
+  canvas.height = 1500
+  const ctx = canvas.getContext('2d')
+  if (!ctx) throw new Error('สร้างใบรับเงิน PDF ไม่สำเร็จ')
+  ctx.fillStyle = '#fff'
+  ctx.fillRect(0, 0, canvas.width, canvas.height)
+  const logoWidth = 500
+  const logoTop = 25
+  const logoHeight = logoWidth * logo.naturalHeight / logo.naturalWidth
+  ctx.drawImage(logo, (canvas.width - logoWidth) / 2, logoTop, logoWidth, logoHeight)
+  ctx.fillStyle = '#111'
+  const fontFor = (line: string, index: number) => `${index < 2 || line.startsWith('ยอดคืนเงิน') ? 'bold ' : ''}52px sans-serif`
+  const metrics = lines.map((line, index) => {
+    if (line === '---') return { ascent: 1, height: 2 }
+    ctx.font = fontFor(line, index)
+    const size = ctx.measureText(line)
+    return { ascent: size.actualBoundingBoxAscent, height: size.actualBoundingBoxAscent + size.actualBoundingBoxDescent }
+  })
+  const contentTop = logoTop + logoHeight + 20
+  const contentBottom = canvas.height - 45
+  const rowGap = (contentBottom - contentTop - metrics.reduce((sum, row) => sum + row.height, 0)) / (lines.length - 1)
+  let cursorY = contentTop
+  lines.forEach((line, index) => {
+    const y = cursorY + metrics[index].ascent
+    cursorY += metrics[index].height + rowGap
+    if (line === '---') {
+      ctx.save()
+      ctx.setLineDash([12, 8])
+      ctx.lineWidth = 2
+      ctx.beginPath()
+      ctx.moveTo(60, y)
+      ctx.lineTo(1140, y)
+      ctx.stroke()
+      ctx.restore()
+      return
+    }
+    ctx.font = fontFor(line, index)
+    if (index < 2 || index >= lines.length - 2) {
+      ctx.textAlign = 'center'
+      ctx.fillText(line, 600, y, 1080)
+    } else {
+      const split = line.indexOf(' ')
+      ctx.textAlign = 'left'
+      ctx.fillText(line.slice(0, split), 60, y, 420)
+      ctx.textAlign = 'right'
+      ctx.fillText(line.slice(split + 1), 1140, y, 620)
+    }
+  })
+  const pdf = new jsPDF({ unit: 'mm', format: [80, 100] })
+  pdf.setProperties({ title: `Refund Receipt ${data.sessionId}`, author: 'A20 Park' })
+  pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, 80, 100)
+  pdf.save(`refund-receipt-${data.sessionId}.pdf`)
+}
