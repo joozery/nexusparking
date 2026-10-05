@@ -1,7 +1,9 @@
 import mongoose, { Schema, type Document } from 'mongoose'
 
-import type { ShiftVehicleCounts } from '@/lib/shiftVehicleCounts'
+import type { ShiftVehicleCounts, VehicleCounts } from '@/lib/shiftVehicleCounts'
 export interface IShift extends Document, ShiftVehicleCounts {
+  openingCardsByType?: VehicleCounts
+  closingCardsByType?: VehicleCounts
   cardRefunds?: { sessionId: string; cardUid: string; plate: string; amount: number; paymentMethod: 'cash' | 'qr'; refundedAt: Date; operatorId: string }[]
   operatorId:      string
   operatorName:    string
@@ -23,6 +25,8 @@ export interface IShift extends Document, ShiftVehicleCounts {
 
 const countsSchema = new Schema({ car: { type: Number, required: true }, motorcycle: { type: Number, required: true } }, { _id: false })
 const ShiftSchema = new Schema<IShift>({
+  openingCardsByType: { type: countsSchema, default: undefined },
+  closingCardsByType: { type: countsSchema, default: undefined },
   cardRefunds: { type: [{ sessionId: String, cardUid: String, plate: String, amount: Number, paymentMethod: { type: String, enum: ['cash', 'qr'] }, refundedAt: Date, operatorId: String }], default: [] },
   checkinsByType: { type: countsSchema, default: undefined },
   checkoutsByType: { type: countsSchema, default: undefined },

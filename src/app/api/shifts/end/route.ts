@@ -63,6 +63,7 @@ async function handlePost(req: NextRequest) {
   shift.closingBreakdown = new Map(Object.entries(closingBreakdown))
   shift.closingCarCount  = closingCarCount
   shift.closingByType = closingByType
+  shift.closingCardsByType = temporaryCardsRemaining
   await shift.save()
 
 
@@ -83,6 +84,7 @@ async function handlePost(req: NextRequest) {
     checkinsByType: shift.checkinsByType,
     checkoutsByType: shift.checkoutsByType,
     closingByType,
+    closingCardsByType: temporaryCardsRemaining,
   })).catch(() => {})
 
   // LINE notification — fire and forget

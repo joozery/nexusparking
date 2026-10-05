@@ -6,7 +6,7 @@ import {
   ArrowDownLeft, ArrowUpRight, AlertTriangle,
   ChevronLeft, ChevronRight, Trash2, X, Check,
   Clock, BadgeDollarSign, CircleParking, Filter,
-  Camera, ImageOff,
+  Camera, ImageOff, Pencil,
 } from 'lucide-react'
 
 type CardType = 'car' | 'motorcycle' | 'overnight'
@@ -89,11 +89,45 @@ export default function HistoryPage() {
   const [dateFrom,  setDateFrom]  = useState('')
   const [dateTo,    setDateTo]    = useState('')
   const [confirmId, setConfirmId] = useState<string | null>(null)
+  const [editSession, setEditSession] = useState<Session | null>(null)
+  const [editPlate, setEditPlate] = useState('')
+  const [editEntryTime, setEditEntryTime] = useState('')
+  const [savingEdit, setSavingEdit] = useState(false)
   const [deleting,  setDeleting]  = useState<string | null>(null)
   const [showDate,  setShowDate]  = useState(false)
   const [zoomPhoto, setZoomPhoto] = useState<{ sessionId: string; type: 'entry' | 'exit'; label: string } | null>(null)
 
   const LIMIT = 20
+
+  function toDateTimeLocal(iso: string) {
+    const date = new Date(iso)
+    const pad = (value: number) => String(value).padStart(2, '0')
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`
+  }
+
+  function openEdit(session: Session) {
+    setEditSession(session)
+    setEditPlate(session.plate)
+    setEditEntryTime(toDateTimeLocal(session.entryTime))
+  }
+
+  async function saveEdit() {
+    if (!editSession || savingEdit) return
+    setSavingEdit(true)
+    try {
+      const res = await fetch(`/api/sessions/${editSession._id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plate: editPlate, entryTime: new Date(editEntryTime).toISOString() }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'แก้ไขรายการไม่สำเร็จ')
+      setSessions(prev => prev.map(session => session._id === data._id ? data : session))
+      setEditSession(null)
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : 'แก้ไขรายการไม่สำเร็จ')
+    } finally { setSavingEdit(false) }
+  }
 
   const fetchSessions = useCallback(async () => {
     setLoading(true)
@@ -426,7 +460,7 @@ export default function HistoryPage() {
                       </div>
 
                       {/* Delete */}
-                      <div className="w-14 shrink-0 flex items-center justify-end">
+                      <div className="w-16 shrink-0 flex items-center justify-end">
                         {isConfirm ? (
                           <div className="flex items-center gap-1">
                             <button
@@ -445,12 +479,23 @@ export default function HistoryPage() {
                             </button>
                           </div>
                         ) : (
-                          <button
-                            onClick={() => setConfirmId(s._id)}
-                            className="size-7 rounded-md flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all hover:bg-red-50"
-                            style={{ color: '#DC2626' }}>
-                            <Trash2 className="size-3" />
-                          </button>
+                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                            {s.status === 'active' && !isLost(s) && (
+                              <button
+                                onClick={() => openEdit(s)}
+                                title="แก้ไขเวลาเข้าและทะเบียน"
+                                className="size-7 rounded-md flex items-center justify-center hover:bg-blue-50"
+                                style={{ color: '#2563EB' }}>
+                                <Pencil className="size-3" />
+                              </button>
+                            )}
+                            <button
+                              onClick={() => setConfirmId(s._id)}
+                              className="size-7 rounded-md flex items-center justify-center hover:bg-red-50"
+                              style={{ color: '#DC2626' }}>
+                              <Trash2 className="size-3" />
+                            </button>
+                          </div>
                         )}
                       </div>
                     </div>
@@ -494,6 +539,32 @@ export default function HistoryPage() {
       </div>
 
       {/* ── fullscreen photo zoom ── */}
+      {editSession && (
+        <div className="fixed inset-0 z-[250] flex items-center justify-center bg-black/50 px-4" onClick={() => !savingEdit && setEditSession(null)}>
+          <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-base font-bold text-slate-900">แก้ไขทรานเซกชัน</h2>
+                <p className="text-xs text-slate-400">แก้ไขได้เฉพาะรายการที่ยังจอดอยู่</p>
+              </div>
+              <button disabled={savingEdit} onClick={() => setEditSession(null)} className="size-8 rounded-lg flex items-center justify-center hover:bg-slate-100 text-slate-400"><X className="size-4" /></button>
+            </div>
+            <div className="space-y-3">
+              <label className="block text-xs font-semibold text-slate-600">ทะเบียนรถ
+                <input value={editPlate} onChange={e => setEditPlate(e.target.value)} className="mt-1 h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-blue-400" />
+              </label>
+              <label className="block text-xs font-semibold text-slate-600">เวลาเข้า
+                <input type="datetime-local" value={editEntryTime} onChange={e => setEditEntryTime(e.target.value)} className="mt-1 h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-blue-400" />
+              </label>
+            </div>
+            <div className="mt-5 flex gap-2">
+              <button disabled={savingEdit} onClick={() => setEditSession(null)} className="h-10 flex-1 rounded-lg border border-slate-200 text-sm font-semibold text-slate-600">ยกเลิก</button>
+              <button disabled={savingEdit || !editPlate.trim() || !editEntryTime} onClick={saveEdit} className="h-10 flex-1 rounded-lg bg-blue-600 text-sm font-bold text-white disabled:opacity-50">{savingEdit ? 'กำลังบันทึก...' : 'บันทึกการแก้ไข'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {zoomPhoto && (
         <div className="fixed inset-0 z-[300] flex flex-col bg-black" onClick={() => setZoomPhoto(null)}>
           <div className="shrink-0 flex items-center justify-between px-4 py-2.5" style={{ background: 'rgba(0,0,0,0.9)' }}>

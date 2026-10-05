@@ -12,6 +12,8 @@ export interface ClosedShift extends ShiftVehicleCounts {
   closingBreakdown: Record<string, number>
   openingBreakdown?: Record<string, number>
   carryoverCars?: number
+  openingCardsByType?: { car: number; motorcycle: number }
+  closingCardsByType?: { car: number; motorcycle: number }
 }
 
 export function ClosedShiftDialog({ shift, onLogout, opening = false }: { shift: ClosedShift; onLogout: () => void; opening?: boolean }) {
@@ -46,6 +48,11 @@ export function ClosedShiftDialog({ shift, onLogout, opening = false }: { shift:
     <DialogBody className="space-y-4 pt-4">
       <p>{shift.operatorName}</p><p>{opening ? 'เงินต้นกะ' : 'เงินส่งคืน'} ฿{(opening ? shift.openingFloat : shift.closingFloat).toLocaleString('th-TH')}</p>
       <ShiftVehicleSummary incoming={shift.checkinsByType} outgoing={shift.checkoutsByType} remaining={opening ? shift.carryoverByType : shift.closingByType} opening={opening} />
+      <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
+        <p className="mb-1 font-bold">บัตรจอดรถคงเหลือ</p>
+        <div className="flex justify-between"><span>รถยนต์</span><strong>{(opening ? shift.openingCardsByType : shift.closingCardsByType)?.car ?? 0} ใบ</strong></div>
+        <div className="flex justify-between"><span>รถจักรยานยนต์</span><strong>{(opening ? shift.openingCardsByType : shift.closingCardsByType)?.motorcycle ?? 0} ใบ</strong></div>
+      </div>
       <p className="text-sm text-slate-500">พิมพ์{title}ซ้ำได้</p>
       {message && <p role="status">{message}</p>}
       <div className="flex flex-wrap gap-2">

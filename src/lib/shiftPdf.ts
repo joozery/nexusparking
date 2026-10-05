@@ -15,6 +15,8 @@ interface ShiftPdfData {
   checkoutsByType?: VehicleCounts
   carryoverByType?: VehicleCounts
   closingByType?: VehicleCounts
+  openingCardsByType?: VehicleCounts
+  closingCardsByType?: VehicleCounts
   openingBreakdown?: Record<string, number>
   closingBreakdown?: Record<string, number>
 }
@@ -31,6 +33,7 @@ export async function downloadShiftPdf(shift: ShiftPdfData, opening: boolean) {
   const count = (counts: VehicleCounts | undefined, type: keyof VehicleCounts) => counts?.[type] ?? 0
   const breakdown = (value?: Record<string, number>) => Object.entries(value ?? {}).map(([denom, amount]) => `${denom} บาท x ${amount}`).join(', ') || '-'
   const remaining = opening ? shift.carryoverByType : shift.closingByType
+  const cardsRemaining = opening ? shift.openingCardsByType : shift.closingCardsByType
   const lines = opening ? [
     'A20 Park', 'ใบเปิดกะ', `พนักงาน ${shift.operatorName}`,
     `เวลาเปิดกะ ${date(shift.startTime)}`, '---',
@@ -38,6 +41,8 @@ export async function downloadShiftPdf(shift: ShiftPdfData, opening: boolean) {
     `รายละเอียดธนบัตร ${breakdown(shift.openingBreakdown)}`, '---',
     `รถยนต์ค้าง ${count(remaining, 'car')} คัน`,
     `รถจักรยานยนต์ค้าง ${count(remaining, 'motorcycle')} คัน`,
+    `บัตรจอดรถคงเหลือ รถยนต์ ${count(cardsRemaining, 'car')} ใบ`,
+    `บัตรจอดรถคงเหลือ รถจักรยานยนต์ ${count(cardsRemaining, 'motorcycle')} ใบ`,
   ] : [
     'A20 Park', 'ใบปิดกะ', `พนักงาน ${shift.operatorName}`,
     `เวลาเปิดกะ ${date(shift.startTime)}`, `เวลาปิดกะ ${date(shift.endTime)}`, '---',
@@ -46,6 +51,8 @@ export async function downloadShiftPdf(shift: ShiftPdfData, opening: boolean) {
     `รายละเอียดธนบัตร ${breakdown(shift.closingBreakdown)}`, '---',
     `รถยนต์ค้าง ${count(remaining, 'car')} คัน`,
     `รถจักรยานยนต์ค้าง ${count(remaining, 'motorcycle')} คัน`,
+    `บัตรจอดรถคงเหลือ รถยนต์ ${count(cardsRemaining, 'car')} ใบ`,
+    `บัตรจอดรถคงเหลือ รถจักรยานยนต์ ${count(cardsRemaining, 'motorcycle')} ใบ`,
   ]
 
   const canvas = document.createElement('canvas')

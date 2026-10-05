@@ -146,7 +146,7 @@ export function buildShiftEndMessage(params: {
     `รถจักรยานยนต์: ${closingByType.motorcycle} คัน`,
     ...(closingCarCount > 0 ? [`รวม: ${closingCarCount} คัน`] : []),
     '─────────────────',
-    'บัตรชั่วคราวคงเหลือตอนปิดกะ',
+    'บัตรจอดรถคงเหลือตอนปิดกะ',
     `รถยนต์: ${params.temporaryCardsRemaining.car} ใบ`,
     `รถจักรยานยนต์: ${params.temporaryCardsRemaining.motorcycle} ใบ`,
     `รวม: ${params.temporaryCardsRemaining.car + params.temporaryCardsRemaining.motorcycle} ใบ`,
