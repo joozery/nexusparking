@@ -79,7 +79,7 @@ export function buildReceipt(r: ReceiptData): Buffer {
   parts.push(BOLD_ON, receiptRow('ยอดชำระสุทธิ', `${r.total.toLocaleString('th-TH')} บาท`), BOLD_OFF)
   parts.push(DIVIDER, ALIGN_CENTER,
     thaiLine('หากมีข้อสงสัยหรือต้องการ\nสอบถามข้อมูลเพิ่มเติม\n'),
-    thaiLine('โทร.086-555-7634 Line:@A20PARK\n'),
+    thaiLine('Facebook:A20Park\n'),
     thaiLine('ขอบคุณที่ใช้บริการครับ\n'))
   parts.push(NL, NL, NL, CUT)
   return Buffer.concat(parts)

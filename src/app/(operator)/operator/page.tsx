@@ -295,8 +295,9 @@ export default function OperatorPage() {
   const fetchData = useCallback(() => {
     if (dataRequest.current) return dataRequest.current
     dataRequest.current = (async () => {
+      const refreshKey = Date.now()
       const results = await Promise.allSettled([
-        '/api/sessions?status=active&allActive=1', '/api/stats', '/api/queue', '/api/stats/fleet',
+        '/api/sessions?status=active&allActive=1', '/api/stats', '/api/queue', `/api/stats/fleet?refresh=${refreshKey}`,
       ].map(async url => {
         const res = await fetch(url, { cache: 'no-store', signal: AbortSignal.timeout(12000) })
         if (!res.ok) throw new Error(`HTTP ${res.status}`)

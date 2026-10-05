@@ -23,11 +23,11 @@ export async function downloadReceiptPdf(sessionId: string) {
     `ค่าจอดรถ ${money(s.fee)}`, `ส่วนลด ${money(s.discountAmount)}`,
     `ค่าปรับ ${money(Number(s.fineAmount ?? 0) + Number(s.lostFine ?? 0))}`,
     `ยอดชำระสุทธิ ${money(s.totalFee)}`,
-    `ชำระโดย ${s.paymentMethod === 'qr' ? 'โอน / QR' : 'เงินสด'}`,
+    `ชำระโดย ${s.paymentMethod === 'qr' ? 'เงินโอน' : 'เงินสด'}`,
     '---',
     'หากมีข้อสงสัยหรือต้องการ',
     'สอบถามข้อมูลเพิ่มเติม',
-    'โทร.086-555-7634 Line:@A20PARK',
+    'Facebook:A20Park',
     'ขอบคุณที่ใช้บริการครับ',
   ]
   // Browser text rendering preserves Thai vowels and tone marks in the PDF image.

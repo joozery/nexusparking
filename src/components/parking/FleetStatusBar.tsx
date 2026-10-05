@@ -6,6 +6,7 @@ export interface FleetTypeStats {
   inToday: number
   outToday: number
   activeTotal: number
+  occupiedTotal: number
   activeNormal: number
   activeOvernight: number
   capacityTotal: number
@@ -48,6 +49,10 @@ function Divider() {
   return <div className="w-px h-5 bg-slate-200 shrink-0" />
 }
 
+function StrongDivider() {
+  return <div className="w-0.5 h-5 bg-black shrink-0" />
+}
+
 function FleetRow({ type, label, accent, bg, stats }: {
   type: 'car' | 'motorcycle'
   label: string
@@ -67,19 +72,19 @@ function FleetRow({ type, label, accent, bg, stats }: {
         <Stat label="เข้าวันนี้" value={stats.inToday} icon={LogIn} color="#A16207" />
         <Divider />
         <Stat label="ออกวันนี้" value={stats.outToday} icon={LogOut} color="#A16207" />
-        <Divider />
-        <Stat label="คงเหลือ" value={stats.activeTotal} icon={Icon} color={accent} />
-        <Divider />
+        <StrongDivider />
         <Stat label="ปกติ" value={stats.activeNormal} icon={Sun} color="#D97706" />
         <Divider />
         <Stat label="ค้างคืน" value={stats.activeOvernight} icon={Moon} color="#7C3AED" />
         <Divider />
-        <Stat label="ช่องจอด" value={`${stats.activeTotal}/${stats.capacityTotal}`} icon={CircleParking} color={accent} />
+        <Stat label="คงเหลือ" value={stats.activeTotal} icon={Icon} color={accent} />
+        <StrongDivider />
+        <Stat label="ช่องจอด" value={`${stats.occupiedTotal}/${stats.capacityTotal}`} icon={CircleParking} color={accent} />
         <Divider />
         <Stat label="ว่าง" value={stats.capacityAvailable} icon={CircleParking} color={stats.capacityAvailable > 0 ? '#059669' : '#DC2626'} />
         <Divider />
         <Stat label="รอคิว" value={stats.queueWaiting} icon={Users} color="#7C3AED" />
-        <Divider />
+        <StrongDivider />
         <div title="บัตรชั่วคราวที่แจกแล้ว (รถในลานและคิวรอ) / บัตรชั่วคราวที่เปิดใช้งานทั้งหมด">
           <Stat label="จำนวนบัตร" value={`${stats.temporaryCardsInUse ?? '—'}/${stats.temporaryCardsRegistered ?? '—'}`} icon={IdCard} color="#334155" />
         </div>

@@ -117,6 +117,9 @@ export function CheckOutDialog({
   const cashInputRef = useRef<HTMLInputElement>(null)
   const entryTimestamp = entryTime?.getTime()
   useEffect(() => {
+    if (open) setCashReceived('')
+  }, [open, plate, entryTimestamp, checkoutSource])
+  useEffect(() => {
     if (!open || step !== 'payment' || paymentMethod !== 'cash') return
     // Allow the dialog focus trap to mount before focusing the payment input.
     const timer = setTimeout(() => cashInputRef.current?.focus(), 50)

@@ -6,7 +6,6 @@ import { Shift } from '@/models/Shift'
 import { getMissingCardUids } from '@/lib/missingCards'
 import { ParkingQueue } from '@/models/ParkingQueue'
 import { getSettings } from '@/models/SystemSettings'
-import { calcFeeBreakdown } from '@/lib/calcFee'
 import { getTodayStartTH } from '@/lib/dateTh'
 
 // 'overnight' card-type sessions are physically cars, so they're folded into the "car" bucket
@@ -68,18 +67,9 @@ export async function GET() {
     ParkingQueue.countDocuments({ cardType: { $in: CAR_TYPES }, status: { $in: ['waiting', 'cancelled'] }, sessionId: null, joinedAt: { $gte: todayStart } }),
     ParkingQueue.countDocuments({ cardType: 'motorcycle', status: { $in: ['waiting', 'cancelled'] }, sessionId: null, joinedAt: { $gte: todayStart } }),
   ])
+  // "เข้าวันนี้" includes vehicles that entered the lot and vehicles that joined the queue.
   const carInToday  = carSessionsToday + carQueueToday
   const motoInToday = motoSessionsToday + motoQueueToday
-
-  // "ค้างคืน" = active session ที่ตอนนี้กำลังโดนคิดอัตราค้างคืนอยู่ (ไม่ใช่ประเภทบัตร) — เช็คจาก breakdown จริง
-  function splitByBillingMode(sessions: IParkingSession[]) {
-    let overnight = 0
-    for (const s of sessions) {
-      const breakdown = calcFeeBreakdown(s.cardType, s.entryTime, now, settings.rates.overnight)
-      if (breakdown.segments.some(seg => seg.kind === 'overnight')) overnight++
-    }
-    return { normal: sessions.length - overnight, overnight }
-  }
 
   const refundShifts = await Shift.find({
     cardRefunds: { $elemMatch: { refundedAt: { $gte: todayStart, $lte: now } } },
@@ -106,8 +96,14 @@ export async function GET() {
     }
   }
 
-  const carSplit  = splitByBillingMode(carActive)
-  const motoSplit = splitByBillingMode(motoActive)
+  // Carryover vehicles are the active vehicles that entered before today.
+  // They are the overnight portion used by the status bar.
+  const carOvernight = carActive.filter(session => session.entryTime < todayStart).length
+  const motoOvernight = motoActive.filter(session => session.entryTime < todayStart).length
+  const carNormal = Math.max(0, carInToday - carOutToday)
+  const motoNormal = Math.max(0, motoInToday - motoOutToday)
+  const carRemaining = carNormal + carOvernight
+  const motoRemaining = motoNormal + motoOvernight
 
   // จำนวนรถที่ใช้ "บัตร" แต่ละประเภทอยู่ในลานตอนนี้ (แยกตามประเภทบัตรที่ลงทะเบียนไว้จริง
   // ไม่ใช่โหมดคิดค่าบริการแบบ activeNormal/activeOvernight ด้านบน)
@@ -119,9 +115,10 @@ export async function GET() {
       ...lostByCategory(carLost),
       inToday:           carInToday,
       outToday:          carOutToday,
-      activeTotal:       carActive.length,
-      activeNormal:      carSplit.normal,
-      activeOvernight:   carSplit.overnight,
+      activeTotal:       carRemaining,
+      occupiedTotal:    carActive.length,
+      activeNormal:      carNormal,
+      activeOvernight:   carOvernight,
       capacityTotal:     settings.capacity.car,
       capacityAvailable: Math.max(0, settings.capacity.car - carActive.length),
       queueWaiting:      carQueueWaiting,
@@ -139,9 +136,10 @@ export async function GET() {
       ...lostByCategory(motoLost),
       inToday:           motoInToday,
       outToday:          motoOutToday,
-      activeTotal:       motoActive.length,
-      activeNormal:      motoSplit.normal,
-      activeOvernight:   motoSplit.overnight,
+      activeTotal:       motoRemaining,
+      occupiedTotal:    motoActive.length,
+      activeNormal:      motoNormal,
+      activeOvernight:   motoOvernight,
       capacityTotal:     settings.capacity.motorcycle,
       capacityAvailable: Math.max(0, settings.capacity.motorcycle - motoActive.length),
       queueWaiting:      motoQueueWaiting,
@@ -150,5 +148,5 @@ export async function GET() {
       cardsRemaining:    remainingCards(['motorcycle']),
       lostToday:         lostToday(motoLost),
     },
-  })
+  }, { headers: { 'Cache-Control': 'no-store, max-age=0, must-revalidate' } })
 }
