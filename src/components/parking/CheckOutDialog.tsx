@@ -11,6 +11,7 @@ import { type CardType } from './types'
 import { calcFeeBreakdown, type OvernightConfig } from '@/lib/calcFee'
 import { toAsciiNumber } from '@/lib/thaiInput'
 import { nowLocal } from '@/lib/simulatorImport'
+import { EntryCapturePanel } from './CctvStrip'
 
 export type PaymentMethod = 'cash' | 'qr'
 
@@ -42,6 +43,7 @@ interface Props {
   fee: number
   paidAmount?: number
   entryTime?: Date | null
+  entrySessionId?: string
   customExitTime?: string
   scannedExitTime?: string
   overnightCfg?: OvernightConfig
@@ -76,7 +78,7 @@ function fmtDuration(entryTime: Date | null | undefined, exitTime: Date | null |
 
 export function CheckOutDialog({
   open, onOpenChange, step, plate, cardType, hours, fee, paidAmount, printing, lostCardFine = 300, checkoutSource,
-  entryTime, customExitTime, scannedExitTime, overnightCfg, onCustomExitTimeChange,
+  entryTime, entrySessionId, customExitTime, scannedExitTime, overnightCfg, onCustomExitTimeChange,
   onSimulateScan, onConfirm, onPrintReceipt, onDone, onDownloadPdf, downloadingPdf, lockedLostCard = false, submitting = false,
 }: Props) {
   const isMoto = cardType === 'motorcycle'
@@ -402,6 +404,7 @@ export function CheckOutDialog({
                         </span>
                       </div>
                     )}
+                    <EntryCapturePanel sessionId={entrySessionId} plate={plate} style={{ height: '220px' }} />
                   </div>
                 )}
 

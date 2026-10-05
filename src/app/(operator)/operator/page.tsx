@@ -86,7 +86,9 @@ interface Shift {
 
 function EntryPhoto({ sessionId, face = false, exit = false }: { sessionId: string; face?: boolean; exit?: boolean }) {
   const [sourceIndex, setSourceIndex] = useState(0)
-  const sources = exit ? ['exit'] : face ? ['cam-face'] : ['cam-plate', 'entry', 'cam-rear']
+  const sources = exit ? ['exit'] : face
+    ? ['cam-face', 'cam-rear', 'cam-plate', 'entry', 'cam-exit']
+    : ['cam-plate', 'entry', 'cam-rear', 'cam-exit']
   const label = exit ? 'ภาพรถตอนออก' : face ? 'ภาพผู้ขับตอนเข้า' : 'ภาพรถตอนเข้า'
   return (
     <span className="flex min-w-0 flex-col gap-1">
@@ -1278,6 +1280,7 @@ export default function OperatorPage() {
         lostCardFine={lostCardFine}
         checkoutSource={coSource}
         entryTime={coEntryTime}
+        entrySessionId={coSessionId || undefined}
         lockedLostCard={coLockedLost}
         customExitTime={coCustomTime}
         onCustomExitTimeChange={handleCoCustomTimeChange}

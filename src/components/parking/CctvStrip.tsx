@@ -208,7 +208,7 @@ function EntryCaptureThumb({ sessionId, camType, label, accent }: {
     <div className="relative flex-1 bg-[#0D1117] rounded-lg overflow-hidden" style={{ minHeight: 0 }}>
       {src && !failed ? (
         <img src={src} alt={label}
-          className="absolute inset-0 w-full h-full object-cover"
+          className="absolute inset-0 w-full h-full object-contain"
           onError={() => setFailed(true)} />
       ) : (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 select-none">
@@ -226,7 +226,7 @@ function EntryCaptureThumb({ sessionId, camType, label, accent }: {
   )
 }
 
-function EntryCapturePanel({ sessionId, plate, style }: { sessionId?: string; plate?: string; style?: CSSProperties }) {
+export function EntryCapturePanel({ sessionId, plate, style }: { sessionId?: string; plate?: string; style?: CSSProperties }) {
   return (
     <div className="shrink-0 flex flex-col gap-1.5 min-h-0" style={style}>
       <div className="shrink-0 flex items-center gap-1.5 px-0.5">
@@ -238,7 +238,7 @@ function EntryCapturePanel({ sessionId, plate, style }: { sessionId?: string; pl
           </span>
         )}
       </div>
-      <div className="flex-1 grid grid-cols-4 gap-1.5 min-h-0">
+      <div className="flex-1 grid grid-cols-2 gap-1.5 min-h-0">
         {ENTRY_CAPTURE_CAMS.map(cam => (
           <EntryCaptureThumb key={cam.camType} sessionId={sessionId} {...cam} />
         ))}

@@ -102,7 +102,9 @@ async function handlePost(req: NextRequest) {
   })
 
   void runCheckinSequence(settings.hardware, { sessionId: String(session._id), cardUid: resolvedUid, plate: plate.trim() })
-  void captureEntryCctvSnapshots(settings.cctvUrls, { sessionId: String(session._id), plate: plate.trim() })
+  // Persist entry camera paths before the session is returned so duplicate-plate
+  // selection can show the correct photos for every vehicle immediately.
+  await captureEntryCctvSnapshots(settings.cctvUrls, { sessionId: String(session._id), plate: plate.trim() })
 
   return NextResponse.json({
     ...session.toObject(),
