@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { connectDB } from '@/lib/mongodb'
 import { ParkingCard } from '@/models/ParkingCard'
+import { ParkingSession } from '@/models/ParkingSession'
+import { ParkingQueue } from '@/models/ParkingQueue'
+import { getMissingCardUids } from '@/lib/missingCards'
 import { normalizeUid } from '@/lib/thaiInput'
 
 function duplicateCardError(cardCategory?: string) {
@@ -14,7 +17,16 @@ function duplicateCardError(cardCategory?: string) {
 export async function GET() {
   await connectDB()
   const cards = await ParkingCard.find().sort({ createdAt: -1 }).lean()
-  return NextResponse.json(cards)
+  const [activeSessions, waitingQueues] = await Promise.all([
+    ParkingSession.find({ status: 'active' }).select('cardUid').lean(),
+    ParkingQueue.find({ status: 'waiting' }).select('cardUid').lean(),
+  ])
+  const occupiedUids = new Set([
+    ...activeSessions.map(session => session.cardUid),
+    ...waitingQueues.map(queue => queue.cardUid),
+  ])
+  const missingUids = await getMissingCardUids(cards.map(card => card.uid), occupiedUids)
+  return NextResponse.json(cards.map(card => ({ ...card, isLost: missingUids.has(card.uid) })))
 }
 
 export async function POST(req: NextRequest) {

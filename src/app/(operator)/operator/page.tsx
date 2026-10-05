@@ -8,7 +8,7 @@ import {
   LogIn, LogOut,
   Car, Bike, RefreshCw, Clock,
   Play, X,
-  XCircle, Nfc, Scan,
+  XCircle, Scan,
 } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogBody } from '@/components/ui/dialog'
 import { CheckInDialog } from '@/components/parking/CheckInDialog'
@@ -27,7 +27,7 @@ import { createHidScan, hidKey } from '@/lib/hidScan'
 import { convertThaiToEn, normalizeUid, toAsciiNumber, toAsciiPlate } from '@/lib/thaiInput'
 import {
   isSerialSupported, connectSerialReader, getReaderBaud, setReaderBaud,
-  COMMON_BAUD_RATES, type SerialReaderHandle,
+  type SerialReaderHandle,
 } from '@/lib/serialReader'
 
 interface Session {
@@ -273,9 +273,9 @@ export default function OperatorPage() {
 
   // Serial (COM port) reader — fallback path for readers that aren't HID keyboard-wedge
   const serialHandleRef = useRef<SerialReaderHandle | null>(null)
-  const [serialSupported, setSerialSupported] = useState(false) // starts false to match SSR; set after mount
-  const [serialConnected, setSerialConnected] = useState(false)
-  const [serialConnecting, setSerialConnecting] = useState(false)
+  const [, setSerialSupported] = useState(false) // starts false to match SSR; set after mount
+  const [, setSerialConnected] = useState(false)
+  const [, setSerialConnecting] = useState(false)
   const [serialBaud, setSerialBaudState] = useState(9600)
 
   function resetCI() { setCiStep('scan'); setCiPlate(''); setCiType('car'); setCiUid(''); setCiCustomTime('') }
@@ -874,16 +874,10 @@ export default function OperatorPage() {
         </div>
 
         <div className="flex items-center gap-3">
-          {stats && (
-            <div className="flex items-center gap-3 px-3 py-1.5 rounded-lg"
-              style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.18)' }}>
-              <span className="size-2 rounded-full animate-pulse inline-block" style={{ background: '#10B981' }} />
-              <span className="text-xs font-bold flex items-center gap-1" style={{ color: '#065F46' }}>
-                <Car className="size-3.5" /> {stats.car.available}/{stats.car.capacity}
-              </span>
-              <span className="text-xs font-bold flex items-center gap-1" style={{ color: '#065F46' }}>
-                <Bike className="size-3.5" /> {stats.motorcycle.available}/{stats.motorcycle.capacity}
-              </span>
+          {shift?.operatorName && (
+            <div className="flex items-center px-3 py-1.5 rounded-lg text-xs font-bold text-slate-600"
+              style={{ background: '#F8FAFF', border: '1px solid #E8ECF4' }}>
+              พนักงาน: {shift.operatorName}
             </div>
           )}
           <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg"
@@ -891,31 +885,6 @@ export default function OperatorPage() {
             <Clock className="size-3.5 text-slate-400" />
             <span className="text-sm font-black text-slate-800 tabular-nums"><LiveClock /></span>
           </div>
-          {serialSupported && (
-            <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg"
-              style={{ background: serialConnected ? 'rgba(16,185,129,0.08)' : '#F8FAFF', border: `1px solid ${serialConnected ? 'rgba(16,185,129,0.2)' : '#E8ECF4'}` }}>
-              <Nfc className="size-3.5" style={{ color: serialConnected ? '#059669' : '#94A3B8' }} />
-              {!serialConnected && (
-                <select
-                  value={serialBaud}
-                  onChange={e => setSerialBaudState(Number(e.target.value))}
-                  className="text-[10px] font-bold text-slate-500 bg-transparent outline-none"
-                  title="Baud rate ของเครื่องอ่านบัตร (Serial)"
-                >
-                  {COMMON_BAUD_RATES.map(b => <option key={b} value={b}>{b}</option>)}
-                </select>
-              )}
-              <button
-                onClick={serialConnected ? handleDisconnectSerialReader : handleConnectSerialReader}
-                disabled={serialConnecting}
-                className="text-[10px] font-bold disabled:opacity-50"
-                style={{ color: serialConnected ? '#059669' : '#6366F1' }}
-                title="เครื่องอ่านบัตรแบบ Serial (COM port) — ใช้เมื่อเครื่องอ่านไม่ใช่ USB-HID keyboard-wedge"
-              >
-                {serialConnecting ? '...' : serialConnected ? 'Reader: OK' : 'เชื่อมต่อ Reader'}
-              </button>
-            </div>
-          )}
           <button
             onClick={() => shift ? setShiftEnding(true) : handleLogout()}
             className="h-8 px-3 rounded-lg text-xs font-bold"

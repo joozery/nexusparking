@@ -404,7 +404,7 @@ export function CheckOutDialog({
                         </span>
                       </div>
                     )}
-                    <EntryCapturePanel sessionId={entrySessionId} plate={plate} style={{ height: '220px' }} />
+                    <EntryCapturePanel sessionId={entrySessionId} plate={plate} landscape style={{ height: '220px' }} />
                   </div>
                 )}
 

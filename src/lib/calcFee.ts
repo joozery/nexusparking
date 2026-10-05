@@ -141,8 +141,8 @@ export function calcFeeBreakdown(
     if (cursor < w.start) {
       const min = Math.floor((w.start.getTime() - cursor.getTime()) / 60000)
       const h   = ceilHours(min)
-      const fee = h * (cfg.extraHour ?? 20)
-      const rateLabel = `${h} ชม. × ฿${cfg.extraHour ?? 20}/ชม.`
+      const fee = h * rate.extraHour
+      const rateLabel = `${h} ชม. × ฿${rate.extraHour}/ชม.`
       segments.push({
         kind: 'outside', from: new Date(cursor), to: new Date(w.start),
         minutes: min, hours: h, fee, rateLabel,

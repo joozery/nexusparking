@@ -30,6 +30,7 @@ interface ParkingCard {
   idCardPhotoPath?: string
   expiryDate?: string
   isActive: boolean
+  isLost?: boolean
   createdAt: string
 }
 
@@ -866,6 +867,12 @@ export default function CardsPage() {
                             ) : <span className="text-[11px] text-slate-300">—</span>}
                           </td>
                           <td className="px-3 py-2.5">
+                            {card.isLost ? (
+                              <span className="inline-flex h-6 items-center px-2 rounded-full text-[10px] font-semibold"
+                                style={{ background: 'rgba(220,38,38,0.1)', color: '#DC2626' }}>
+                                บัตรหาย
+                              </span>
+                            ) : (
                             <button onClick={() => handleToggle(card._id, card.isActive)}
                               className="h-6 px-2 rounded-full text-[10px] font-semibold transition-all"
                               style={card.isActive
@@ -873,6 +880,7 @@ export default function CardsPage() {
                                 : { background: '#F1F5F9', color: '#94A3B8' }}>
                               {card.isActive ? '● ใช้งาน' : '○ ปิดใช้'}
                             </button>
+                            )}
                           </td>
                           <td className="pr-4 py-1.5">
                             <div className="flex items-center justify-end gap-1">

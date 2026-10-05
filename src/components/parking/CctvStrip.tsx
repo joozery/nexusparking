@@ -196,8 +196,8 @@ const ENTRY_CAPTURE_CAMS = [
   { camType: 'cam-exit'  as const, label: 'ขาออก',        accent: '#EA580C' },
 ]
 
-function EntryCaptureThumb({ sessionId, camType, label, accent }: {
-  sessionId?: string; camType: string; label: string; accent: string
+function EntryCaptureThumb({ sessionId, camType, label, accent, contain = false }: {
+  sessionId?: string; camType: string; label: string; accent: string; contain?: boolean
 }) {
   const [failed, setFailed] = useState(false)
   const src = sessionId ? `/api/sessions/${sessionId}/photo?type=${camType}` : ''
@@ -208,7 +208,7 @@ function EntryCaptureThumb({ sessionId, camType, label, accent }: {
     <div className="relative flex-1 bg-[#0D1117] rounded-lg overflow-hidden" style={{ minHeight: 0 }}>
       {src && !failed ? (
         <img src={src} alt={label}
-          className="absolute inset-0 w-full h-full object-contain"
+          className={`absolute inset-0 w-full h-full ${contain ? 'object-contain' : 'object-cover'}`}
           onError={() => setFailed(true)} />
       ) : (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 select-none">
@@ -226,7 +226,9 @@ function EntryCaptureThumb({ sessionId, camType, label, accent }: {
   )
 }
 
-export function EntryCapturePanel({ sessionId, plate, style }: { sessionId?: string; plate?: string; style?: CSSProperties }) {
+export function EntryCapturePanel({ sessionId, plate, style, landscape = false }: {
+  sessionId?: string; plate?: string; style?: CSSProperties; landscape?: boolean
+}) {
   return (
     <div className="shrink-0 flex flex-col gap-1.5 min-h-0" style={style}>
       <div className="shrink-0 flex items-center gap-1.5 px-0.5">
@@ -238,9 +240,9 @@ export function EntryCapturePanel({ sessionId, plate, style }: { sessionId?: str
           </span>
         )}
       </div>
-      <div className="flex-1 grid grid-cols-2 gap-1.5 min-h-0">
+      <div className={`flex-1 grid ${landscape ? 'grid-cols-2' : 'grid-cols-4'} gap-1.5 min-h-0`}>
         {ENTRY_CAPTURE_CAMS.map(cam => (
-          <EntryCaptureThumb key={cam.camType} sessionId={sessionId} {...cam} />
+          <EntryCaptureThumb key={cam.camType} sessionId={sessionId} contain={landscape} {...cam} />
         ))}
       </div>
     </div>
