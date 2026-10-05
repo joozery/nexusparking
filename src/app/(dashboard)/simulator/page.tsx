@@ -381,11 +381,11 @@ function BatchSeed({ overnightCfg, cards, lostCardFine }: { overnightCfg: Overni
     try {
       const res = await fetch('/api/simulate', {
         method: 'DELETE', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token: confirmClear.token, confirmation: 'CLEAR_COMPLETED_HISTORY' }),
+        body: JSON.stringify({ token: confirmClear.token, confirmation: 'CLEAR_ALL_DATA' }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
-      warning('ล้างประวัติแล้ว', 'ลบ ' + data.deleted + ' รายการ โดยเก็บบัตรหายที่ยังไม่คืนเงิน รถที่ยังไม่ออก และข้อมูลระบบไว้')
+      warning('ล้างข้อมูลแล้ว', 'ลบข้อมูลบัตร รถ คิว กะ ส่วนลด และค่าปรับ ' + data.deleted + ' รายการ โดยเก็บบัญชีผู้ดูแล การตั้งค่าอื่น ๆ และ Hardware Logs ไว้ กรุณากรอกความจุลานใหม่')
     } catch (err) { toastError('ล้างไม่สำเร็จ', err instanceof Error ? err.message : 'กรุณาลองใหม่') }
     finally { setClearing(false); setConfirmClear(null) }
   }
@@ -412,14 +412,14 @@ function BatchSeed({ overnightCfg, cards, lostCardFine }: { overnightCfg: Overni
           </div>
           <div>
             <p className="text-sm font-black text-slate-900">บันทึกรายการจอดย้อนหลัง</p>
-            <p className="text-[10px] text-slate-400">บันทึกรายการปกติ · ล้างรถที่ออกแล้วและบัตรหายที่คืนเงินแล้ว</p>
+            <p className="text-[10px] text-slate-400">บันทึกรายการปกติ · ล้างบัตร รถ คิว กะ ส่วนลด และค่าปรับทั้งหมด</p>
           </div>
         </div>
         {!confirmClear ? (
           <button onClick={previewClear} disabled={clearing}
             className="h-8 px-3 rounded-lg text-xs font-bold flex items-center gap-1.5 disabled:opacity-40"
             style={{ background: 'rgba(220,38,38,0.06)', color: '#991B1B', border: '1px solid rgba(220,38,38,0.2)' }}>
-            <Trash2 className="size-3.5" />ล้างประวัติการจอด
+            <Trash2 className="size-3.5" />ล้างข้อมูลทั้งหมด
           </button>
         ) : (
           <div className="flex items-center gap-2">

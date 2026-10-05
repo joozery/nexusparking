@@ -67,6 +67,10 @@ export default function GeneralSettingsPage() {
 
   async function handleSave() {
     if (!settings) return
+    if (settings.capacity.car < 1 || settings.capacity.motorcycle < 1) {
+      toastError('กรุณากรอกความจุลาน', 'ระบุจำนวนช่องรถยนต์และรถจักรยานยนต์อย่างน้อย 1 คัน')
+      return
+    }
     if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(settings.rates.overnight.flatRateStart ?? '22:00')) {
       toastError('กรุณาระบุเวลาตัดรอบเหมาค้างคืนให้ถูกต้อง')
       return
@@ -95,11 +99,12 @@ export default function GeneralSettingsPage() {
     try {
       const res = await fetch('/api/reset', {
         method: 'DELETE', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token: resetPreview.token, confirmation: 'CLEAR_COMPLETED_HISTORY' }),
+        body: JSON.stringify({ token: resetPreview.token, confirmation: 'CLEAR_ALL_DATA' }),
       })
       const data = await res.json()
       if (res.ok) {
-        success('ล้างประวัติการจอดสำเร็จ', `ลบ ${data.deleted} รายการ โดยเก็บบัตร ส่วนลด และการตั้งค่าไว้`)
+        setSettings(s => s ? { ...s, capacity: { car: 0, motorcycle: 0 } } : s)
+        success('ล้างข้อมูลสำเร็จ', `ลบ ${data.deleted} รายการ กรุณากรอกความจุลานใหม่ก่อนใช้งานต่อ`)
         setShowResetConfirm(false)
         setConfirmText('')
       } else {
@@ -165,7 +170,7 @@ export default function GeneralSettingsPage() {
             {([['รถยนต์ (คัน)', 'car'], ['รถจักรยานยนต์ (คัน)', 'motorcycle']] as const).map(([label, key]) => (
               <div key={key}>
                 <label className="text-[10px] font-black text-slate-500 uppercase tracking-wide block mb-1.5">{label}</label>
-                <input type="number" min={1} value={settings.capacity[key]}
+                <input type="number" min={1} value={settings.capacity[key] || ''}
                   onChange={e => setSettings(s => s ? ({ ...s, capacity: { ...s.capacity, [key]: +e.target.value } }) : s)}
                   className="w-full h-10 px-3 rounded-lg text-sm font-black text-slate-800 outline-none"
                   style={{ border: '1.5px solid #E8ECF4', background: '#FAFBFF' }}
@@ -174,6 +179,11 @@ export default function GeneralSettingsPage() {
               </div>
             ))}
           </div>
+          {(settings.capacity.car < 1 || settings.capacity.motorcycle < 1) && (
+            <p className="mt-3 rounded-lg px-3 py-2 text-[11px] font-bold text-red-700" style={{ background: '#FFF7F7', border: '1px solid rgba(220,38,38,0.15)' }}>
+              กรุณากรอกความจุลานรถยนต์และรถจักรยานยนต์ใหม่ หลังจากล้างข้อมูล
+            </p>
+          )}
           <p className="mt-3 text-[10px] text-slate-400">
             รวมทั้งหมด: <span className="font-black text-slate-600">{(settings.capacity.car + settings.capacity.motorcycle).toLocaleString()} คัน</span>
           </p>
@@ -324,14 +334,14 @@ export default function GeneralSettingsPage() {
         <div className="p-5">
           <div className="flex items-center justify-between p-4 rounded-lg" style={{ background: 'rgba(220,38,38,0.04)', border: '1px solid rgba(220,38,38,0.12)' }}>
             <div>
-              <p className="text-xs font-black text-slate-800">ล้างประวัติการจอด</p>
-              <p className="text-[10px] text-slate-400 mt-0.5">ลบประวัติรถที่ออกแล้ว รวมถึงบัตรหายที่คืนเงินแล้ว · เก็บบัตรหายที่ยังไม่คืนเงินและข้อมูลระบบไว้</p>
+              <p className="text-xs font-black text-slate-800">ล้างข้อมูลทั้งหมด</p>
+              <p className="text-[10px] text-slate-400 mt-0.5">ล้างข้อมูลบัตร รถ คิว กะ ส่วนลด และค่าปรับทั้งหมด · เก็บบัญชีผู้ดูแล การตั้งค่าอื่น ๆ และ Hardware Logs ไว้</p>
             </div>
             <button onClick={previewReset} disabled={resetting}
               className="h-8 px-4 rounded-lg text-white text-xs font-bold flex items-center gap-1.5 hover:opacity-90 shrink-0 ml-4"
               style={{ background: '#DC2626' }}>
               <Trash2 className="size-3.5" />
-              {resetting ? 'กำลังตรวจสอบ…' : 'ล้างประวัติการจอด'}
+              {resetting ? 'กำลังตรวจสอบ…' : 'ล้างข้อมูลทั้งหมด'}
             </button>
           </div>
         </div>
@@ -353,17 +363,14 @@ export default function GeneralSettingsPage() {
             <div className="p-6 space-y-4">
               <div className="rounded-lg p-3 text-[11px] text-slate-600 space-y-1" style={{ background: '#FFF7F7', border: '1px solid rgba(220,38,38,0.12)' }}>
                 <p className="font-bold text-red-700">ข้อมูลที่จะถูกลบ:</p>
-                <p>• ประวัติการจอดที่มีเวลาออกแล้ว รวมรายการบัตรหายที่คืนเงินแล้ว</p>
-                <p>• รวมรายการปกติและรายการนำเข้าจาก Excel</p>
+                <p>• บัตรที่ลงทะเบียน รถที่จอดอยู่ และคิวทั้งหมด</p>
+                <p>• กะการทำงาน ข้อมูลคืนเงิน คูปอง ส่วนลด และค่าปรับทั้งหมด</p>
               </div>
               <div className="rounded-lg p-3 text-[11px] text-slate-600" style={{ background: '#F0FDF4', border: '1px solid rgba(5,150,105,0.15)' }}>
                 <p className="font-bold text-green-700">ข้อมูลที่จะยังคงอยู่:</p>
-                <p>• บัตรที่ลงทะเบียนทั้งหมด</p>
-                <p>• รถที่ยังไม่ออก และรายการบัตรหายที่ยังไม่คืนเงิน</p>
-                <p>• คูปอง/ส่วนลด และรายการค่าปรับที่ตั้งไว้</p>
-                <p>• คิว กะการทำงาน และ Hardware Logs</p>
                 <p>• บัญชีผู้ดูแลระบบ (Admin)</p>
-                <p>• การตั้งค่าระบบทั้งหมด</p>
+                <p>• การตั้งค่าระบบอื่น ๆ โดยความจุลานจะถูกรีเซ็ตให้กรอกใหม่</p>
+                <p>• Hardware Logs</p>
               </div>
               <div>
                 <label className="text-[10px] font-black text-slate-500 uppercase tracking-wide block mb-1.5">

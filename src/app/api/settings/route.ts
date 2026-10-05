@@ -25,6 +25,12 @@ export async function PUT(req: NextRequest) {
     if (body.businessHours.close !== undefined) $set['businessHours.close'] = body.businessHours.close
   }
   if (body.capacity) {
+    const carCapacity = body.capacity.car
+    const motorcycleCapacity = body.capacity.motorcycle
+    if ((carCapacity !== undefined && (!Number.isInteger(carCapacity) || carCapacity < 1))
+      || (motorcycleCapacity !== undefined && (!Number.isInteger(motorcycleCapacity) || motorcycleCapacity < 1))) {
+      return NextResponse.json({ error: 'กรุณาระบุความจุลานเป็นจำนวนเต็มอย่างน้อย 1 คัน' }, { status: 400 })
+    }
     if (body.capacity.car        !== undefined) $set['capacity.car']        = body.capacity.car
     if (body.capacity.motorcycle !== undefined) $set['capacity.motorcycle'] = body.capacity.motorcycle
   }

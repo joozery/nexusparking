@@ -14,10 +14,9 @@ import { loadCardTimeline } from '@/lib/cardAvailability'
 import { cardVisitError } from '@/lib/cardTimeline'
 import { Discount } from '@/models/Discount'
 import { Fine } from '@/models/Fine'
-import { getSettings } from '@/models/SystemSettings'
+import { getSettings, SystemSettings } from '@/models/SystemSettings'
 import { calcFeeBreakdown, calcDurationMinutes, type CardType } from '@/lib/calcFee'
 import { importDiscounts } from '@/lib/simulatorImport'
-import { clearParkingHistoryFilter } from '@/lib/clearParkingHistory'
 
 async function isAdmin() {
   const token = (await cookies()).get(COOKIE_NAME)?.value
@@ -27,29 +26,24 @@ async function isAdmin() {
 const digest = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex')
 
 async function deletionPreview() {
-  const candidates = await ParkingSession.find(clearParkingHistoryFilter)
-    .select('_id lostCard lostFine').sort({ _id: 1 }).lean()
-  const lostIds = candidates
-    .filter(session => session.lostCard === true || session.lostFine > 0)
-    .map(session => String(session._id))
-  const refundedIds = new Set<string>()
-  if (lostIds.length) {
-    const shifts = await Shift.find({ 'cardRefunds.sessionId': { $in: lostIds } })
-      .select('cardRefunds.sessionId').lean()
-    for (const shift of shifts) {
-      for (const refund of shift.cardRefunds ?? []) {
-        const sessionId = String(refund.sessionId)
-        if (lostIds.includes(sessionId)) refundedIds.add(sessionId)
-      }
-    }
+  const [sessions, queues, cards, shifts, discounts, fines] = await Promise.all([
+    ParkingSession.find({}).select('_id').sort({ _id: 1 }).lean(),
+    ParkingQueue.find({}).select('_id').sort({ _id: 1 }).lean(),
+    ParkingCard.find({}).select('_id').sort({ _id: 1 }).lean(),
+    Shift.find({}).select('_id').sort({ _id: 1 }).lean(),
+    Discount.find({}).select('_id').sort({ _id: 1 }).lean(),
+    Fine.find({}).select('_id').sort({ _id: 1 }).lean(),
+  ])
+  const ids = {
+    sessions: sessions.map(row => String(row._id)),
+    queues: queues.map(row => String(row._id)),
+    cards: cards.map(row => String(row._id)),
+    shifts: shifts.map(row => String(row._id)),
+    discounts: discounts.map(row => String(row._id)),
+    fines: fines.map(row => String(row._id)),
   }
-  const ids = candidates
-    .filter(session =>
-      (session.lostCard !== true && !(session.lostFine > 0))
-      || refundedIds.has(String(session._id))
-    )
-    .map(session => session._id)
-  return { count: ids.length, token: digest(ids.map(String)), ids }
+  const count = Object.values(ids).reduce((total, collection) => total + collection.length, 0)
+  return { count, token: digest(ids), ids }
 }
 
 export async function GET() {
@@ -63,12 +57,28 @@ async function handleDelete(req: NextRequest) {
   let body
   try { body = await req.json() } catch { return NextResponse.json({ error: 'กรุณาตรวจสอบจำนวนรายการก่อนลบ' }, { status: 400 }) }
   const preview = await deletionPreview()
-  if (body?.confirmation !== 'CLEAR_COMPLETED_HISTORY' || body?.token !== preview.token) {
+  if (body?.confirmation !== 'CLEAR_ALL_DATA' || body?.token !== preview.token) {
     return NextResponse.json({ error: 'รายการเปลี่ยนแปลง กรุณาตรวจสอบจำนวนและยืนยันใหม่' }, { status: 409 })
   }
-  const result = await ParkingSession.deleteMany({ _id: { $in: preview.ids } })
-  await ParkingQueue.deleteMany({ sessionId: { $in: preview.ids.map(String) }, status: { $in: ['entered', 'cancelled'] } })
-  return NextResponse.json({ deleted: result.deletedCount })
+  const [sessions, queues, cards, shifts, discounts, fines] = await Promise.all([
+    ParkingSession.deleteMany({ _id: { $in: preview.ids.sessions } }),
+    ParkingQueue.deleteMany({ _id: { $in: preview.ids.queues } }),
+    ParkingCard.deleteMany({ _id: { $in: preview.ids.cards } }),
+    Shift.deleteMany({ _id: { $in: preview.ids.shifts } }),
+    Discount.deleteMany({ _id: { $in: preview.ids.discounts } }),
+    Fine.deleteMany({ _id: { $in: preview.ids.fines } }),
+  ])
+  // Clearing history also requires the administrator to enter the lot capacity again.
+  await SystemSettings.findOneAndUpdate(
+    {},
+    { $set: { 'capacity.car': 0, 'capacity.motorcycle': 0 } },
+    { upsert: true },
+  )
+  return NextResponse.json({
+    deleted: sessions.deletedCount + queues.deletedCount + cards.deletedCount
+      + shifts.deletedCount + discounts.deletedCount + fines.deletedCount,
+    requiresCapacity: true,
+  })
 }
 const lockedDelete = parkingMutation(handleDelete)
 export async function DELETE(req: NextRequest) {
