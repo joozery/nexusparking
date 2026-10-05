@@ -37,9 +37,10 @@ export function buildShiftStartMessage(params: {
   openingFloat: number
   openingBreakdown: Record<string, number>
   carryoverByType: { car: number; motorcycle: number }
+  carryoverByBilling: { carNormal: number; carOvernight: number; motorcycleNormal: number; motorcycleOvernight: number }
   temporaryCardsRemaining: { car: number; motorcycle: number }
 }): string {
-  const { operatorName, startTime, openingFloat, openingBreakdown, carryoverByType } = params
+  const { operatorName, startTime, openingFloat, openingBreakdown, carryoverByBilling } = params
   const money = (amount: number) => amount.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
   const denominations = Object.entries(openingBreakdown)
     .filter(([, count]) => count > 0)
@@ -55,12 +56,12 @@ export function buildShiftStartMessage(params: {
     ...(denominations.length ? denominations : ['ไม่ได้ระบุจำนวนธนบัตร/เหรียญ']),
     '─────────────────',
     'รถค้างในลานตอนเปิดกะ',
-    `รถยนต์: ${carryoverByType.car} คัน`,
-    `รถจักรยานยนต์: ${carryoverByType.motorcycle} คัน`,
-    ...(carryoverByType.car + carryoverByType.motorcycle > 0
-      ? [`รวม: ${carryoverByType.car + carryoverByType.motorcycle} คัน`] : []),
+    `รถยนต์: ${carryoverByBilling.carNormal} คัน`,
+    `รถจักรยานยนต์: ${carryoverByBilling.motorcycleNormal} คัน`,
+    `รถยนต์ค้างคืน: ${carryoverByBilling.carOvernight} คัน`,
+    `รถจักรยานยนต์ค้างคืน: ${carryoverByBilling.motorcycleOvernight} คัน`,
     '─────────────────',
-    'บัตรชั่วคราวคงเหลือตอนเปิดกะ',
+    'บัตรจอดรถคงเหลือตอนเปิดกะ',
     `รถยนต์: ${params.temporaryCardsRemaining.car} ใบ`,
     `รถจักรยานยนต์: ${params.temporaryCardsRemaining.motorcycle} ใบ`,
     `รวม: ${params.temporaryCardsRemaining.car + params.temporaryCardsRemaining.motorcycle} ใบ`,

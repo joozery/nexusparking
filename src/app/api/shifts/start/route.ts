@@ -4,7 +4,7 @@ import { verifyToken, COOKIE_NAME } from '@/lib/auth'
 import { connectDB } from '@/lib/mongodb'
 import { Shift } from '@/models/Shift'
 import { Admin } from '@/models/Admin'
-import { countActiveVehicles } from '@/lib/countActiveVehicles'
+import { countActiveVehicles, countActiveVehiclesByBilling } from '@/lib/countActiveVehicles'
 import { countRemainingTemporaryCards } from '@/lib/countRemainingTemporaryCards'
 import { getSettings } from '@/models/SystemSettings'
 import { sendLineMessage, buildShiftStartMessage } from '@/lib/lineNotify'
@@ -40,7 +40,10 @@ export async function POST(req: NextRequest) {
   const carryoverCars = carryoverByType.car + carryoverByType.motorcycle
 
   const cfg = await getSettings()
-  const temporaryCardsRemaining = await countRemainingTemporaryCards()
+  const [carryoverByBilling, temporaryCardsRemaining] = await Promise.all([
+    countActiveVehiclesByBilling(cfg.rates.overnight, new Date()),
+    countRemainingTemporaryCards(),
+  ])
   const shift = await Shift.create({
     operatorId:   payload.sub,
     operatorName,
@@ -70,6 +73,7 @@ export async function POST(req: NextRequest) {
         openingFloat: shift.openingFloat,
         openingBreakdown: Object.fromEntries(shift.openingBreakdown),
         carryoverByType,
+        carryoverByBilling,
         temporaryCardsRemaining,
       }),
     ).catch(() => {})
