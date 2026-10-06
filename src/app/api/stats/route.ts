@@ -16,7 +16,7 @@ export async function GET() {
   const todayStart = getTodayStartTH()
   const now = new Date()
 
-  const [carActive, motoActive, todayEntrySessions, todayRevenueByMethod, todayRefundsByMethod, settings, todayQueues] = await Promise.all([
+  const [carActive, motoActive, todayEntrySessions, todayRevenueByMethod, todayRefundsByMethod, settings, todayQueues, todayRevenueSessions, refundShifts] = await Promise.all([
     ParkingSession.countDocuments({ cardType: { $in: CAR_TYPES }, status: 'active' }),
     ParkingSession.countDocuments({ cardType: 'motorcycle', status: 'active' }),
     // Need the actual rows (not just a count) to classify each by billing mode below.
@@ -32,6 +32,8 @@ export async function GET() {
     ]),
     getSettings(),
     ParkingQueue.find({ status: { $in: ['waiting', 'cancelled'] }, sessionId: null, joinedAt: { $gte: todayStart } }).lean(),
+    ParkingSession.find({ status: { $in: ['completed', 'lost'] }, exitTime: { $gte: todayStart, $lte: now } }).select('cardType paymentMethod totalFee').lean(),
+    Shift.find({ 'cardRefunds.0': { $exists: true } }).select('cardRefunds').lean(),
   ])
 
   const activeSessions = carActive + motoActive
@@ -47,6 +49,26 @@ export async function GET() {
     .filter(r => r._id !== 'cash' && r._id !== 'qr')
     .reduce((sum, r) => sum + ((r.total as number) ?? 0), 0)
   const revenue = cashRevenue + qrRevenue + otherRevenue
+
+  const revenueByTypeMethod = {
+    car: { cash: 0, qr: 0, other: 0 },
+    motorcycle: { cash: 0, qr: 0, other: 0 },
+  }
+  for (const session of todayRevenueSessions) {
+    const type = session.cardType === 'motorcycle' ? 'motorcycle' : 'car'
+    const method = session.paymentMethod === 'cash' || session.paymentMethod === 'qr' ? session.paymentMethod : 'other'
+    revenueByTypeMethod[type][method] += session.totalFee
+  }
+  const refundRows = refundShifts.flatMap(shift => (shift.cardRefunds ?? [])
+    .filter(refund => new Date(refund.refundedAt) >= todayStart && new Date(refund.refundedAt) <= now))
+  const refundSessionIds = [...new Set(refundRows.map(refund => refund.sessionId))]
+  const refundSessions = await ParkingSession.find({ _id: { $in: refundSessionIds } }).select('cardType').lean()
+  const refundTypeBySession = new Map(refundSessions.map(session => [String(session._id), session.cardType]))
+  for (const refund of refundRows) {
+    const type = refundTypeBySession.get(refund.sessionId) === 'motorcycle' ? 'motorcycle' : 'car'
+    const method = refund.paymentMethod
+    revenueByTypeMethod[type][method] = Math.max(0, revenueByTypeMethod[type][method] - refund.amount)
+  }
 
   // "รถเข้าวันนี้" split into 4 buckets: car/motorcycle × normal/overnight billing mode.
   // Billing mode is worked out from the session's actual fee breakdown (crossing the
@@ -89,6 +111,7 @@ export async function GET() {
       qr:    qrRevenue,
       other: otherRevenue,
     },
+    todayRevenueByTypeMethod: revenueByTypeMethod,
     // Today's entries split by vehicle type × billing mode (sums to todayEntries).
     todayEntriesByType: {
       car:                 carNormal,

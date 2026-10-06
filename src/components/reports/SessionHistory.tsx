@@ -29,6 +29,20 @@ interface SessionRow extends HistoryExportRow {
   exitPhotoPath?:  string
 }
 
+interface RefundRow {
+  id: string
+  sessionId: string
+  cardUid: string
+  plate: string
+  amount: number
+  paymentMethod: 'cash' | 'qr'
+  refundedAt: string
+  operatorName?: string
+  cardType: 'car' | 'motorcycle' | 'overnight'
+  originalEntryTime?: string
+  originalExitTime?: string
+}
+
 const STATUS_META: Record<SessionRow['status'], { label: string; color: string; bg: string }> = {
   active:    { label: 'อยู่ในลาน', color: '#059669', bg: 'rgba(5,150,105,0.1)' },
   completed: { label: 'เสร็จสิ้น', color: '#A16207', bg: 'rgba(161,98,7,0.1)' },
@@ -73,12 +87,43 @@ export function SessionHistory() {
       if (plate) qs.set('plate', plate)
       if (dateFrom) qs.set('dateFrom', dateFrom)
       if (dateTo) qs.set('dateTo', dateTo)
-      const response = await fetch(`/api/reports/history?${qs}`, { signal: controller.signal })
+      const [response, refundResponse] = await Promise.all([
+        fetch(`/api/reports/history?${qs}`, { signal: controller.signal }),
+        fetch(`/api/history/refunds?${qs}`, { signal: controller.signal }),
+      ])
       const data = await response.json()
+      const refundData = await refundResponse.json()
       if (!response.ok) throw new Error(data.error ?? 'โหลดรายการไม่สำเร็จ')
+      if (!refundResponse.ok) throw new Error(refundData.error ?? 'โหลดรายการคืนเงินไม่สำเร็จ')
       controller.signal.throwIfAborted()
-      if (!data.sessions?.length) throw new Error('ไม่มีรายการที่ตรงกับตัวกรอง')
-      setPendingExport({ rows: data.sessions, format, description, photos: includePhotos })
+      const refundRows: HistoryExportRow[] = (refundData.refunds as RefundRow[] ?? [])
+        .filter(refund => !plate || refund.plate.toLowerCase().includes(plate.toLowerCase()))
+        .map(refund => ({
+          _id: `refund:${refund.id}`,
+          cardUid: refund.cardUid,
+          cardType: refund.cardType,
+          plate: refund.plate,
+          entryTime: refund.originalEntryTime ?? refund.refundedAt,
+          exitTime: refund.originalExitTime,
+          durationMin: 0,
+          fee: 0,
+          discountAmount: 0,
+          lostFine: 0,
+          totalFee: 0,
+          paymentMethod: refund.paymentMethod,
+          status: 'completed',
+          note: 'คืนค่าปรับบัตรหาย',
+          transactionType: 'refund',
+          refundedAt: refund.refundedAt,
+          refundAmount: refund.amount,
+          originalSessionId: refund.sessionId,
+          refundOperatorName: refund.operatorName,
+        }))
+      const rows: HistoryExportRow[] = [...(data.sessions ?? []), ...refundRows]
+        .sort((a, b) => new Date(b.transactionType === 'refund' ? (b.refundedAt ?? b.entryTime) : b.entryTime).getTime()
+          - new Date(a.transactionType === 'refund' ? (a.refundedAt ?? a.entryTime) : a.entryTime).getTime())
+      if (!rows.length) throw new Error('ไม่มีรายการที่ตรงกับตัวกรอง')
+      setPendingExport({ rows, format, description, photos: includePhotos })
     } catch (error) {
       if (!controller.signal.aborted) toastError('ส่งออกไม่สำเร็จ', error instanceof Error ? error.message : 'กรุณาลองใหม่')
     } finally { setExporting(false); setProgress('') }

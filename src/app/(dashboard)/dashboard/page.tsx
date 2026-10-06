@@ -7,7 +7,7 @@ import {
   LayoutDashboard, Car, Bike, Moon, BadgeDollarSign, TrendingUp,
   RefreshCw, Clock, ArrowDownLeft, ArrowUpRight, AlertTriangle,
   CircleParking, CreditCard, History, BarChart2, DoorOpen, Settings,
-  Banknote, Smartphone, Wallet,
+  Banknote, Smartphone,
 } from 'lucide-react'
 import {
   ChartContainer, ChartTooltip, ChartTooltipContent,
@@ -29,6 +29,10 @@ interface Stats {
   car: LotStats
   motorcycle: LotStats
   todayRevenueByMethod: { cash: number; qr: number; other: number }
+  todayRevenueByTypeMethod: {
+    car: { cash: number; qr: number; other: number }
+    motorcycle: { cash: number; qr: number; other: number }
+  }
   todayEntriesByType: { car: number; motorcycle: number; overnightCar: number; overnightMotorcycle: number }
 }
 
@@ -51,12 +55,6 @@ const QUICK_LINKS = [
   { href: '/reports', icon: BarChart2,      label: 'รายงาน',          sub: 'รายได้รายวัน/เดือน', color: '#059669', bg: 'rgba(5,150,105,0.08)'  },
   { href: '/settings',icon: Settings,       label: 'ตั้งค่า',         sub: 'ฮาร์ดแวร์ / ระบบ',  color: '#D97706', bg: 'rgba(217,119,6,0.08)'  },
 ]
-
-const REVENUE_METHOD_META = {
-  cash:  { label: 'เงินสด',  icon: Banknote,    color: '#A16207' },
-  qr:    { label: 'เงินโอน', icon: Smartphone,  color: '#0891B2' },
-  other: { label: 'อื่นๆ',   icon: Wallet,      color: '#94A3B8' },
-} as const
 
 const entryTypeChartConfig = {
   car:                 { label: 'รถยนต์',            color: '#A16207' },
@@ -122,6 +120,12 @@ export default function DashboardPage() {
     .map(key => ({ key, value: stats?.todayEntriesByType[key] ?? 0 }))
     .filter(d => d.value > 0)
   const totalEntriesToday = entryTypeData.reduce((sum, d) => sum + d.value, 0)
+  const revenueTypeRows = [
+    { key: 'carCash', label: 'รถยนต์ · เงินสด', amount: stats?.todayRevenueByTypeMethod?.car.cash ?? 0, color: '#A16207', icon: Banknote },
+    { key: 'carQr', label: 'รถยนต์ · เงินโอน', amount: stats?.todayRevenueByTypeMethod?.car.qr ?? 0, color: '#0891B2', icon: Smartphone },
+    { key: 'motoCash', label: 'รถจักรยานยนต์ · เงินสด', amount: stats?.todayRevenueByTypeMethod?.motorcycle.cash ?? 0, color: '#6D28D9', icon: Banknote },
+    { key: 'motoQr', label: 'รถจักรยานยนต์ · เงินโอน', amount: stats?.todayRevenueByTypeMethod?.motorcycle.qr ?? 0, color: '#7C3AED', icon: Smartphone },
+  ]
 
   return (
     <>
@@ -281,17 +285,17 @@ export default function DashboardPage() {
                 <p className="text-xs font-bold text-slate-700">สัดส่วนรายได้วันนี้</p>
               </div>
               <div className="p-4 space-y-3">
-                {(Object.keys(REVENUE_METHOD_META) as (keyof typeof REVENUE_METHOD_META)[]).map(key => {
-                  const meta   = REVENUE_METHOD_META[key]
-                  const Icon   = meta.icon
-                  const amount = stats?.todayRevenueByMethod[key] ?? 0
+                {revenueTypeRows.map(row => {
+                  const Icon = row.icon
+                  const amount = row.amount
+                  const color = row.color
                   const total  = stats?.todayRevenue ?? 0
                   const pct    = total > 0 ? Math.round((amount / total) * 100) : 0
                   return (
-                    <div key={key}>
+                    <div key={row.key}>
                       <div className="flex items-center justify-between mb-1">
                         <span className="text-xs font-semibold text-slate-600 flex items-center gap-1.5">
-                          <Icon className="size-3.5" style={{ color: meta.color }} /> {meta.label}
+                          <Icon className="size-3.5" style={{ color }} /> {row.label}
                         </span>
                         <span className="text-xs font-bold text-slate-800">
                           ฿{amount.toLocaleString('th-TH')} <span className="text-slate-400 font-normal">({pct}%)</span>
@@ -299,7 +303,7 @@ export default function DashboardPage() {
                       </div>
                       <div className="h-1.5 rounded-full overflow-hidden" style={{ background: '#F1F5F9' }}>
                         <div className="h-full rounded-full"
-                          style={{ width: `${pct}%`, background: meta.color, transition: 'width 0.6s ease' }} />
+                          style={{ width: `${pct}%`, background: color, transition: 'width 0.6s ease' }} />
                       </div>
                     </div>
                   )

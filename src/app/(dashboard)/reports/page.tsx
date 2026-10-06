@@ -16,10 +16,12 @@ import {
 import {
   BarChart2, TrendingUp, Car, Bike, Moon, AlertTriangle,
   RefreshCw, ArrowUpRight, Calendar, SlidersHorizontal, History,
-  FileSpreadsheet, FileText, Columns3, Check as CheckIcon,
+  FileSpreadsheet, FileText, Columns3,
 } from 'lucide-react'
 import { SessionHistory } from '@/components/reports/SessionHistory'
-import { exportRowsToExcel, exportRowsToPDF, type ExportColumn } from '@/lib/reportExport'
+import type { ExportColumn } from '@/lib/reportExport'
+import type { HistoryExportRow } from '@/lib/sessionHistoryExport'
+import { exportRevenueSummaryExcel, exportRevenueSummaryPDF } from '@/lib/revenueSummaryExport'
 
 interface MonthlyRow { _id: string; total: number; count: number; car: number; motorcycle: number; carOvernight: number; motorcycleOvernight: number; overnight: number; overnightCount: number; lostFines: number }
 interface DailyRow   { _id: string; total: number; count: number; car: number; motorcycle: number; overnight: number; overnightCount: number; lostFines: number }
@@ -120,6 +122,8 @@ export default function ReportsPage() {
   const [dateTo,      setDateTo]      = useState(today)
   const [data,        setData]        = useState<ReportData | null>(null)
   const [loading,     setLoading]     = useState(false)
+  const [detailedExporting, setDetailedExporting] = useState(false)
+  const [exportReportKind, setExportReportKind] = useState<'all' | 'summary'>('all')
 
   // คอลัมน์ที่จะโชว์ในตารางรายวัน + export — จำค่าไว้ต่อเบราว์เซอร์ (วันที่ล็อกไว้เสมอ ไม่ togglable)
   const togglableColumns = REPORT_COLUMNS.filter(c => c.key !== '_id')
@@ -133,28 +137,85 @@ export default function ReportsPage() {
     } catch { /* localStorage unavailable — keep defaults */ }
   }, [])
 
-  function toggleColumn(key: string) {
-    setVisibleCols(prev => {
-      const next = new Set(prev)
-      if (next.has(key)) next.delete(key); else next.add(key)
-      try { localStorage.setItem(REPORT_COLUMNS_STORAGE_KEY, JSON.stringify([...next])) } catch { /* ignore */ }
-      return next
-    })
-  }
-
-  const activeColumns = REPORT_COLUMNS.filter(c => c.key === '_id' || visibleCols.has(c.key))
-
-  function exportFilename() {
-    if (!data) return 'revenue-report'
-    return `revenue-report_${data.startDate.slice(0, 10)}_to_${data.endDate.slice(0, 10)}`
-  }
   function handleExportExcel() {
-    if (!data) return
-    exportRowsToExcel(data.daily, activeColumns, exportFilename())
+    void exportDetailed('excel')
   }
   function handleExportPDF() {
-    if (!data) return
-    exportRowsToPDF(data.daily, activeColumns, exportFilename(), 'Revenue Report')
+    void exportDetailed('pdf')
+  }
+
+  async function exportDetailed(format: 'pdf' | 'excel') {
+    if (!data || detailedExporting) return
+    setDetailedExporting(true)
+    try {
+      if (exportReportKind === 'summary') {
+        const summaryData = {
+          startDate: data.startDate,
+          endDate: data.endDate,
+          daily: data.daily,
+          summary: data.summary,
+        }
+        if (format === 'excel') exportRevenueSummaryExcel(summaryData)
+        else exportRevenueSummaryPDF(summaryData)
+        return
+      }
+      const from = data.startDate.slice(0, 10)
+      const to = data.endDate.slice(0, 10)
+      const qs = new URLSearchParams({ dateFrom: from, dateTo: to })
+      const [historyResponse, refundResponse] = await Promise.all([
+        fetch(`/api/reports/history?${qs}`),
+        fetch(`/api/history/refunds?${qs}`),
+      ])
+      const historyData = await historyResponse.json()
+      const refundData = await refundResponse.json()
+      if (!historyResponse.ok) throw new Error(historyData.error ?? 'โหลดรายการจอดไม่สำเร็จ')
+      if (!refundResponse.ok) throw new Error(refundData.error ?? 'โหลดรายการคืนเงินไม่สำเร็จ')
+
+      const refundRows: HistoryExportRow[] = (refundData.refunds ?? []).map((refund: {
+        id: string; sessionId: string; cardUid: string; plate: string; amount: number
+        paymentMethod: 'cash' | 'qr'; refundedAt: string; operatorName?: string
+        cardType: string; originalEntryTime?: string; originalExitTime?: string
+      }) => ({
+        _id: `refund:${refund.id}`,
+        cardUid: refund.cardUid,
+        cardType: refund.cardType,
+        plate: refund.plate,
+        entryTime: refund.originalEntryTime ?? refund.refundedAt,
+        exitTime: refund.originalExitTime,
+        durationMin: 0,
+        fee: 0,
+        discountAmount: 0,
+        lostFine: 0,
+        totalFee: 0,
+        paymentMethod: refund.paymentMethod,
+        status: 'completed',
+        note: 'คืนค่าปรับบัตรหาย',
+        transactionType: 'refund',
+        refundedAt: refund.refundedAt,
+        refundAmount: refund.amount,
+        originalSessionId: refund.sessionId,
+        refundOperatorName: refund.operatorName,
+      }))
+      const rows: HistoryExportRow[] = [...(historyData.sessions ?? []), ...refundRows]
+        .sort((a, b) => new Date(b.transactionType === 'refund' ? (b.refundedAt ?? b.entryTime) : b.entryTime).getTime()
+          - new Date(a.transactionType === 'refund' ? (a.refundedAt ?? a.entryTime) : a.entryTime).getTime())
+      if (!rows.length) throw new Error('ไม่มีรายการในช่วงวันที่เลือก')
+
+      const { exportHistoryExcel, exportHistoryPDF } = await import('@/lib/sessionHistoryExport')
+      const options = {
+        includePhotos: false,
+        description: `รายการจอดและคืนค่าปรับ · ${from} ถึง ${to}`,
+        signal: new AbortController().signal,
+        onProgress: () => undefined,
+        reportKind: 'revenue' as const,
+      }
+      if (format === 'excel') await exportHistoryExcel(rows, options)
+      else await exportHistoryPDF(rows, options)
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : 'ส่งออกข้อมูลไม่สำเร็จ')
+    } finally {
+      setDetailedExporting(false)
+    }
   }
 
   const fetchReport = useCallback(async (p: PeriodKey, from: string, to: string) => {
@@ -248,7 +309,7 @@ export default function ReportsPage() {
                   <button onClick={() => setColPanelOpen(v => !v)}
                     className="h-8 px-2.5 rounded-lg flex items-center gap-1.5 text-[11px] font-semibold text-slate-500 hover:bg-slate-100 transition-colors"
                     style={{ border: '1px solid #E2E8F0' }}>
-                    <Columns3 className="size-3.5" /> คอลัมน์
+                    <Columns3 className="size-3.5" /> หัวข้อรายงาน
                   </button>
                   {colPanelOpen && (
                     <>
@@ -256,35 +317,35 @@ export default function ReportsPage() {
                       <div className="absolute right-0 top-9 z-50 w-56 rounded-xl bg-white p-2 shadow-lg"
                         style={{ border: '1px solid #E8ECF4' }}>
                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide px-2 py-1">
-                          โชว์คอลัมน์ในตาราง/export
+                          รูปแบบไฟล์ Export
                         </p>
-                        {togglableColumns.map(c => {
-                          const active = visibleCols.has(c.key)
-                          return (
-                            <button key={c.key} onClick={() => toggleColumn(c.key)}
-                              className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs font-semibold text-left hover:bg-slate-50 transition-colors"
-                              style={{ color: active ? '#1E293B' : '#94A3B8' }}>
-                              <span className="size-4 rounded flex items-center justify-center shrink-0"
-                                style={{ background: active ? '#A16207' : '#F1F5F9' }}>
-                                {active && <CheckIcon className="size-3 text-white" />}
-                              </span>
-                              {c.label}
-                            </button>
-                          )
-                        })}
+                        {[
+                          { value: 'all' as const, label: 'รายงานรายการทั้งหมด' },
+                          { value: 'summary' as const, label: 'รายงานสรุป' },
+                        ].map(option => (
+                          <button key={option.value} onClick={() => setExportReportKind(option.value)}
+                            className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs font-semibold text-left hover:bg-slate-50 transition-colors"
+                            style={{ color: exportReportKind === option.value ? '#1E293B' : '#94A3B8' }}>
+                            <span className="size-4 rounded-full flex items-center justify-center shrink-0"
+                              style={{ border: `1px solid ${exportReportKind === option.value ? '#A16207' : '#CBD5E1'}` }}>
+                              {exportReportKind === option.value && <span className="size-2 rounded-full" style={{ background: '#A16207' }} />}
+                            </span>
+                            {option.label}
+                          </button>
+                        ))}
                       </div>
                     </>
                   )}
                 </div>
 
                 {/* Export */}
-                <button onClick={handleExportExcel} disabled={!data || data.daily.length === 0}
+                <button onClick={handleExportExcel} disabled={!data || data.daily.length === 0 || detailedExporting}
                   title="Export Excel"
                   className="h-8 px-2.5 rounded-lg flex items-center gap-1.5 text-[11px] font-semibold text-slate-500 hover:bg-slate-100 transition-colors disabled:opacity-40"
                   style={{ border: '1px solid #E2E8F0' }}>
-                  <FileSpreadsheet className="size-3.5" style={{ color: '#059669' }} /> Excel
+                  <FileSpreadsheet className="size-3.5" style={{ color: '#059669' }} /> {detailedExporting ? 'กำลังสร้าง…' : 'Excel'}
                 </button>
-                <button onClick={handleExportPDF} disabled={!data || data.daily.length === 0}
+                <button onClick={handleExportPDF} disabled={!data || data.daily.length === 0 || detailedExporting}
                   title="Export PDF"
                   className="h-8 px-2.5 rounded-lg flex items-center gap-1.5 text-[11px] font-semibold text-slate-500 hover:bg-slate-100 transition-colors disabled:opacity-40"
                   style={{ border: '1px solid #E2E8F0' }}>
