@@ -6,13 +6,14 @@ export interface RevenueSummaryDailyRow {
   total: number
   count: number
   lostFines: number
+  lostCardCount: number
 }
 
 export interface RevenueSummaryData {
   startDate: string
   endDate: string
   daily: RevenueSummaryDailyRow[]
-  summary: { total: number; count: number; lostFines: number }
+  summary: { total: number; count: number; lostFines: number; lostCardCount: number; lostFineRefunds: number; lostFineRefundCount: number }
 }
 
 const money = (value: number) => Number(value || 0).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -26,7 +27,13 @@ function rows(data: RevenueSummaryData) {
     ['บัตรหาย', '', data.summary.lostFines],
     ['รวมทั้งหมด', data.summary.count, data.summary.total],
   ]
-  return { parking, lost, totals }
+  const lostWithCount = data.daily.filter(row => row.lostFines > 0)
+    .map(row => ['\u0e1a\u0e31\u0e15\u0e23\u0e2b\u0e32\u0e22', dateLabel(row._id), row.lostCardCount, row.lostFines])
+  const totalsWithCount = [...totals]
+  void lost
+  totalsWithCount[1] = ['\u0e1a\u0e31\u0e15\u0e23\u0e2b\u0e32\u0e22', data.summary.lostCardCount, data.summary.lostFines]
+  totalsWithCount.splice(2, 0, ['\u0e04\u0e37\u0e19\u0e04\u0e48\u0e32\u0e1b\u0e23\u0e31\u0e1a\u0e1a\u0e31\u0e15\u0e23\u0e2b\u0e32\u0e22', data.summary.lostFineRefundCount, -(data.summary.lostFineRefunds ?? 0)])
+  return { parking, lost: lostWithCount, totals: totalsWithCount }
 }
 
 export function exportRevenueSummaryExcel(data: RevenueSummaryData) {

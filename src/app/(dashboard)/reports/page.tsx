@@ -24,9 +24,9 @@ import type { HistoryExportRow } from '@/lib/sessionHistoryExport'
 import { exportRevenueSummaryExcel, exportRevenueSummaryPDF } from '@/lib/revenueSummaryExport'
 
 interface MonthlyRow { _id: string; total: number; count: number; car: number; motorcycle: number; carOvernight: number; motorcycleOvernight: number; overnight: number; overnightCount: number; lostFines: number }
-interface DailyRow   { _id: string; total: number; count: number; car: number; motorcycle: number; overnight: number; overnightCount: number; lostFines: number }
+interface DailyRow   { _id: string; total: number; count: number; car: number; motorcycle: number; overnight: number; overnightCount: number; lostFines: number; lostCardCount: number }
 interface TypeRow    { _id: string; total: number; count: number; avg: number; avgDurationMin: number }
-interface Summary    { total: number; count: number; avg: number; lostFines: number; maxFee: number; cash: number; transfer: number; lostFineRefunds: number; lostFineRefundCount: number; lostFineRefundCash: number; lostFineRefundTransfer: number; fineTotal: number; fineBreakdown: { name: string; total: number }[] }
+interface Summary    { total: number; count: number; avg: number; lostFines: number; lostCardCount: number; maxFee: number; cash: number; transfer: number; lostFineRefunds: number; lostFineRefundCount: number; lostFineRefundCash: number; lostFineRefundTransfer: number; fineTotal: number; fineBreakdown: { name: string; total: number }[] }
 interface AvgOccupancy { car: number; motorcycle: number }
 interface HourlyRow { hour: number; total: number; count: number; car: number; motorcycle: number; carOvernight: number; motorcycleOvernight: number; avgTotal: number; avgCount: number }
 interface ReportData {
@@ -161,7 +161,7 @@ export default function ReportsPage() {
       }
       const from = data.startDate.slice(0, 10)
       const to = data.endDate.slice(0, 10)
-      const qs = new URLSearchParams({ dateFrom: from, dateTo: to })
+      const qs = new URLSearchParams({ dateFrom: from, dateTo: to, reportMode: 'revenue' })
       const [historyResponse, refundResponse] = await Promise.all([
         fetch(`/api/reports/history?${qs}`),
         fetch(`/api/history/refunds?${qs}`),

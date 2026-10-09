@@ -176,9 +176,13 @@ export default function HistoryPage() {
   const hasFilter  = !!(search || status || dateFrom || dateTo)
 
   const isLost = (s: Session) => s.status === 'lost' || s.lostCard === true || s.lostFine > 0
+  // A lost-card transaction remains in history after the physical card is
+  // returned, but it must no longer be counted as an outstanding lost card.
+  const returnedSessionIds = new Set(refunds.map(refund => refund.sessionId))
+  const isOutstandingLost = (s: Session) => isLost(s) && !returnedSessionIds.has(s._id)
   const countActive    = sessions.filter(s => s.status === 'active' && !isLost(s)).length
   const countCompleted = sessions.filter(s => s.status === 'completed').length
-  const countLost      = sessions.filter(isLost).length
+  const countLost      = sessions.filter(isOutstandingLost).length
   const totalRevenue   = sessions.filter(s => s.status !== 'active').reduce((a, s) => a + s.totalFee, 0)
   const showRefunds    = status === '' || status === 'completed'
   const visibleRefunds = showRefunds
@@ -186,8 +190,11 @@ export default function HistoryPage() {
     : []
   const totalRefunded  = visibleRefunds.reduce((sum, refund) => sum + refund.amount, 0)
   const netRevenue     = totalRevenue - totalRefunded
+  const visibleSessions = status === 'lost'
+    ? sessions.filter(session => isOutstandingLost(session))
+    : sessions
   const timelineItems: TimelineItem[] = [
-    ...sessions.map(session => ({ kind: 'session' as const, session, eventTime: session.exitTime ?? session.entryTime })),
+    ...visibleSessions.map(session => ({ kind: 'session' as const, session, eventTime: session.exitTime ?? session.entryTime })),
     ...(showRefunds
       ? visibleRefunds.map(refund => ({ kind: 'refund' as const, refund, eventTime: refund.refundedAt }))
       : []),
@@ -355,7 +362,7 @@ export default function HistoryPage() {
 
                 const s = item.session
                 const tm = TYPE_META[s.cardType]
-                const displayStatus: SessionStatus = isLost(s) ? 'lost' : s.status
+                const displayStatus: SessionStatus = isOutstandingLost(s) ? 'lost' : s.status
                 const sm = STATUS_META[displayStatus]
                 const TypeIcon = tm.icon
                 const isConfirm = confirmId === s._id

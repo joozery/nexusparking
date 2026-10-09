@@ -16,12 +16,12 @@ export async function GET(req: NextRequest) {
 
   let startDate: Date
   let refDate: Date
+  const thaiDate = (value: string, endOfDay = false) =>
+    new Date(`${value}T${endOfDay ? '23:59:59.999' : '00:00:00.000'}+07:00`)
 
   if (dateFrom && dateTo) {
-    startDate = new Date(dateFrom)
-    startDate.setHours(0, 0, 0, 0)
-    refDate = new Date(dateTo)
-    refDate.setHours(23, 59, 59, 999)
+    startDate = thaiDate(dateFrom)
+    refDate = thaiDate(dateTo, true)
   } else {
     refDate = dateStr ? new Date(dateStr) : new Date()
     refDate.setHours(23, 59, 59, 999)
@@ -63,7 +63,7 @@ export async function GET(req: NextRequest) {
 
   const [reportSettings, reportSessions, monthlySessions] = await Promise.all([
     getSettings(),
-    ParkingSession.find(reportSessionFilter).select('cardType entryTime exitTime fee durationMin lostFine fineName fineAmount').lean(),
+    ParkingSession.find(reportSessionFilter).select('cardUid cardType entryTime exitTime fee durationMin lostFine lostCard status fineName fineAmount').lean(),
     ParkingSession.find(monthlySessionFilter).select('cardType entryTime exitTime fee').lean(),
   ])
   const classifySession = (session: { cardType: 'car' | 'motorcycle' | 'overnight'; entryTime: Date; exitTime?: Date }) => {
@@ -164,7 +164,7 @@ export async function GET(req: NextRequest) {
     // รายได้แต่ละวัน
     ParkingSession.aggregate([
       { $match: matchFilter },
-      { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$exitTime', timezone: '+07:00' } }, total: { $sum: '$totalFee' }, count: { $sum: 1 }, ...typeFields } },
+      { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$exitTime', timezone: '+07:00' } }, total: { $sum: '$totalFee' }, count: { $sum: 1 }, lostCardUids: { $addToSet: { $cond: [{ $gt: ['$lostFine', 0] }, '$cardUid', null] } }, ...typeFields } },
       { $sort: { _id: 1 } },
     ]),
     // รายได้รายเดือน (12 เดือนล่าสุด เสมอ)
@@ -251,6 +251,14 @@ export async function GET(req: NextRequest) {
   // เติมทุกชั่วโมง 0-23 ให้ครบ (ชั่วโมงไหนไม่มีข้อมูล = 0) แล้วคำนวณค่าเฉลี่ย/วันไว้ให้พร้อมใช้
   // (เผื่อช่วงที่เลือกยาวกว่า 1 วัน ฝั่ง UI จะได้สลับ sum/avg ได้โดยไม่ต้องคำนวณเพิ่ม)
   const periodDays = Math.max(1, Math.round((refDate.getTime() - startDate.getTime()) / 86400000))
+  const dailyReport = daily.map(row => ({
+    ...row,
+    lostCardCount: (row.lostCardUids ?? []).filter(Boolean).length,
+  }))
+  const lostCardCount = new Set(reportSessions
+    .filter(session => session.lostCard === true || (session.lostFine ?? 0) > 0 || session.status === 'lost')
+    .map(session => session.cardUid)
+    .filter(Boolean)).size
   const hourlyByHour = new Map((hourlyRaw as { _id: number; total: number; count: number }[]).map(r => [r._id, r]))
   const hourly = Array.from({ length: 24 }, (_, hour) => {
     const row = hourlyByHour.get(hour)
@@ -270,7 +278,7 @@ export async function GET(req: NextRequest) {
     period,
     startDate: startDate.toISOString(),
     endDate:   refDate.toISOString(),
-    daily,
+    daily: dailyReport,
     monthly: monthlyReport,
     byType: reportByType,
     summary: {
@@ -285,6 +293,7 @@ export async function GET(req: NextRequest) {
       lostFineRefundCount: refundSummary[0]?.count ?? 0,
       lostFineRefundCash: refundSummary[0]?.cash ?? 0,
       lostFineRefundTransfer: refundSummary[0]?.transfer ?? 0,
+      lostCardCount,
       fineTotal: fineBreakdown.reduce((sum, row) => sum + row.total, 0),
       fineBreakdown,
     },

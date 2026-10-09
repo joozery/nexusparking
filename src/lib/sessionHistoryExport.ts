@@ -26,6 +26,7 @@ export interface HistoryExportRow {
   refundAmount?: number
   originalSessionId?: string
   refundOperatorName?: string
+  operatorName?: string
 }
 type Photo = { data: string; width: number; height: number } | { message: string }
 export interface HistoryExportOptions {
@@ -52,9 +53,10 @@ export function historyValues(r: HistoryExportRow) {
 }
 const HEADERS = ['ทะเบียน', 'ประเภท (car/motorcycle/overnight)', 'เลขบัตร UID', 'วันที่เข้า (DD/MM/YYYY)', 'เวลาเข้า (HH:MM:SS)', 'วันที่ออก (DD/MM/YYYY)', 'เวลาออก (HH:MM:SS)', 'ค่าจอดรถ (บาท)', 'ชื่อส่วนลดร้านค้า (ไม่มีบัตร)', 'ส่วนลดร้านค้า (บาท)', 'ชื่อค่าปรับนอกเวลา', 'ค่าปรับนอกเวลา (บาท)', 'บัตรหาย (true/false)', 'ค่าปรับบัตรหาย (บาท)', 'ค่าปรับนอกเวลา (true/false)', 'ค่าปรับนอกเวลา (บาท)', 'Cash/QR', 'จำนวนเงินสุทธิ (บาท)', 'หมายเหตุ/รายการ']
 const REVENUE_HEADERS = ['ทะเบียน', 'ประเภท (car/motorcycle/overnight)', 'เลขบัตร UID', 'วันที่เข้า (DD/MM/YYYY)', 'เวลาเข้า (HH:MM:SS)', 'วันที่ออก (DD/MM/YYYY)', 'เวลาออก (HH:MM:SS)', 'ค่าจอดรถ (บาท)', 'ชื่อค่าปรับ', 'ค่าปรับ (บาท)', 'ชื่อส่วนลดรายคน / โรงแรม', 'ส่วนลดรายคน / โรงแรม (บาท)', 'บัตรหาย (true/false)', 'ค่าปรับบัตรหาย (บาท)', 'Cash/QR', 'จำนวนเงินสุทธิ (บาท)', 'หมายเหตุ/รายการ']
-const exportHeaders = (options: HistoryExportOptions) => options.reportKind === 'revenue' ? REVENUE_HEADERS : HEADERS
+const OPERATOR_HEADER = '\u0e0a\u0e37\u0e48\u0e2d\u0e1e\u0e19\u0e31\u0e01\u0e07\u0e32\u0e19'
+const exportHeaders = (options: HistoryExportOptions) => options.reportKind === 'revenue' ? [...REVENUE_HEADERS, OPERATOR_HEADER] : HEADERS
 const exportValues = (row: HistoryExportRow, options: HistoryExportOptions) => options.reportKind === 'revenue'
-  ? (() => { const values = historyValues(row); return [values[0], values[1], values[2], values[3], values[4], values[5], values[6], values[7], values[10], values[11], values[8], values[9], values[12], values[13], values[16], values[17], values[18]] })()
+  ? (() => { const values = historyValues(row); return [values[0], values[1], values[2], values[3], values[4], values[5], values[6], values[7], values[10], values[11], values[8], values[9], values[12], values[13], values[16], values[17], values[18], row.transactionType === 'refund' ? row.refundOperatorName ?? '' : row.operatorName ?? ''] })()
   : historyValues(row)
 const pause = () => new Promise<void>(resolve => setTimeout(resolve, 0))
 
@@ -147,6 +149,7 @@ export async function exportHistoryPDF(rows: HistoryExportRow[], options: Histor
   const widths = options.reportKind === 'revenue'
     ? [100, 175, 155, 125, 110, 125, 110, 115, 180, 125, 220, 145, 130, 140, 105, 145, 220]
     : [100, 175, 155, 125, 110, 125, 110, 115, 220, 125, 180, 125, 130, 140, 155, 140, 105, 145, 220]
+  const renderedWidths = options.reportKind === 'revenue' ? [...widths, 150] : widths
   const left = 35, top = 185, headerHeight = 105, rowHeight = 62, bottom = 2025
   const pageRows = Math.max(1, Math.floor((bottom - top - headerHeight) / rowHeight))
   const wrap = (value: string, maxWidth: number, size: number) => {
@@ -179,11 +182,11 @@ export async function exportHistoryPDF(rows: HistoryExportRow[], options: Histor
       x += width
     }
     x = left
-    exportHeaders(options).forEach((header, index) => drawCell(header, widths[index], top, headerHeight, true))
+    exportHeaders(options).forEach((header, index) => drawCell(header, renderedWidths[index], top, headerHeight, true))
     pageRowsData.forEach((row, rowIndex) => {
       x = left
       const values = exportValues(row, options)
-      values.forEach((value, index) => drawCell(String(value ?? ''), widths[index], top + headerHeight + rowIndex * rowHeight, rowHeight, false, (options.reportKind === 'revenue' ? [7, 9, 11, 13, 15] : [7, 9, 11, 13, 15, 17]).includes(index)))
+      values.forEach((value, index) => drawCell(String(value ?? ''), renderedWidths[index], top + headerHeight + rowIndex * rowHeight, rowHeight, false, (options.reportKind === 'revenue' ? [7, 9, 11, 13, 15] : [7, 9, 11, 13, 15, 17]).includes(index)))
     })
     ctx.fillStyle = '#6B7280'; ctx.font = `18px ${font}`
     ctx.fillText(`หน้า ${pageIndex + 1}`, left, 2070)
