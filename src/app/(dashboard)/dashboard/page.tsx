@@ -202,7 +202,7 @@ export default function DashboardPage() {
           </div>
 
           {/* ── KPI STRIP ── */}
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 gap-3">
             {[
               {
                 label: 'รายได้วันนี้',
@@ -236,7 +236,7 @@ export default function DashboardPage() {
                   ? 'rgba(217,119,6,0.2)'
                   : 'rgba(5,150,105,0.2)',
               },
-            ].map(k => {
+            ].slice(0, 2).map(k => {
               const Icon = k.icon
               return (
                 <div key={k.label} className="rounded-xl p-4 text-white relative overflow-hidden"

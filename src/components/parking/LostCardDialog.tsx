@@ -18,16 +18,20 @@ interface Props {
   onOpenChange: (open: boolean) => void
   onConfirm: (plate: string, estimatedHours: number, cardType: 'car' | 'motorcycle') => void
   defaultPlate?: string
+  defaultCardType?: 'car' | 'motorcycle'
 }
 
-export function LostCardDialog({ open, onOpenChange, onConfirm, defaultPlate }: Props) {
+export function LostCardDialog({ open, onOpenChange, onConfirm, defaultPlate, defaultCardType = 'car' }: Props) {
   const [plate,    setPlate]    = useState('')
   const [hours,    setHours]    = useState(2)
   const [cardType, setCardType] = useState<'car' | 'motorcycle'>('car')
 
   useEffect(() => {
-    if (open) setPlate(defaultPlate ?? '')
-  }, [open, defaultPlate])
+    if (open) {
+      setPlate(defaultPlate ?? '')
+      setCardType(defaultCardType)
+    }
+  }, [open, defaultPlate, defaultCardType])
 
   const parkingFee = calcFeeFromMinutes(cardType, hours * 60)
   const totalFee   = parkingFee + LOST_FINE

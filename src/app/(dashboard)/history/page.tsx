@@ -99,6 +99,15 @@ export default function HistoryPage() {
   const [timeFrom,  setTimeFrom]  = useState('00:00')
   const [timeTo,    setTimeTo]    = useState('23:59')
   const [openDateTime, setOpenDateTime] = useState<'from' | 'to' | null>(null)
+  useEffect(() => {
+    if (!openDateTime) return
+    const handleOutsideClick = (event: MouseEvent) => {
+      const target = event.target as Element | null
+      if (!target?.closest('[data-history-datetime]')) setOpenDateTime(null)
+    }
+    document.addEventListener('mousedown', handleOutsideClick)
+    return () => document.removeEventListener('mousedown', handleOutsideClick)
+  }, [openDateTime])
   const [datePreset, setDatePreset] = useState<'today' | '7days' | 'month' | ''>('')
   const [confirmId, setConfirmId] = useState<string | null>(null)
   const [editSession, setEditSession] = useState<Session | null>(null)
@@ -336,7 +345,7 @@ export default function HistoryPage() {
                   </button>
                 ))}
               </div>
-              <div className="relative">
+              <div className="relative" data-history-datetime>
                 <button type="button" onClick={() => setOpenDateTime(openDateTime === 'from' ? null : 'from')}
                   className="h-8 px-3 rounded-lg text-xs text-slate-700 outline-none"
                   style={{ background: '#F8FAFF', border: '1px solid #E8ECF4' }}>
@@ -344,7 +353,7 @@ export default function HistoryPage() {
                 </button>
                 {openDateTime === 'from' && (
                   <div className="absolute left-0 top-10 z-30 rounded-lg bg-white p-3 shadow-xl" style={{ border: '1px solid #E8ECF4' }}>
-                    <input type="date" value={dateFrom.slice(0, 10)}
+                    <input type="date" value={dateFrom.slice(0, 10)} max={dateTo.slice(0, 10) || undefined}
                       onChange={e => { setDateFrom(e.target.value ? `${e.target.value}T${timeFrom}` : ''); setDatePreset(''); setPage(1) }}
                       className="h-8 px-2 rounded-lg text-xs text-slate-700 outline-none"
                       style={{ background: '#F8FAFF', border: '1px solid #E8ECF4' }} />
@@ -365,7 +374,7 @@ export default function HistoryPage() {
                 )}
               </div>
               <span className="text-slate-300 text-xs">–</span>
-              <div className="relative">
+              <div className="relative" data-history-datetime>
                 <button type="button" onClick={() => setOpenDateTime(openDateTime === 'to' ? null : 'to')}
                   className="h-8 px-3 rounded-lg text-xs text-slate-700 outline-none"
                   style={{ background: '#F8FAFF', border: '1px solid #E8ECF4' }}>
@@ -373,7 +382,7 @@ export default function HistoryPage() {
                 </button>
                 {openDateTime === 'to' && (
                   <div className="absolute right-0 top-10 z-30 rounded-lg bg-white p-3 shadow-xl" style={{ border: '1px solid #E8ECF4' }}>
-                    <input type="date" value={dateTo.slice(0, 10)}
+                    <input type="date" value={dateTo.slice(0, 10)} min={dateFrom.slice(0, 10) || undefined}
                       onChange={e => { setDateTo(e.target.value ? `${e.target.value}T${timeTo}` : ''); setDatePreset(''); setPage(1) }}
                       className="h-8 px-2 rounded-lg text-xs text-slate-700 outline-none"
                       style={{ background: '#F8FAFF', border: '1px solid #E8ECF4' }} />

@@ -91,9 +91,10 @@ export default function GatePage() {
   const [coHours, setCoHours] = useState(1)
   const [coFee,   setCoFee]   = useState(0)
   const [coSessionId, setCoSessionId] = useState('')
+  const [lockedLostCheckout, setLockedLostCheckout] = useState(false)
 
   function resetCI() { setCiStep('scan'); setCiPlate(''); setCiType('car'); setCiUid('') }
-  function resetCO() { setCoStep('scan'); setCoSessionId('') }
+  function resetCO() { setCoStep('scan'); setCoSessionId(''); setLockedLostCheckout(false) }
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -183,11 +184,11 @@ export default function GatePage() {
     }
   }
 
-  async function handleCheckout(paymentMethod: 'cash' | 'qr' = 'cash', discountId?: string) {
+  async function handleCheckout(paymentMethod: 'cash' | 'qr' = 'cash', discountId?: string, dailyDiscountId?: string, isLostCard?: boolean, fineId?: string) {
     const res = await fetch('/api/sessions/checkout', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sessionId: coSessionId || undefined, paymentMethod, discountId }),
+      body: JSON.stringify({ sessionId: coSessionId || undefined, paymentMethod, discountId, dailyDiscountId, lostCard: isLostCard === true, fineId }),
     })
     if (res.ok) {
       setCheckOutOpen(false); resetCO(); fetchData()
@@ -307,6 +308,14 @@ ${lostFine > 0 ? `<div class="row lost-row"><span>ค่าปรับบัต
     setCoSessionId(s._id); setCoStep('payment'); setCheckOutOpen(true)
   }
 
+  function openLostCardFromActive() {
+    if (!active) { setLostOpen(true); return }
+    const durationMin = Math.max(1, Math.floor((Date.now() - new Date(active.entryTime).getTime()) / 60000))
+    const hours = Math.ceil(durationMin / 60)
+    setCoType(active.cardType); setCoHours(hours); setCoFee(calcFee(active.cardType, hours))
+    setCoSessionId(active._id); setLockedLostCheckout(true); setCoStep('payment'); setCheckOutOpen(true)
+  }
+
   const filtered = sessions.filter(s => {
     const matchTab = activeTab === 'all' ? true : activeTab === 'active' ? s.status === 'active' : s.status === 'completed'
     const matchSearch = search === '' || s.plate.toLowerCase().includes(search.toLowerCase()) || s.cardUid.toLowerCase().includes(search.toLowerCase())
@@ -362,13 +371,6 @@ ${lostFine > 0 ? `<div class="row lost-row"><span>ค่าปรับบัต
             <span className="absolute top-1.5 right-1.5 size-1.5 bg-red-500 rounded-full border border-white" />
           </button>
           <div className="w-px h-5 bg-slate-200 mx-1" />
-          <button onClick={() => setLostOpen(true)}
-            className="h-8 px-3 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors"
-            style={{ background: 'rgba(245,158,11,0.08)', color: '#B45309', border: '1px solid rgba(245,158,11,0.2)' }}
-            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(245,158,11,0.14)' }}
-            onMouseLeave={e => { e.currentTarget.style.background = 'rgba(245,158,11,0.08)' }}>
-            <AlertTriangle className="size-3" /> บัตรหาย
-          </button>
           <button onClick={() => { resetCI(); setCheckInOpen(true) }}
             className="h-8 px-4 rounded-lg text-black text-xs font-bold flex items-center gap-1.5 transition-opacity hover:opacity-90"
             style={{ background: '#EAB308', boxShadow: '0 1px 8px rgba(161,98,7,0.35)' }}>
@@ -381,13 +383,13 @@ ${lostFine > 0 ? `<div class="row lost-row"><span>ค่าปรับบัต
       <div className="flex-1 flex flex-col gap-4 p-5 overflow-hidden min-h-0">
 
         {/* Stats */}
-        <div className="shrink-0 grid grid-cols-4 gap-3">
+        <div className="shrink-0 grid grid-cols-3 gap-3">
           {[
             { label: 'รถในลาน',      value: stats?.activeCars,     sub: stats ? `รถ ${stats.car.active} · รถจักรยานยนต์ ${stats.motorcycle.active}` : `จาก 200 คัน`, icon: CircleParking,   iconBg: 'rgba(161,98,7,0.1)',  iconColor: '#A16207', bar: true },
             { label: 'ที่จอดว่าง',   value: stats?.availableSlots, sub: stats ? `รถ ${stats.car.available} · รถจักรยานยนต์ ${stats.motorcycle.available}` : 'ที่ว่าง', icon: Car,             iconBg: 'rgba(16,185,129,0.1)', iconColor: '#10B981', bar: false },
             { label: 'รายได้วันนี้', value: stats ? `฿${stats.todayRevenue.toLocaleString()}` : undefined, sub: 'วันนี้', icon: BadgeDollarSign, iconBg: 'rgba(16,185,129,0.1)', iconColor: '#10B981', bar: false },
             { label: 'แจ้งเตือน',   value: sessions.filter(s => s.status === 'lost' || !s.status).length || undefined, sub: 'รายการผิดปกติ', icon: ShieldAlert, iconBg: 'rgba(245,158,11,0.1)', iconColor: '#F59E0B', bar: false },
-          ].map(({ label, value, sub, icon: Icon, iconBg, iconColor, bar }) => (
+          ].slice(0, 3).map(({ label, value, sub, icon: Icon, iconBg, iconColor, bar }) => (
             <div key={label} className="bg-white rounded-xl px-4 py-3.5 flex items-center gap-3.5"
               style={{ border: '1px solid #E8ECF4' }}>
               <div className="size-9 rounded-lg flex items-center justify-center shrink-0"
@@ -650,8 +652,9 @@ ${lostFine > 0 ? `<div class="row lost-row"><span>ค่าปรับบัต
               {/* Actions */}
               <div className="shrink-0 px-6 pb-5 flex items-center gap-3"
                 style={{ borderTop: '1px solid #E8ECF4', paddingTop: '16px' }}>
-                <button onClick={() => setLostOpen(true)}
-                  className="h-10 px-4 rounded-lg text-xs font-bold flex items-center gap-2 transition-colors"
+                <button onClick={openLostCardFromActive}
+                  disabled={active?.status !== 'active'}
+                  className="h-10 px-4 rounded-lg text-xs font-bold flex items-center gap-2 transition-colors disabled:cursor-not-allowed disabled:opacity-40"
                   style={{ background: 'rgba(245,158,11,0.08)', color: '#B45309', border: '1px solid rgba(245,158,11,0.2)' }}
                   onMouseEnter={e => { e.currentTarget.style.background = 'rgba(245,158,11,0.14)' }}
                   onMouseLeave={e => { e.currentTarget.style.background = 'rgba(245,158,11,0.08)' }}>
@@ -696,6 +699,9 @@ ${lostFine > 0 ? `<div class="row lost-row"><span>ค่าปรับบัต
         onOpenChange={o => { setCheckOutOpen(o); if (!o) resetCO() }}
         step={coStep} plate={active?.plate} cardType={coType} hours={coHours} fee={coFee}
         checkoutSource="card"
+        entryTime={active ? new Date(active.entryTime) : undefined}
+        entrySessionId={coSessionId || undefined}
+        lockedLostCard={lockedLostCheckout}
         onSimulateScan={simulateCOScan}
         onBack={() => setCoStep('scan')}
         onConfirm={handleCheckout}

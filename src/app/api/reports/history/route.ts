@@ -3,8 +3,10 @@ import { cookies } from 'next/headers'
 import { COOKIE_NAME, verifyToken } from '@/lib/auth'
 import { connectDB } from '@/lib/mongodb'
 import { sessionFilters } from '@/lib/sessionFilters'
+import { calcFeeBreakdown } from '@/lib/calcFee'
 import { ParkingSession } from '@/models/ParkingSession'
 import { Shift } from '@/models/Shift'
+import { getSettings } from '@/models/SystemSettings'
 
 export async function GET(req: NextRequest) {
   const token = (await cookies()).get(COOKIE_NAME)?.value
@@ -29,6 +31,7 @@ export async function GET(req: NextRequest) {
     filter.exitTime = exitRange
   }
   await connectDB()
+  const settings = await getSettings()
   // One ordered query: no screen pagination or separate count that could drift.
   const sessions = await ParkingSession.find(filter)
     .select('cardUid cardType plate entryTime exitTime durationMin fee lostFine lostCard fineName fineAmount totalFee status paymentMethod discountName discountAmount note entryPhotoPath exitPhotoPath operatorId shiftId')
@@ -48,7 +51,12 @@ export async function GET(req: NextRequest) {
       shift.operatorId === session.operatorId
       && new Date(shift.startTime).getTime() <= new Date(session.entryTime).getTime()
       && (!shift.endTime || new Date(shift.endTime).getTime() >= new Date(session.entryTime).getTime()))
-    return { ...session, operatorName: fallbackShift?.operatorName ?? '' }
+    const isOvernight = session.cardType === 'overnight' || (
+      session.exitTime != null
+      && calcFeeBreakdown(session.cardType, session.entryTime, session.exitTime, settings.rates.overnight)
+        .segments.some(segment => segment.kind === 'overnight')
+    )
+    return { ...session, reportCategory: isOvernight ? 'overnight' : 'normal', operatorName: fallbackShift?.operatorName ?? '' }
   })
   return NextResponse.json({ sessions: sessionsWithOperator, total: sessionsWithOperator.length }, { headers: { 'Cache-Control': 'no-store' } })
 }

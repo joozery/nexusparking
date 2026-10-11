@@ -160,11 +160,11 @@ export async function GET(req: NextRequest) {
     avgTotal: Math.round((row.total / Math.max(1, Math.round((refDate.getTime() - startDate.getTime()) / 86400000))) * 100) / 100,
     avgCount: Math.round((row.count / Math.max(1, Math.round((refDate.getTime() - startDate.getTime()) / 86400000))) * 100) / 100,
   }))
-  const [daily, monthly, summary, refundSummary, occupancyByType, hourlyRaw] = await Promise.all([
+  const [daily, monthly, summary, refundSummary, refundDaily, occupancyByType, hourlyRaw] = await Promise.all([
     // รายได้แต่ละวัน
     ParkingSession.aggregate([
       { $match: matchFilter },
-      { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$exitTime', timezone: '+07:00' } }, total: { $sum: '$totalFee' }, count: { $sum: 1 }, lostCardUids: { $addToSet: { $cond: [{ $gt: ['$lostFine', 0] }, '$cardUid', null] } }, ...typeFields } },
+      { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$exitTime', timezone: '+07:00' } }, total: { $sum: '$totalFee' }, count: { $sum: 1 }, cash: { $sum: { $cond: [{ $eq: ['$paymentMethod', 'cash'] }, '$totalFee', 0] } }, transfer: { $sum: { $cond: [{ $eq: ['$paymentMethod', 'qr'] }, '$totalFee', 0] } }, lostFineCash: { $sum: { $cond: [{ $and: [{ $gt: ['$lostFine', 0] }, { $eq: ['$paymentMethod', 'cash'] }] }, '$lostFine', 0] } }, lostFineTransfer: { $sum: { $cond: [{ $and: [{ $gt: ['$lostFine', 0] }, { $eq: ['$paymentMethod', 'qr'] }] }, '$lostFine', 0] } }, lostCardUids: { $addToSet: { $cond: [{ $gt: ['$lostFine', 0] }, '$cardUid', null] } }, ...typeFields } },
       { $sort: { _id: 1 } },
     ]),
     // รายได้รายเดือน (12 เดือนล่าสุด เสมอ)
@@ -203,6 +203,18 @@ export async function GET(req: NextRequest) {
           transfer: { $sum: { $cond: [{ $eq: ['$cardRefunds.paymentMethod', 'qr'] }, '$cardRefunds.amount', 0] } },
         },
       },
+    ]),
+    Shift.aggregate([
+      { $unwind: '$cardRefunds' },
+      { $match: { 'cardRefunds.refundedAt': { $gte: startDate, $lte: refDate } } },
+      {
+        $group: {
+          _id: { $dateToString: { format: '%Y-%m-%d', date: '$cardRefunds.refundedAt', timezone: '+07:00' } },
+          total: { $sum: '$cardRefunds.amount' },
+          count: { $sum: 1 },
+        },
+      },
+      { $sort: { _id: 1 } },
     ]),
     // ค่าเฉลี่ยจำนวนรถในลาน แยกรถยนต์/รถจักรยานยนต์ — เฉลี่ยจาก "vehicle-hours" ที่ทับซ้อนกับช่วงเวลาที่เลือก
     // หารด้วยความยาวของช่วงเวลานั้น (รวม session ที่ยังจอดอยู่ด้วย ไม่ใช่แค่ completed/lost)
@@ -251,7 +263,16 @@ export async function GET(req: NextRequest) {
   // เติมทุกชั่วโมง 0-23 ให้ครบ (ชั่วโมงไหนไม่มีข้อมูล = 0) แล้วคำนวณค่าเฉลี่ย/วันไว้ให้พร้อมใช้
   // (เผื่อช่วงที่เลือกยาวกว่า 1 วัน ฝั่ง UI จะได้สลับ sum/avg ได้โดยไม่ต้องคำนวณเพิ่ม)
   const periodDays = Math.max(1, Math.round((refDate.getTime() - startDate.getTime()) / 86400000))
-  const dailyReport = daily.map(row => ({
+  const dailyByDate = new Map(daily.map(row => [row._id, row]))
+  for (const refund of refundDaily as { _id: string; total: number; count: number }[]) {
+    const current = dailyByDate.get(refund._id)
+    dailyByDate.set(refund._id, {
+      ...(current ?? { _id: refund._id, total: 0, count: 0, lostFines: 0, lostCardUids: [] }),
+      lostFineRefunds: refund.total,
+      lostFineRefundCount: refund.count,
+    })
+  }
+  const dailyReport = [...dailyByDate.values()].sort((a, b) => a._id.localeCompare(b._id)).map(row => ({
     ...row,
     lostCardCount: (row.lostCardUids ?? []).filter(Boolean).length,
   }))
