@@ -16,6 +16,8 @@ const ALIGN_LEFT   = Buffer.from([ESC, 0x61, 0x00])
 const ALIGN_CENTER = Buffer.from([ESC, 0x61, 0x01])
 const BOLD_ON      = Buffer.from([ESC, 0x45, 0x01])
 const BOLD_OFF     = Buffer.from([ESC, 0x45, 0x00])
+const SMALL_FONT_ON  = Buffer.from([ESC, 0x21, 0x01])
+const SMALL_FONT_OFF = Buffer.from([ESC, 0x21, 0x00])
 const CUT          = Buffer.from([GS, 0x56, 0x42, 0x00])     // GS V B 0 — full cut w/ feed
 // Select Thai code page — verify against the physical printer; EPSON TM-series
 // commonly maps ESC t 21 to a Thai/TIS-620-compatible page. Adjust if receipts
@@ -79,7 +81,7 @@ export function buildReceipt(r: ReceiptData): Buffer {
   parts.push(receiptRow('ค่าปรับ', `${combinedFine.toLocaleString('th-TH')} บาท`))
   parts.push(BOLD_ON, receiptRow('ยอดชำระสุทธิ', `${r.total.toLocaleString('th-TH')} บาท`), BOLD_OFF)
   parts.push(DIVIDER, ALIGN_CENTER,
-    thaiLine('หากมีข้อสงสัยหรือต้องการ\nสอบถามข้อมูลเพิ่มเติม\n'),
+    SMALL_FONT_ON, thaiLine('หากมีข้อสงสัยหรือต้องการสอบถามข้อมูลเพิ่มเติม\n'), SMALL_FONT_OFF,
     thaiLine('Facebook:A20Park\n'),
     thaiLine('ขอบคุณที่ใช้บริการ\n'))
   parts.push(NL, NL, NL, CUT)
@@ -112,7 +114,7 @@ export function buildRefundReceipt(r: RefundReceiptData): Buffer {
   parts.push(BOLD_ON, receiptRow('ยอดคืนเงิน', `${r.amount.toLocaleString('th-TH')} บาท`), BOLD_OFF)
   parts.push(receiptRow('คืนโดย', r.paymentMethod === 'qr' ? 'เงินโอน' : 'เงินสด'))
   parts.push(DIVIDER, ALIGN_CENTER,
-    thaiLine('หากมีข้อสงสัยหรือต้องการสอบถามข้อมูลเพิ่มเติม\n'),
+    SMALL_FONT_ON, thaiLine('หากมีข้อสงสัยหรือต้องการสอบถามข้อมูลเพิ่มเติม\n'), SMALL_FONT_OFF,
     thaiLine('Facebook:A20Park\n'),
     thaiLine('ขอบคุณที่ใช้บริการ\n'))
   parts.push(NL, NL, NL, CUT)

@@ -25,8 +25,7 @@ export async function downloadReceiptPdf(sessionId: string) {
     `ยอดชำระสุทธิ ${money(s.totalFee)}`,
     `ชำระโดย ${s.paymentMethod === 'qr' ? 'เงินโอน' : 'เงินสด'}`,
     '---',
-    'หากมีข้อสงสัยหรือต้องการ',
-    'สอบถามข้อมูลเพิ่มเติม',
+    'หากมีข้อสงสัยหรือต้องการสอบถามข้อมูลเพิ่มเติม',
     'Facebook:A20Park',
     'ขอบคุณที่ใช้บริการ',
   ]
