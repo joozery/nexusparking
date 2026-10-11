@@ -1,9 +1,11 @@
 import mongoose, { Schema, type Document } from 'mongoose'
 
+import type { ActiveVehicleBillingCounts } from '@/lib/countActiveVehicles'
 import type { ShiftVehicleCounts, VehicleCounts } from '@/lib/shiftVehicleCounts'
 export interface IShift extends Document, ShiftVehicleCounts {
   openingCardsByType?: VehicleCounts
   closingCardsByType?: VehicleCounts
+  carryoverByBilling?: ActiveVehicleBillingCounts
   cardRefunds?: { sessionId: string; cardUid: string; plate: string; amount: number; paymentMethod: 'cash' | 'qr'; refundedAt: Date; operatorId: string }[]
   operatorId:      string
   operatorName:    string
@@ -31,6 +33,12 @@ const ShiftSchema = new Schema<IShift>({
   checkinsByType: { type: countsSchema, default: undefined },
   checkoutsByType: { type: countsSchema, default: undefined },
   carryoverByType: { type: countsSchema, default: undefined },
+  carryoverByBilling: {
+    carNormal: { type: Number, default: 0 },
+    carOvernight: { type: Number, default: 0 },
+    motorcycleNormal: { type: Number, default: 0 },
+    motorcycleOvernight: { type: Number, default: 0 },
+  },
   closingByType: { type: countsSchema, default: undefined },
   operatorId:      { type: String, required: true },
   operatorName:    { type: String, required: true },

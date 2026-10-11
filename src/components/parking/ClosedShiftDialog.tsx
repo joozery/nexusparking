@@ -12,6 +12,7 @@ export interface ClosedShift extends ShiftVehicleCounts {
   closingBreakdown: Record<string, number>
   openingBreakdown?: Record<string, number>
   carryoverCars?: number
+  carryoverByBilling?: { carNormal: number; carOvernight: number; motorcycleNormal: number; motorcycleOvernight: number }
   openingCardsByType?: { car: number; motorcycle: number }
   closingCardsByType?: { car: number; motorcycle: number }
 }

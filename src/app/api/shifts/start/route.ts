@@ -54,6 +54,7 @@ export async function POST(req: NextRequest) {
     openingCardsByType: temporaryCardsRemaining,
     carryoverCars,
     carryoverByType,
+    carryoverByBilling,
     checkinsByType: { car: 0, motorcycle: 0 },
     checkoutsByType: { car: 0, motorcycle: 0 },
   })
@@ -61,7 +62,7 @@ export async function POST(req: NextRequest) {
 
   // เปิดลิ้นชัก — operator ต้องใส่เงินทอนตั้งต้น (opening float) ลงลิ้นชักตอนเข้ากะ
   void triggerDrawer(cfg.hardware).catch(() => {})
-  void printRaw(cfg.hardware, buildShiftStartSlip({ operatorName, startTime: shift.startTime, openingFloat, carryoverCars, carryoverByType, openingCardsByType: temporaryCardsRemaining })).catch(() => {})
+  void printRaw(cfg.hardware, buildShiftStartSlip({ operatorName, startTime: shift.startTime, openingFloat, carryoverCars, carryoverByType, carryoverByBilling, openingCardsByType: temporaryCardsRemaining })).catch(() => {})
 
   // LINE notification — fire and forget
   if (cfg.line?.enabled && cfg.line.channelToken && cfg.line.targets?.length) {

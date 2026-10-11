@@ -14,6 +14,7 @@ interface ShiftPdfData {
   checkinsByType?: VehicleCounts
   checkoutsByType?: VehicleCounts
   carryoverByType?: VehicleCounts
+  carryoverByBilling?: { carNormal: number; carOvernight: number; motorcycleNormal: number; motorcycleOvernight: number }
   closingByType?: VehicleCounts
   openingCardsByType?: VehicleCounts
   closingCardsByType?: VehicleCounts
@@ -33,14 +34,18 @@ export async function downloadShiftPdf(shift: ShiftPdfData, opening: boolean) {
   const count = (counts: VehicleCounts | undefined, type: keyof VehicleCounts) => counts?.[type] ?? 0
   const breakdown = (value?: Record<string, number>) => Object.entries(value ?? {}).map(([denom, amount]) => `${denom} บาท x ${amount}`).join(', ') || '-'
   const remaining = opening ? shift.carryoverByType : shift.closingByType
+  const carryoverByBilling = shift.carryoverByBilling
   const cardsRemaining = opening ? shift.openingCardsByType : shift.closingCardsByType
   const lines = opening ? [
     'A20 Park', 'ใบเปิดกะ', `พนักงาน ${shift.operatorName}`,
     `เวลาเปิดกะ ${date(shift.startTime)}`, '---',
     `เงินต้นกะ ${money(shift.openingFloat)}`,
     `รายละเอียดธนบัตร ${breakdown(shift.openingBreakdown)}`, '---',
-    `รถยนต์ค้าง ${count(remaining, 'car')} คัน`,
-    `รถจักรยานยนต์ค้าง ${count(remaining, 'motorcycle')} คัน`,
+    'รถค้างในลานตอนเปิดกะ',
+    `รถยนต์ ${carryoverByBilling?.carNormal ?? count(remaining, 'car')} คัน`,
+    `รถจักรยานยนต์ ${carryoverByBilling?.motorcycleNormal ?? count(remaining, 'motorcycle')} คัน`,
+    `รถยนต์ค้างคืน ${carryoverByBilling?.carOvernight ?? 0} คัน`,
+    `รถจักรยานยนต์ค้างคืน ${carryoverByBilling?.motorcycleOvernight ?? 0} คัน`,
     `บัตรจอดรถคงเหลือ รถยนต์ ${count(cardsRemaining, 'car')} ใบ`,
     `บัตรจอดรถคงเหลือ รถจักรยานยนต์ ${count(cardsRemaining, 'motorcycle')} ใบ`,
   ] : [

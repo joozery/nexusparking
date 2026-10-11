@@ -28,7 +28,7 @@ export async function downloadReceiptPdf(sessionId: string) {
     'หากมีข้อสงสัยหรือต้องการ',
     'สอบถามข้อมูลเพิ่มเติม',
     'Facebook:A20Park',
-    'ขอบคุณที่ใช้บริการครับ',
+    'ขอบคุณที่ใช้บริการ',
   ]
   // Browser text rendering preserves Thai vowels and tone marks in the PDF image.
   const canvas = document.createElement('canvas')
@@ -119,7 +119,7 @@ export async function downloadRefundReceiptPdf(data: {
     `ยอดคืนเงิน ${money(data.amount)}`,
     '---',
     'Facebook:A20Park',
-    'ขอบคุณที่ใช้บริการครับ',
+    'ขอบคุณที่ใช้บริการ',
   ]
   const canvas = document.createElement('canvas')
   canvas.width = 1200

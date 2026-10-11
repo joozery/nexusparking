@@ -96,12 +96,12 @@ export async function GET() {
     }
   }
 
-  // Carryover vehicles are the active vehicles that entered before today.
-  // They are the overnight portion used by the status bar.
+  // The status bar's "normal" count is the vehicles still parked that entered today.
+  // Keep it independent from today's total exits, which may include overnight vehicles.
+  const carNormal = carActive.filter(session => session.entryTime >= todayStart).length
+  const motoNormal = motoActive.filter(session => session.entryTime >= todayStart).length
   const carOvernight = carActive.filter(session => session.entryTime < todayStart).length
   const motoOvernight = motoActive.filter(session => session.entryTime < todayStart).length
-  const carNormal = Math.max(0, carInToday - carOutToday)
-  const motoNormal = Math.max(0, motoInToday - motoOutToday)
   const carRemaining = carNormal + carOvernight
   const motoRemaining = motoNormal + motoOvernight
 

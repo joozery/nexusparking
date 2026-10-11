@@ -1,4 +1,5 @@
 import { vehicleCountLines, type ShiftVehicleCounts } from './shiftVehicleCounts'
+import type { ActiveVehicleBillingCounts } from './countActiveVehicles'
 import iconv from 'iconv-lite'
 import { receiptLogo } from './receiptLogo'
 
@@ -80,7 +81,7 @@ export function buildReceipt(r: ReceiptData): Buffer {
   parts.push(DIVIDER, ALIGN_CENTER,
     thaiLine('หากมีข้อสงสัยหรือต้องการ\nสอบถามข้อมูลเพิ่มเติม\n'),
     thaiLine('Facebook:A20Park\n'),
-    thaiLine('ขอบคุณที่ใช้บริการครับ\n'))
+    thaiLine('ขอบคุณที่ใช้บริการ\n'))
   parts.push(NL, NL, NL, CUT)
   return Buffer.concat(parts)
 }
@@ -112,7 +113,7 @@ export function buildRefundReceipt(r: RefundReceiptData): Buffer {
   parts.push(receiptRow('คืนโดย', r.paymentMethod === 'qr' ? 'เงินโอน' : 'เงินสด'))
   parts.push(DIVIDER, ALIGN_CENTER,
     thaiLine('Facebook:A20Park\n'),
-    thaiLine('ขอบคุณที่ใช้บริการครับ\n'))
+    thaiLine('ขอบคุณที่ใช้บริการ\n'))
   parts.push(NL, NL, NL, CUT)
   return Buffer.concat(parts)
 }
@@ -122,12 +123,16 @@ function thaiDateTime(d: Date): string {
 }
 
 /** Slip printed when a shift starts — operator's own record of the opening float. */
-export function buildShiftStartSlip(data: { operatorName: string; startTime: Date; openingFloat: number; carryoverCars: number; openingCardsByType?: { car: number; motorcycle: number } } & ShiftVehicleCounts): Buffer {
+export function buildShiftStartSlip(data: { operatorName: string; startTime: Date; openingFloat: number; carryoverCars: number; carryoverByBilling?: ActiveVehicleBillingCounts; openingCardsByType?: { car: number; motorcycle: number } } & ShiftVehicleCounts): Buffer {
   const parts: Buffer[] = [INIT, THAI_CODEPAGE, ALIGN_CENTER, BOLD_ON]
   parts.push(thaiLine('เปิดกะการทำงาน\n'), BOLD_OFF, NL, ALIGN_LEFT, DIVIDER)
   parts.push(thaiLine(`พนักงาน   : ${data.operatorName}\n`))
   parts.push(thaiLine(`เวลา      : ${thaiDateTime(data.startTime)}\n`))
-  vehicleCountLines("ค้าง", data.carryoverByType).forEach(line => parts.push(thaiLine(line + "\n")))
+  parts.push(thaiLine('รถค้างในลานตอนเปิดกะ\n'))
+  parts.push(thaiLine(`รถยนต์: ${data.carryoverByBilling?.carNormal ?? data.carryoverByType?.car ?? 0} คัน\n`))
+  parts.push(thaiLine(`รถจักรยานยนต์: ${data.carryoverByBilling?.motorcycleNormal ?? data.carryoverByType?.motorcycle ?? 0} คัน\n`))
+  parts.push(thaiLine(`รถยนต์ค้างคืน: ${data.carryoverByBilling?.carOvernight ?? 0} คัน\n`))
+  parts.push(thaiLine(`รถจักรยานยนต์ค้างคืน: ${data.carryoverByBilling?.motorcycleOvernight ?? 0} คัน\n`))
   parts.push(thaiLine(`บัตรจอดรถคงเหลือ รถยนต์ : ${data.openingCardsByType?.car ?? 0} ใบ\n`))
   parts.push(thaiLine(`บัตรจอดรถคงเหลือ รถจักรยานยนต์ : ${data.openingCardsByType?.motorcycle ?? 0} ใบ\n`))
   parts.push(DIVIDER)
