@@ -3,7 +3,7 @@
 import {
   LayoutDashboard, DoorOpen, History, CreditCard,
   BarChart2, Settings, ChevronRight, LogOut,
-  Clock, CloudSun, Droplets, Wind, Sun, Cloud, CloudRain, Activity, Users, ClipboardList, Tag, FlaskConical, Cctv,
+  Clock, CloudSun, Droplets, Wind, Sun, Cloud, CloudRain, Activity, Users, ClipboardList, Tag, FlaskConical, Cctv, Menu, X,
 } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
@@ -134,6 +134,7 @@ export function ParkingSidebar({ isOpen, activeNav }: Props) {
   const [me, setMe] = useState<{ name: string; role: string } | null>(null)
   const [bizHours, setBizHours] = useState({ open: '06:30', close: '22:00' })
   const [stats, setStats] = useState<{ activeCars: number; availableSlots: number; todayEntries: number } | null>(null)
+  const [mobileOpen, setMobileOpen] = useState(false)
 
   useEffect(() => {
     fetch('/api/auth/me').then(r => r.ok ? r.json() : null).then(d => { if (d) setMe(d) })
@@ -149,7 +150,17 @@ export function ParkingSidebar({ isOpen, activeNav }: Props) {
   }
 
   return (
-    <aside className="hidden md:flex w-64 shrink-0 flex-col h-screen select-none bg-white"
+    <>
+      <button
+        type="button"
+        aria-label="เปิดเมนู"
+        onClick={() => setMobileOpen(value => !value)}
+        className="fixed left-3 top-3 z-[60] flex size-9 items-center justify-center rounded-lg bg-white text-slate-600 shadow-md md:hidden"
+      >
+        {mobileOpen ? <X className="size-5" /> : <Menu className="size-5" />}
+      </button>
+      {mobileOpen && <button aria-label="ปิดเมนู" className="fixed inset-0 z-40 bg-slate-900/30 md:hidden" onClick={() => setMobileOpen(false)} />}
+      <aside className={`fixed inset-y-0 left-0 z-50 flex w-72 shrink-0 flex-col bg-white select-none shadow-xl transition-transform duration-200 md:static md:z-auto md:w-64 md:translate-x-0 md:shadow-none ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}`}
       style={{ borderRight: '1px solid #E8ECF4' }}>
 
       {/* ══ HEADER BANNER ══ */}
@@ -219,6 +230,7 @@ export function ParkingSidebar({ isOpen, activeNav }: Props) {
                 <Link key={key} href={href}
                   className="relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold transition-all duration-150 group"
                   style={{ background: active ? 'rgba(161,98,7,0.07)' : 'transparent', color: active ? '#A16207' : '#64748B' }}
+                  onClick={() => setMobileOpen(false)}
                   onMouseEnter={e => { if (!active) { e.currentTarget.style.background = '#F8FAFF'; e.currentTarget.style.color = '#334155' } }}
                   onMouseLeave={e => { if (!active) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#64748B' } }}
                 >
@@ -256,6 +268,7 @@ export function ParkingSidebar({ isOpen, activeNav }: Props) {
                 <Link key={key} href={href}
                   className="relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold transition-all duration-150"
                   style={{ background: active ? 'rgba(161,98,7,0.07)' : 'transparent', color: active ? '#A16207' : '#64748B' }}
+                  onClick={() => setMobileOpen(false)}
                   onMouseEnter={e => { if (!active) { e.currentTarget.style.background = '#F8FAFF'; e.currentTarget.style.color = '#334155' } }}
                   onMouseLeave={e => { if (!active) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#64748B' } }}
                 >
@@ -295,6 +308,7 @@ export function ParkingSidebar({ isOpen, activeNav }: Props) {
         </button>
       </div>
 
-    </aside>
+      </aside>
+    </>
   )
 }

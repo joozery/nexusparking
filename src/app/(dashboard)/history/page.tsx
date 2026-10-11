@@ -270,7 +270,7 @@ export default function HistoryPage() {
     <>
       {/* ── HEADER ── */}
       <header className="shrink-0 bg-white" style={{ borderBottom: '1px solid #E8ECF4' }}>
-        <div className="flex items-center justify-between px-6 h-14">
+        <div className="flex flex-wrap items-center justify-between gap-2 px-6 py-2 min-h-14">
           <div className="flex items-center gap-3">
             <div className="flex size-7 items-center justify-center rounded-lg"
               style={{ background: 'rgba(161,98,7,0.08)' }}>

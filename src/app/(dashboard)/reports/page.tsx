@@ -24,7 +24,7 @@ import type { HistoryExportRow } from '@/lib/sessionHistoryExport'
 import { exportRevenueSummaryExcel, exportRevenueSummaryPDF } from '@/lib/revenueSummaryExport'
 
 interface MonthlyRow { _id: string; total: number; count: number; car: number; motorcycle: number; carOvernight: number; motorcycleOvernight: number; overnight: number; overnightCount: number; lostFines: number }
-interface DailyRow   { _id: string; total: number; count: number; car: number; motorcycle: number; overnight: number; overnightCount: number; lostFines: number; lostCardCount: number }
+interface DailyRow   { _id: string; total: number; count: number; car: number; motorcycle: number; carOvernight: number; motorcycleOvernight: number; overnight: number; overnightCount: number; lostFines: number; lostCardCount: number; lostFineRefunds?: number }
 interface TypeRow    { _id: string; total: number; count: number; avg: number; avgDurationMin: number }
 interface Summary    { total: number; count: number; avg: number; lostFines: number; lostCardCount: number; maxFee: number; cash: number; transfer: number; lostFineRefunds: number; lostFineRefundCount: number; lostFineRefundCash: number; lostFineRefundTransfer: number; fineTotal: number; fineBreakdown: { name: string; total: number }[] }
 interface AvgOccupancy { car: number; motorcycle: number }
@@ -64,10 +64,17 @@ const REPORT_COLUMNS: ExportColumn[] = [
 const REPORT_COLUMNS_STORAGE_KEY = 'np_reports_columns'
 
 // ── Chart configs ────────────────────────────────────────────────
-const dailyChartConfig = {
+const legacyDailyChartConfig = {
   car:        { label: 'รถยนต์',       color: '#A16207' },
   motorcycle: { label: 'รถจักรยานยนต์', color: '#0891B2' },
   overnight:  { label: 'ค้างคืน',     color: '#7C3AED' },
+} satisfies ChartConfig
+
+const dailyChartConfig = {
+  car:                 { label: 'รถยนต์', color: '#A16207' },
+  carOvernight:        { label: 'ค้างคืนรถยนต์', color: '#7C3AED' },
+  motorcycle:          { label: 'รถจักรยานยนต์', color: '#0891B2' },
+  motorcycleOvernight: { label: 'ค้างคืนรถจักรยานยนต์', color: '#9333EA' },
 } satisfies ChartConfig
 
 const monthlyChartConfig = {
@@ -112,6 +119,52 @@ function thaiMonth(iso: string) {
 }
 
 // ── Main page ─────────────────────────────────────────────────────
+function DailyRevenueTable({ rows, summary }: { rows: DailyRow[]; summary: Summary }) {
+  const columns = [
+    { key: 'car', label: 'รถยนต์', color: '#A16207' },
+    { key: 'carOvernight', label: 'ค้างคืนรถยนต์', color: '#7C3AED' },
+    { key: 'motorcycle', label: 'รถจักรยานยนต์', color: '#0891B2' },
+    { key: 'motorcycleOvernight', label: 'ค้างคืนรถจักรยานยนต์', color: '#9333EA' },
+  ] as const
+  return (
+    <div className="bg-white rounded-xl overflow-hidden" style={{ border: '1px solid #E8ECF4' }}>
+      <div className="flex items-center gap-2 px-5 py-3" style={{ borderBottom: '1px solid #E8ECF4', background: '#FAFBFF' }}>
+        <Calendar className="size-3.5 text-slate-400" />
+        <p className="text-xs font-bold text-slate-700">ตารางรายได้แต่ละวัน</p>
+        <span className="ml-auto text-[10px] text-slate-400">{rows.length} วัน</span>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full">
+          <thead><tr style={{ background: '#F8FAFF', borderBottom: '1px solid #E8ECF4' }}>
+            <th className="px-4 py-2.5 text-left text-[10px] font-bold text-slate-400 whitespace-nowrap">วันที่</th>
+            {columns.map(column => <th key={column.key} className="px-4 py-2.5 text-left text-[10px] font-bold text-slate-400 whitespace-nowrap">{column.label}</th>)}
+            <th className="px-4 py-2.5 text-left text-[10px] font-bold text-slate-400 whitespace-nowrap">ค่าปรับบัตรหาย</th>
+            <th className="px-4 py-2.5 text-left text-[10px] font-bold text-slate-400 whitespace-nowrap">คืนค่าปรับบัตรหาย</th>
+            <th className="px-4 py-2.5 text-left text-[10px] font-bold text-slate-400 whitespace-nowrap">คัน</th>
+            <th className="px-4 py-2.5 text-left text-[10px] font-bold text-slate-400 whitespace-nowrap">รวม</th>
+          </tr></thead>
+          <tbody>{[...rows].reverse().map((row, index) => <tr key={row._id} style={{ background: index % 2 === 0 ? 'white' : '#FAFBFF', borderBottom: '1px solid #F1F5F9' }}>
+            <td className="px-4 py-2.5 text-xs font-bold text-slate-700 whitespace-nowrap">{shortDate(row._id)}</td>
+            {columns.map(column => { const value = row[column.key]; return <td key={column.key} className="px-4 py-2.5 text-xs font-semibold" style={{ color: value > 0 ? column.color : '#CBD5E1' }}>{value > 0 ? `฿${fmt(value)}` : '—'}</td> })}
+            <td className="px-4 py-2.5 text-xs font-semibold" style={{ color: row.lostFines > 0 ? '#DC2626' : '#CBD5E1' }}>{row.lostFines > 0 ? `฿${fmt(row.lostFines)}` : '—'}</td>
+            <td className="px-4 py-2.5 text-xs font-semibold" style={{ color: (row.lostFineRefunds ?? 0) > 0 ? '#DC2626' : '#CBD5E1' }}>{(row.lostFineRefunds ?? 0) > 0 ? `-฿${fmt(row.lostFineRefunds ?? 0)}` : '—'}</td>
+            <td className="px-4 py-2.5 text-xs font-semibold text-slate-600">{row.count}</td>
+            <td className="px-4 py-2.5 text-xs font-bold" style={{ color: '#A16207' }}>฿{fmt(row.total)}</td>
+          </tr>)}</tbody>
+          <tfoot><tr style={{ background: '#EEF2FF', borderTop: '2px solid #C7D2FE' }}>
+            <td className="px-4 py-2.5 text-xs font-bold text-slate-800">รวมทั้งหมด</td>
+            {columns.map(column => <td key={column.key} className="px-4 py-2.5 text-xs font-bold" style={{ color: column.color }}>฿{fmt(rows.reduce((total, row) => total + row[column.key], 0))}</td>)}
+            <td className="px-4 py-2.5 text-xs font-bold" style={{ color: '#DC2626' }}>฿{fmt(summary.lostFines)}</td>
+            <td className="px-4 py-2.5 text-xs font-bold" style={{ color: '#DC2626' }}>-฿{fmt(summary.lostFineRefunds ?? 0)}</td>
+            <td className="px-4 py-2.5 text-xs font-bold text-slate-800">{summary.count}</td>
+            <td className="px-4 py-2.5 text-xs font-bold" style={{ color: '#A16207' }}>฿{fmt(summary.total)}</td>
+          </tr></tfoot>
+        </table>
+      </div>
+    </div>
+  )
+}
+
 export default function ReportsPage() {
   const today   = toInputDate(new Date())
   const weekAgo = toInputDate(new Date(Date.now() - 6 * 86400000))
@@ -120,7 +173,8 @@ export default function ReportsPage() {
   const [period,      setPeriod]      = useState<PeriodKey>('week')
   const [dateFrom,    setDateFrom]    = useState(weekAgo)
   const [dateTo,      setDateTo]      = useState(today)
-  const [data,        setData]        = useState<ReportData | null>(null)
+  const [reportData,  setData]        = useState<ReportData | null>(null)
+  const data = reportData!
   const [loading,     setLoading]     = useState(false)
   const [detailedExporting, setDetailedExporting] = useState(false)
   const [exportReportKind, setExportReportKind] = useState<'all' | 'summary'>('all')
@@ -242,7 +296,7 @@ export default function ReportsPage() {
     <>
       {/* ── HEADER ── */}
       <header className="shrink-0 bg-white" style={{ borderBottom: '1px solid #E8ECF4' }}>
-        <div className="flex items-center justify-between px-6 h-14">
+        <div className="flex flex-wrap items-center justify-between gap-2 px-6 py-2 min-h-14">
           <div className="flex items-center gap-3">
             <div className="size-7 rounded-lg flex items-center justify-center"
               style={{ background: 'rgba(161,98,7,0.08)' }}>
@@ -599,7 +653,6 @@ export default function ReportsPage() {
                         }
                       />
                       <ChartLegend content={<ChartLegendContent />} />
-                      <ChartLegend content={<ChartLegendContent />} />
                       <Line dataKey="car" type="monotone" stroke="var(--color-car)" strokeWidth={2} dot={false} />
                       <Line dataKey="carOvernight" type="monotone" stroke="var(--color-carOvernight)" strokeWidth={2} dot={false} />
                       <Line dataKey="motorcycle" type="monotone" stroke="var(--color-motorcycle)" strokeWidth={2} dot={false} />
@@ -631,10 +684,10 @@ export default function ReportsPage() {
                   </div>
                 </div>
 
-                {/* line chart */}
+                {/* bar chart */}
                 <div className="px-2 pb-4 pt-2">
                   <ChartContainer config={monthlyChartConfig} className="h-[220px] w-full">
-                    <LineChart
+                    <BarChart
                       data={data.monthly}
                       margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
                     >
@@ -669,18 +722,18 @@ export default function ReportsPage() {
                         }
                       />
                       <ChartLegend content={<ChartLegendContent />} />
-                      <Line dataKey="car" type="monotone" stroke="var(--color-car)" strokeWidth={2} dot={false} />
-                      <Line dataKey="carOvernight" type="monotone" stroke="var(--color-carOvernight)" strokeWidth={2} dot={false} />
-                      <Line dataKey="motorcycle" type="monotone" stroke="var(--color-motorcycle)" strokeWidth={2} dot={false} />
-                      <Line dataKey="motorcycleOvernight" type="monotone" stroke="var(--color-motorcycleOvernight)" strokeWidth={2} dot={false} />
-                    </LineChart>
+                      <Bar dataKey="car" fill="var(--color-car)" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="carOvernight" fill="var(--color-carOvernight)" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="motorcycle" fill="var(--color-motorcycle)" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="motorcycleOvernight" fill="var(--color-motorcycleOvernight)" radius={[4, 4, 0, 0]} />
+                    </BarChart>
                   </ChartContainer>
                 </div>
               </div>
             )}
 
             {/* กราฟค้างคืน: วัน/จำนวนคัน */}
-            {data.daily.some(r => r.overnightCount > 0) && (
+            {false && data.daily.some(r => r.overnightCount > 0) && (
               <div className="bg-white rounded-xl overflow-hidden" style={{ border: '1px solid #E8ECF4' }}>
                 <div className="px-5 pt-4 pb-2">
                   <p className="text-sm font-bold text-slate-900">กราฟค้างคืน — วัน / จำนวนคัน</p>
@@ -725,7 +778,8 @@ export default function ReportsPage() {
 
 
             {/* Table */}
-            {data.daily.length > 0 && (
+            {data.daily.length > 0 && <DailyRevenueTable rows={data.daily} summary={data.summary} />}
+            {data && false && data.daily.length > 0 && (
               <div className="bg-white rounded-xl overflow-hidden" style={{ border: '1px solid #E8ECF4' }}>
                 <div className="flex items-center gap-2 px-5 py-3"
                   style={{ borderBottom: '1px solid #E8ECF4', background: '#FAFBFF' }}>
@@ -790,7 +844,7 @@ export default function ReportsPage() {
             )}
 
             {/* ตารางสรุปค้างคืน */}
-            {(() => {
+            {false && (() => {
               const overnightRows = data.daily.filter(r => r.overnightCount > 0)
               if (overnightRows.length === 0) return null
               const totalOvernightCount   = overnightRows.reduce((s, r) => s + r.overnightCount, 0)

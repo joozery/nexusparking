@@ -31,6 +31,9 @@ interface Session {
   durationMin: number
   fee: number
   totalFee: number
+  discountAmount?: number
+  fineAmount?: number
+  lostFine?: number
   status: 'active' | 'completed' | 'lost'
 }
 
@@ -217,15 +220,21 @@ export default function GatePage() {
 
   function printReceipt(s: Session, currentFee?: number) {
     const fee      = currentFee ?? s.totalFee ?? s.fee ?? 0
-    const lostFine = (s as Session & { lostFine?: number }).lostFine ?? 0
-    const parkFee  = lostFine > 0 ? fee - lostFine : fee
+    const parkingFee = s.status === 'active' ? fee : (s.fee ?? fee)
+    const discountAmount = s.discountAmount ?? 0
+    const fineAmount = s.fineAmount ?? 0
+    const lostFine = s.lostFine ?? 0
+    const combinedFine = fineAmount + lostFine
+    const total = s.status === 'active' ? fee : (s.totalFee ?? fee)
     const entry    = new Date(s.entryTime)
     const exit     = s.status !== 'active' ? new Date((s as Session & { exitTime?: string }).exitTime ?? Date.now()) : new Date()
-    const durMin   = Math.max(1, Math.round((exit.getTime() - entry.getTime()) / 60000))
-    const durHr    = Math.floor(durMin / 60)
-    const durMn    = durMin % 60
-    const fmt      = (d: Date) => d.toLocaleString('th-TH', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: '2-digit', hour12: false })
-    const now      = new Date()
+    const durationSeconds = Math.max(0, Math.floor((exit.getTime() - entry.getTime()) / 1000))
+    const durationDays = Math.floor(durationSeconds / 86400)
+    const durationHours = Math.floor(durationSeconds % 86400 / 3600)
+    const durationMinutes = Math.floor(durationSeconds % 3600 / 60)
+    const durationSecondsRemainder = durationSeconds % 60
+    const fmt      = (d: Date) => d.toLocaleString('th-TH', { timeZone: 'Asia/Bangkok', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
+    const duration = `${durationDays} วัน ${durationHours} ชั่วโมง ${durationMinutes} นาที ${durationSecondsRemainder} วินาที`
     const typeLabel: Record<CardType, string> = { car: 'รถยนต์', motorcycle: 'รถจักรยานยนต์', overnight: 'ค้างคืน' }
 
     const html = `<!DOCTYPE html>
@@ -250,6 +259,8 @@ export default function GatePage() {
   .lg { font-size: 16px; }
   .xl { font-size: 22px; }
   .sm { font-size: 10px; }
+  .logo { margin-bottom: 3px; }
+  .logo img { width: 42mm; max-height: 18mm; object-fit: contain; }
   .dash { border-top: 1px dashed #000; margin: 4px 0; }
   .row { display: flex; justify-content: space-between; padding: 2px 0; }
   .row.total { font-weight: 700; font-size: 15px; border-top: 2px solid #000; padding-top: 4px; margin-top: 2px; }
@@ -258,39 +269,31 @@ export default function GatePage() {
 </style>
 </head>
 <body>
-<div class="center bold lg" style="letter-spacing:1px">A20 PARK</div>
-<div class="center sm" style="margin-top:2px">ระบบจัดการลานจอดรถ</div>
-<div class="dash"></div>
-
-<div class="row"><span class="sm">วันที่พิมพ์</span><span class="sm">${fmt(now)}</span></div>
-<div class="row"><span class="sm">เลขที่</span><span class="sm bold">${s._id.slice(-8).toUpperCase()}</span></div>
-
-<div class="dash"></div>
-
-<div class="center xl bold" style="letter-spacing:4px;margin:4px 0">${s.plate}</div>
-<div class="center sm">${typeLabel[s.cardType]} &nbsp;|&nbsp; UID: ${s.cardUid.slice(0, 10)}</div>
+<div class="center logo"><img src="${location.origin}/logo/receipt-logo.png" alt="A20 Park"></div>
+<div class="center bold lg">ใบเสร็จรับเงิน</div>
+<div class="center bold lg">A20 Park</div>
+<div class="row"><span>ทะเบียน</span><span class="bold">${s.plate}</span></div>
+<div class="row"><span>ประเภทรถ</span><span class="bold">${typeLabel[s.cardType]}</span></div>
 
 <div class="dash"></div>
 
 <div class="row"><span>เวลาเข้า</span><span class="bold">${fmt(entry)}</span></div>
 <div class="row"><span>เวลาออก</span><span class="bold">${s.status === 'active' ? '(ยังจอดอยู่)' : fmt(exit)}</span></div>
-<div class="row"><span>ระยะเวลา</span><span class="bold">${durHr > 0 ? durHr + ' ชม. ' : ''}${durMn} นาที</span></div>
 
 <div class="dash"></div>
 
-${s.cardType !== 'overnight' ? `
-<div class="row"><span>ชั่วโมงแรก</span><span>฿${s.cardType === 'car' ? 30 : 20}</span></div>
-${Math.ceil(durMin / 60) > 1 ? `<div class="row"><span>ชั่วโมงถัดไป ×${Math.ceil(durMin/60)-1}</span><span>฿${(s.cardType === 'car' ? 20 : 10) * (Math.ceil(durMin/60)-1)}</span></div>` : ''}
-` : `<div class="row"><span>อัตราค้างคืนเหมาจ่าย</span><span>฿100</span></div>`}
-
-${lostFine > 0 ? `<div class="row lost-row"><span>ค่าปรับบัตรหาย</span><span>฿${lostFine}</span></div>` : ''}
-
-<div class="row total"><span>${s.status === 'lost' ? 'ยอดรวม (บัตรหาย)' : 'ยอดรวมทั้งสิ้น'}</span><span>฿${fee}</span></div>
+<div class="row"><span>เวลาจอด</span><span class="bold">${duration}</span></div>
 
 <div class="dash"></div>
-<div class="center sm" style="margin:6px 0">ขอบคุณที่ใช้บริการ<br>Thank you for your visit</div>
+
+<div class="row"><span>ค่าจอดรถ</span><span>฿${parkingFee.toLocaleString('th-TH')} บาท</span></div>
+${discountAmount > 0 ? `<div class="row"><span>ส่วนลด</span><span>฿${discountAmount.toLocaleString('th-TH')} บาท</span></div>` : ''}
+<div class="row lost-row"><span>ค่าปรับ</span><span>฿${combinedFine.toLocaleString('th-TH')} บาท</span></div>
+
+<div class="row total"><span>ยอดชำระสุทธิ</span><span>฿${total.toLocaleString('th-TH')} บาท</span></div>
+
 <div class="dash"></div>
-<div class="center sm" style="opacity:0.5">** กรุณาเก็บใบเสร็จไว้เป็นหลักฐาน **</div>
+<div class="center sm" style="margin:6px 0">หากมีข้อสงสัยหรือต้องการสอบถามข้อมูลเพิ่มเติม<br>Facebook:A20Park<br>ขอบคุณที่ใช้บริการ</div>
 </body>
 </html>`
 
@@ -380,7 +383,7 @@ ${lostFine > 0 ? `<div class="row lost-row"><span>ค่าปรับบัต
       </header>
 
       {/* Body */}
-      <div className="flex-1 flex flex-col gap-4 p-5 overflow-hidden min-h-0">
+      <div className="flex-1 flex flex-col gap-4 p-5 overflow-y-auto md:overflow-hidden min-h-0">
 
         {/* Stats */}
         <div className="shrink-0 grid grid-cols-3 gap-3">
@@ -411,10 +414,10 @@ ${lostFine > 0 ? `<div class="row lost-row"><span>ค่าปรับบัต
         </div>
 
         {/* Split */}
-        <div className="flex gap-4 flex-1 min-h-0">
+        <div className="flex flex-col md:flex-row gap-4 flex-1 min-h-0">
 
           {/* Vehicle list */}
-          <div className="w-[280px] shrink-0 flex flex-col bg-white rounded-xl overflow-hidden"
+          <div className="w-full md:w-[280px] shrink-0 flex flex-col bg-white rounded-xl overflow-hidden max-h-[48vh] md:max-h-none"
             style={{ border: '1px solid #E8ECF4' }}>
             <div className="shrink-0 px-4 pt-3.5 pb-3">
               <div className="flex items-center justify-between mb-3">
@@ -454,7 +457,7 @@ ${lostFine > 0 ? `<div class="row lost-row"><span>ค่าปรับบัต
 
             <div style={{ borderTop: '1px solid #F1F5F9' }} />
 
-            <div className="flex-1 overflow-y-auto scrollbar-hide">
+            <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide">
               {loading ? (
                 <div className="flex items-center justify-center h-20">
                   <RefreshCw className="size-4 text-slate-300 animate-spin" />
@@ -520,11 +523,11 @@ ${lostFine > 0 ? `<div class="row lost-row"><span>ค่าปรับบัต
               </div>
             </div>
           ) : (
-            <div className="flex-1 flex flex-col bg-white rounded-xl overflow-hidden"
+            <div className="w-full min-w-0 md:flex-1 flex flex-col bg-white rounded-xl overflow-hidden min-h-[520px] md:min-h-0"
               style={{ border: '1px solid #E8ECF4' }}>
 
               {/* Yellow header */}
-              <div className="shrink-0 relative overflow-hidden px-6 py-5"
+              <div className="shrink-0 relative overflow-hidden px-4 md:px-6 py-5"
                 style={{ background: 'linear-gradient(135deg, #FFE119 0%, #FACC15 55%, #EAB308 100%)' }}>
                 <div className="absolute -top-8 -right-8 size-32 rounded-full pointer-events-none"
                   style={{ background: 'rgba(255,255,255,0.35)' }} />
@@ -562,21 +565,21 @@ ${lostFine > 0 ? `<div class="row lost-row"><span>ค่าปรับบัต
               </div>
 
               {/* Info strip */}
-              <div className="shrink-0 grid grid-cols-3"
+              <div className="shrink-0 grid grid-cols-3 min-w-0"
                 style={{ borderBottom: '1px solid #E8ECF4' }}>
                 {[
                   { icon: ArrowDownLeft, label: 'เวลาเข้า',    value: new Date(active.entryTime).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }), iconColor: '#A16207', iconBg: 'rgba(161,98,7,0.08)' },
                   { icon: Clock,         label: 'ระยะเวลา',    value: fmtDur(active.entryTime, active.exitTime), iconColor: '#EAB308', iconBg: 'rgba(234,179,8,0.08)' },
                   { icon: Hash,          label: 'ประเภทอัตรา', value: active.cardType === 'overnight' ? 'Overnight' : 'Daytime', iconColor: '#F59E0B', iconBg: 'rgba(245,158,11,0.08)' },
                 ].map(({ icon: Icon, label, value, iconColor, iconBg }, i) => (
-                  <div key={label} className="flex items-center gap-3 px-5 py-3"
+                  <div key={label} className="flex min-w-0 items-center gap-1 md:gap-3 px-2 md:px-5 py-3"
                     style={i < 2 ? { borderRight: '1px solid #E8ECF4' } : {}}>
                     <div className="size-7 rounded-lg flex items-center justify-center shrink-0" style={{ background: iconBg }}>
                       <Icon className="size-3.5" style={{ color: iconColor }} strokeWidth={1.75} />
                     </div>
-                    <div>
-                      <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-wide">{label}</p>
-                      <p className="text-sm font-black text-slate-800">{value}</p>
+                    <div className="min-w-0">
+                      <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-wide break-words">{label}</p>
+                      <p className="text-sm font-black text-slate-800 break-words">{value}</p>
                     </div>
                   </div>
                 ))}
@@ -650,11 +653,11 @@ ${lostFine > 0 ? `<div class="row lost-row"><span>ค่าปรับบัต
               </div>
 
               {/* Actions */}
-              <div className="shrink-0 px-6 pb-5 flex items-center gap-3"
+              <div className="shrink-0 px-4 md:px-6 pb-5 flex flex-wrap items-center gap-3"
                 style={{ borderTop: '1px solid #E8ECF4', paddingTop: '16px' }}>
                 <button onClick={openLostCardFromActive}
                   disabled={active?.status !== 'active'}
-                  className="h-10 px-4 rounded-lg text-xs font-bold flex items-center gap-2 transition-colors disabled:cursor-not-allowed disabled:opacity-40"
+                  className="h-10 flex-1 min-w-[120px] px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-colors disabled:cursor-not-allowed disabled:opacity-40"
                   style={{ background: 'rgba(245,158,11,0.08)', color: '#B45309', border: '1px solid rgba(245,158,11,0.2)' }}
                   onMouseEnter={e => { e.currentTarget.style.background = 'rgba(245,158,11,0.14)' }}
                   onMouseLeave={e => { e.currentTarget.style.background = 'rgba(245,158,11,0.08)' }}>
@@ -662,7 +665,7 @@ ${lostFine > 0 ? `<div class="row lost-row"><span>ค่าปรับบัต
                 </button>
                 <button
                   onClick={() => printReceipt(active, liveFee)}
-                  className="h-10 px-4 rounded-lg text-xs font-bold flex items-center gap-2 transition-colors"
+                  className="h-10 flex-1 min-w-[120px] px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-colors"
                   style={{ background: '#F8FAFF', color: '#64748B', border: '1px solid #E8ECF4' }}
                   onMouseEnter={e => { e.currentTarget.style.background = '#F1F5F9' }}
                   onMouseLeave={e => { e.currentTarget.style.background = '#F8FAFF' }}>
@@ -671,7 +674,7 @@ ${lostFine > 0 ? `<div class="row lost-row"><span>ค่าปรับบัต
                 <button
                   onClick={() => active.status === 'active' ? openCheckoutFromList(active) : null}
                   disabled={active.status !== 'active'}
-                  className="flex-1 h-10 rounded-lg text-sm font-black text-black flex items-center justify-center gap-2 transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-40"
+                  className="w-full md:flex-1 h-10 rounded-lg text-sm font-black text-black flex items-center justify-center gap-2 transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-40"
                   style={{ background: '#EAB308', boxShadow: '0 2px 12px rgba(161,98,7,0.35)' }}>
                   <ArrowUpRight className="size-4" />
                   Process Payment — ฿{liveFee}

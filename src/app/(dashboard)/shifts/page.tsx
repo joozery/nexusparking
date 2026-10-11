@@ -33,6 +33,18 @@ interface Shift {
   closingFloat:    number
   carryoverCars:   number
   closingCarCount: number
+  systemAdminSessionIds?: string[]
+  externalSessions?: ExternalSession[]
+}
+
+interface ExternalSession {
+  _id: string
+  plate: string
+  totalFee: number
+  paymentMethod: 'cash' | 'qr'
+  operatorId?: string
+  operatorName: string
+  exitTime?: string
 }
 
 interface Session {
@@ -117,10 +129,16 @@ function ShiftSessionTable({ shift }: { shift: Shift }) {
     fetch(byShift)
       .then(safeJson)
       .then(async (d) => {
-        if ((d.sessions ?? []).length > 0) return d.sessions as Session[]
+        if ((d.sessions ?? []).length > 0) {
+          // Keep sessions belonging to another operator out of this shift's
+          // detail list; they are rendered in the separate operator card.
+          const externalIds = new Set(shift.systemAdminSessionIds ?? [])
+          return (d.sessions as Session[]).filter(session => !externalIds.has(session._id))
+        }
         // ไม่เจอ shiftId → ใช้ช่วงเวลาแทน
         const d2 = await fetch(byTime).then(safeJson)
-        return (d2.sessions ?? []) as Session[]
+        const externalIds = new Set(shift.systemAdminSessionIds ?? [])
+        return (d2.sessions ?? []).filter((session: Session & { _id: string }) => !externalIds.has(session._id)) as Session[]
       })
       .then(s => setSessions(s))
       .finally(() => setLoading(false))
@@ -363,6 +381,46 @@ function ShiftItem({ shift }: { shift: Shift }) {
   )
 }
 
+function ExternalOperatorCard({ operatorName, sessions }: { operatorName: string; sessions: ExternalSession[] }) {
+  const [open, setOpen] = useState(false)
+  const total = sessions.reduce((sum, session) => sum + session.totalFee, 0)
+  const cash = sessions.filter(session => session.paymentMethod === 'cash').reduce((sum, session) => sum + session.totalFee, 0)
+  const qr = total - cash
+  return (
+    <div className="bg-white rounded-2xl overflow-hidden" style={{ border: '1px solid #E8ECF4', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
+      <button onClick={() => setOpen(value => !value)} className="w-full flex flex-wrap items-center gap-4 px-5 py-4 text-left hover:bg-slate-50/60 transition-colors">
+        <div className="size-10 rounded-xl flex items-center justify-center text-white text-sm font-black shrink-0" style={{ background: '#64748B' }}>
+          <User className="size-4" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <p className="text-base font-black text-slate-900">{operatorName}</p>
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: 'rgba(100,116,139,0.1)', color: '#475569' }}>นอกกะ</span>
+          </div>
+          <p className="text-xs text-slate-400 mt-0.5">รายการนอกกะ · รถออก {sessions.length} คัน</p>
+        </div>
+        <div className="flex items-center gap-4 shrink-0">
+          <div className="text-right"><p className="text-[10px] text-slate-400 font-medium">เงินสด</p><p className="text-sm font-black text-slate-700">฿{cash}</p></div>
+          <div className="text-right"><p className="text-[10px] text-slate-400 font-medium">โอน</p><p className="text-sm font-black text-slate-700">฿{qr}</p></div>
+          <div className="px-4 py-2 rounded-xl text-right" style={{ background: 'rgba(100,116,139,0.1)' }}>
+            <p className="text-[10px] font-semibold text-slate-500">รวมทั้งสิ้น</p><p className="text-lg font-black text-slate-700">฿{total}</p>
+          </div>
+        </div>
+        {open ? <ChevronUp className="size-4 text-slate-400 shrink-0" /> : <ChevronDown className="size-4 text-slate-400 shrink-0" />}
+      </button>
+      {open && <div className="px-5 pb-4" style={{ borderTop: '1px solid #F1F5F9' }}>
+          {sessions.map(session => (
+            <div key={session._id} className="flex items-center justify-between py-2 text-xs border-b last:border-0 border-slate-100">
+              <span className="font-black text-slate-800">{session.plate}</span>
+              <span className="text-slate-400">{session.exitTime ? fmtDateTime(session.exitTime) : '—'}</span>
+              <span className="font-black text-slate-700">฿{session.totalFee}</span>
+            </div>
+          ))}
+        </div>}
+    </div>
+  )
+}
+
 /* ── การ์ด operator ── */
 function OperatorCard({ group }: { group: OperatorGroup }) {
   const [open, setOpen] = useState(false)
@@ -382,7 +440,7 @@ function OperatorCard({ group }: { group: OperatorGroup }) {
 
       {/* Operator header */}
       <button onClick={() => setOpen(v => !v)}
-        className="w-full flex items-center gap-4 px-5 py-4 text-left hover:bg-slate-50/60 transition-colors">
+        className="w-full flex flex-wrap items-center gap-4 px-5 py-4 text-left hover:bg-slate-50/60 transition-colors">
 
         {/* Avatar */}
         <div className="size-10 rounded-xl flex items-center justify-center text-white text-sm font-black shrink-0"
@@ -408,7 +466,7 @@ function OperatorCard({ group }: { group: OperatorGroup }) {
         </div>
 
         {/* Revenue summary */}
-        <div className="flex items-center gap-4 shrink-0">
+        <div className="flex w-full md:w-auto items-center justify-end gap-4 shrink-0">
           <div className="text-right">
             <p className="text-[10px] text-slate-400 font-medium flex items-center gap-1 justify-end">
               <Banknote className="size-3" /> เงินสด
@@ -581,8 +639,26 @@ export default function ShiftsPage() {
     return a.operatorName.localeCompare(b.operatorName, 'th')
   })
 
+  const externalByOperator = shifts.flatMap(shift => shift.externalSessions ?? []).reduce<Record<string, { name: string; sessions: ExternalSession[] }>>((acc, session) => {
+    const key = session.operatorId ?? session.operatorName
+    if (!acc[key]) acc[key] = { name: session.operatorName, sessions: [] }
+    if (!acc[key].sessions.some(item => item._id === session._id)) acc[key].sessions.push(session)
+    return acc
+  }, {})
+  const externalGroups = Object.values(externalByOperator)
+
+  const externalTotals = externalGroups.reduce((acc, group) => {
+    for (const session of group.sessions) {
+      acc.count += 1
+      acc.total += session.totalFee
+      if (session.paymentMethod === 'cash') acc.cash += session.totalFee
+      else if (session.paymentMethod === 'qr') acc.qr += session.totalFee
+    }
+    return acc
+  }, { count: 0, cash: 0, qr: 0, total: 0 })
+
   /* Summary ทั้งหมด */
-  const grand = shifts.reduce((acc, s) => ({
+  const shiftGrand = shifts.reduce((acc, s) => ({
     ins:          acc.ins          + s.checkinsCount,
     outs:         acc.outs         + s.checkoutsCount,
     cash:         acc.cash         + s.cashAmount,
@@ -593,13 +669,20 @@ export default function ShiftsPage() {
     carryover:    acc.carryover    + (s.carryoverCars   ?? 0),
     closingCars:  acc.closingCars  + (s.closingCarCount ?? 0),
   }), { ins: 0, outs: 0, cash: 0, qr: 0, total: 0, opening: 0, closing: 0, carryover: 0, closingCars: 0 })
+  const grand = {
+    ...shiftGrand,
+    outs: shiftGrand.outs + externalTotals.count,
+    cash: shiftGrand.cash + externalTotals.cash,
+    qr: shiftGrand.qr + externalTotals.qr,
+    total: shiftGrand.total + externalTotals.total,
+  }
 
   return (
     <>
       {/* Header */}
-      <header className="shrink-0 h-14 bg-white flex items-center justify-between px-6"
+      <header className="shrink-0 min-h-14 h-auto bg-white flex flex-wrap items-center justify-between gap-2 px-6 py-2"
         style={{ borderBottom: '1px solid #E8ECF4' }}>
-        <div className="flex items-center gap-3">
+        <div className="flex min-w-0 items-center gap-3">
           <div className="size-7 rounded-lg flex items-center justify-center"
             style={{ background: 'rgba(161,98,7,0.08)' }}>
             <Clock className="size-3.5" style={{ color: '#A16207' }} />
@@ -609,7 +692,7 @@ export default function ShiftsPage() {
             <p className="text-[10px] text-slate-400 mt-0.5">สรุปยอดรายคน · แต่ละกะ · รายรถ</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex w-full md:w-auto items-center justify-end gap-2 flex-wrap">
           <CalendarDays className="size-3.5 text-slate-400" />
           <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
             className="h-8 px-2 text-xs rounded-lg outline-none text-slate-700"
@@ -632,11 +715,11 @@ export default function ShiftsPage() {
         <div className="shrink-0 rounded-2xl overflow-hidden"
           style={{ background: 'linear-gradient(135deg, #0A0A0A 0%, #713F12 60%, #A16207 100%)', boxShadow: '0 4px 24px rgba(161,98,7,0.25)' }}>
 
-          <div className="px-6 py-4 flex items-center justify-between" style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+          <div className="px-6 py-4 flex flex-wrap items-center justify-between gap-2" style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
             <div>
               <p className="text-white font-black text-base">สรุปรวมทุกกะ</p>
               <p className="text-yellow-300 text-xs mt-0.5">
-                {groups.length} operator · {shifts.length} กะ
+                {groups.length + externalGroups.length} operator · {shifts.length} กะ
                 {(dateFrom || dateTo) && ` · ช่วงวันที่เลือก`}
               </p>
             </div>
@@ -670,13 +753,14 @@ export default function ShiftsPage() {
           <div className="flex items-center justify-center h-40">
             <RefreshCw className="size-5 text-slate-300 animate-spin" />
           </div>
-        ) : groups.length === 0 ? (
+        ) : groups.length === 0 && externalGroups.length === 0 ? (
           <div className="flex items-center justify-center h-40">
             <p className="text-sm text-slate-300">ไม่พบข้อมูลกะ</p>
           </div>
         ) : (
           <div className="flex flex-col gap-3">
             {groups.map(g => <OperatorCard key={g.operatorId} group={g} />)}
+            {externalGroups.map(group => <ExternalOperatorCard key={group.name} operatorName={group.name} sessions={group.sessions} />)}
           </div>
         )}
       </div>

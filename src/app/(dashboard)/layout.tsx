@@ -17,7 +17,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     <ToastProvider>
       <div className="flex h-screen overflow-hidden" style={{ background: '#FFFFFF' }}>
         <ParkingSidebar isOpen hardware={HARDWARE} />
-        <div className="flex-1 flex flex-col overflow-hidden bg-[#F0F2F8]">
+        <div className="min-w-0 flex-1 flex flex-col overflow-hidden bg-[#F0F2F8]">
           {children}
         </div>
       </div>

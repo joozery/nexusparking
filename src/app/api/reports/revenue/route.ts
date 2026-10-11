@@ -63,7 +63,7 @@ export async function GET(req: NextRequest) {
 
   const [reportSettings, reportSessions, monthlySessions] = await Promise.all([
     getSettings(),
-    ParkingSession.find(reportSessionFilter).select('cardUid cardType entryTime exitTime fee durationMin lostFine lostCard status fineName fineAmount').lean(),
+    ParkingSession.find(reportSessionFilter).select('cardUid cardType entryTime exitTime fee totalFee durationMin lostFine lostCard status fineName fineAmount').lean(),
     ParkingSession.find(monthlySessionFilter).select('cardType entryTime exitTime fee').lean(),
   ])
   const classifySession = (session: { cardType: 'car' | 'motorcycle' | 'overnight'; entryTime: Date; exitTime?: Date }) => {
@@ -272,8 +272,33 @@ export async function GET(req: NextRequest) {
       lostFineRefundCount: refund.count,
     })
   }
+  const dailyBreakdown = new Map<string, { car: number; motorcycle: number; carOvernight: number; motorcycleOvernight: number; overnight: number; overnightCount: number }>()
+  const dailyDateKey = (value: Date) => new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(value)
+  for (const session of reportSessions) {
+    if (!session.exitTime) continue
+    const key = dailyDateKey(session.exitTime)
+    const bucket = dailyBreakdown.get(key) ?? { car: 0, motorcycle: 0, carOvernight: 0, motorcycleOvernight: 0, overnight: 0, overnightCount: 0 }
+    const kind = classifySession(session)
+    // Vehicle columns show parking fee only; lost-card fine is kept in its
+    // own column so it is not mixed into any vehicle category.
+    const amount = session.fee ?? 0
+    if (kind === 'car') bucket.car += amount
+    if (kind === 'motorcycle') bucket.motorcycle += amount
+    if (kind === 'overnightCar') bucket.carOvernight += amount
+    if (kind === 'overnightMotorcycle') bucket.motorcycleOvernight += amount
+    if (kind === 'overnightCar' || kind === 'overnightMotorcycle') {
+      bucket.overnight += amount
+      bucket.overnightCount += 1
+    }
+    dailyBreakdown.set(key, bucket)
+  }
   const dailyReport = [...dailyByDate.values()].sort((a, b) => a._id.localeCompare(b._id)).map(row => ({
     ...row,
+    ...(dailyBreakdown.get(row._id) ?? { car: 0, motorcycle: 0, carOvernight: 0, motorcycleOvernight: 0, overnight: 0, overnightCount: 0 }),
+    // Report the net daily total after any lost-card fine refund.
+    total: Math.max(0, row.total - (row.lostFineRefunds ?? 0)),
     lostCardCount: (row.lostCardUids ?? []).filter(Boolean).length,
   }))
   const lostCardCount = new Set(reportSessions

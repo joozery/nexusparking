@@ -6,6 +6,7 @@ import { sessionFilters } from '@/lib/sessionFilters'
 import { calcFeeBreakdown } from '@/lib/calcFee'
 import { ParkingSession } from '@/models/ParkingSession'
 import { Shift } from '@/models/Shift'
+import { Admin } from '@/models/Admin'
 import { getSettings } from '@/models/SystemSettings'
 
 export async function GET(req: NextRequest) {
@@ -44,6 +45,11 @@ export async function GET(req: NextRequest) {
         ...(operatorIds.length ? [{ operatorId: { $in: operatorIds } }] : []),
       ] }).select('operatorId operatorName startTime endTime').lean()
     : []
+  const admins = operatorIds.length
+    ? await Admin.find({ _id: { $in: operatorIds } }).select('_id name').lean()
+    : []
+  const adminNameById = new Map(admins.map(admin => [String(admin._id), admin.name]))
+  const envAdminName = process.env.ADMIN_NAME ?? 'System Admin'
   const shiftById = new Map(shifts.map(shift => [String(shift._id), shift]))
   const sessionsWithOperator = sessions.map(session => {
     const exactShift = session.shiftId ? shiftById.get(String(session.shiftId)) : undefined
@@ -56,7 +62,14 @@ export async function GET(req: NextRequest) {
       && calcFeeBreakdown(session.cardType, session.entryTime, session.exitTime, settings.rates.overnight)
         .segments.some(segment => segment.kind === 'overnight')
     )
-    return { ...session, reportCategory: isOvernight ? 'overnight' : 'normal', operatorName: fallbackShift?.operatorName ?? '' }
+    // Prefer the identity stored on the checkout session. A systemadmin
+    // checkout has no operator shift, so time-range fallback must not relabel
+    // it as the booth operator.
+    const directOperatorName = session.operatorId === 'env-admin'
+      ? envAdminName
+      : (session.operatorId ? adminNameById.get(session.operatorId) : undefined)
+    const operatorName = directOperatorName ?? fallbackShift?.operatorName ?? ''
+    return { ...session, reportCategory: isOvernight ? 'overnight' : 'normal', operatorName }
   })
   return NextResponse.json({ sessions: sessionsWithOperator, total: sessionsWithOperator.length }, { headers: { 'Cache-Control': 'no-store' } })
 }
