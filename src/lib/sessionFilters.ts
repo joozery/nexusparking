@@ -17,10 +17,16 @@ export function sessionFilters(params: URLSearchParams): Record<string, unknown>
     if (to) range.$lte = new Date(to.includes('T') ? to : `${to}T23:59:59`)
     if (Object.values(range).some(d => !Number.isFinite(d.getTime()))) throw new Error('วันที่ไม่ถูกต้อง')
     if (range.$gte && range.$lte && range.$gte > range.$lte) throw new Error('วันเริ่มต้องไม่เกินวันสิ้นสุด')
-    // Completed and lost records are historical exit events, so date filters
-    // should use the checkout time. Other views keep their entry-time behavior.
-    const dateField = status === 'completed' || status === 'lost' ? 'exitTime' : 'entryTime'
-    filter[dateField] = range
+    if (!status) {
+      // The all-status view combines active entries and completed exits.
+      // Match either event time so records are not dropped from the combined list.
+      filter.$or = [{ entryTime: range }, { exitTime: range }]
+    } else {
+      // Completed and lost records are historical exit events, while active
+      // records are still measured from their entry time.
+      const dateField = status === 'completed' || status === 'lost' ? 'exitTime' : 'entryTime'
+      filter[dateField] = range
+    }
   }
   return filter
 }

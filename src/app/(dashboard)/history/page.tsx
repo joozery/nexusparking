@@ -30,6 +30,7 @@ interface Session {
 }
 
 interface HistorySummary {
+  all: number
   active: number
   completed: number
   revenueTotal: number
@@ -221,6 +222,9 @@ export default function HistoryPage() {
   const visibleRefunds = showRefunds
     ? refunds.filter(r => !search || r.plate.toLowerCase().includes(search.toLowerCase()))
     : []
+  // The list combines parking sessions and refund records. Keep pagination
+  // based on sessions, but show the true combined record count in the UI.
+  const displayedTotal = (status === '' ? (summary?.all ?? total) : total) + visibleRefunds.length
   const totalRefunded  = visibleRefunds.reduce((sum, refund) => sum + refund.amount, 0)
   const netRevenue     = totalRevenue - totalRefunded
   const visibleSessions = status === 'lost'
@@ -245,7 +249,7 @@ export default function HistoryPage() {
             </div>
             <div>
               <h1 className="text-sm font-bold text-slate-900 leading-none">ประวัติการจอด</h1>
-              <p className="text-[10px] text-slate-400 mt-0.5">{total} รายการทั้งหมด</p>
+              <p className="text-[10px] text-slate-400 mt-0.5">{displayedTotal} รายการทั้งหมด</p>
             </div>
           </div>
           <button onClick={fetchSessions}
@@ -279,7 +283,7 @@ export default function HistoryPage() {
                 style={status === t.key
                   ? { background: 'white', color: '#A16207', boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }
                   : { color: '#94A3B8' }}>
-                {t.label}
+                {t.key === '' ? `${t.label} (${displayedTotal})` : t.label}
               </button>
             ))}
           </div>
@@ -563,7 +567,7 @@ export default function HistoryPage() {
           {/* ── PAGINATION ── */}
           {totalPages > 1 && (
             <div className="flex items-center justify-between mt-4">
-              <span className="text-xs text-slate-400">หน้า {page} จาก {totalPages} · {total} รายการ</span>
+              <span className="text-xs text-slate-400">หน้า {page} จาก {totalPages} · {displayedTotal} รายการ</span>
               <div className="flex items-center gap-1">
                 <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
                   className="size-8 rounded-lg flex items-center justify-center text-slate-500 transition-colors disabled:opacity-30"

@@ -34,9 +34,10 @@ export async function GET(req: NextRequest) {
   summaryParams.delete('status')
   const summaryFilter = sessionFilters(summaryParams)
 
-  const [sessions, total, activeTotal, completedTotal, revenueRows] = await Promise.all([
+  const [sessions, total, allTotal, activeTotal, completedTotal, revenueRows] = await Promise.all([
     ParkingSession.find(filter).sort({ entryTime: -1, _id: -1 }).skip(allActive ? 0 : (page - 1) * limit).limit(allActive ? 0 : limit).lean(),
     ParkingSession.countDocuments(filter),
+    ParkingSession.countDocuments(summaryFilter),
     ParkingSession.countDocuments({ ...summaryFilter, status: 'active' }),
     ParkingSession.countDocuments({ ...summaryFilter, status: 'completed' }),
     ParkingSession.aggregate<{ _id: null; total: number }>([
@@ -52,6 +53,7 @@ export async function GET(req: NextRequest) {
     page,
     limit,
     summary: {
+      all: allTotal,
       active: activeTotal,
       completed: completedTotal,
       revenueTotal: revenueRows[0]?.total ?? 0,
