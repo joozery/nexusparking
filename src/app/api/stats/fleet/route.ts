@@ -96,10 +96,10 @@ export async function GET() {
     }
   }
 
-  // The status bar's "normal" count is the vehicles still parked that entered today.
-  // Keep it independent from today's total exits, which may include overnight vehicles.
-  const carNormal = carActive.filter(session => session.entryTime >= todayStart).length
-  const motoNormal = motoActive.filter(session => session.entryTime >= todayStart).length
+  // The status bar's "normal" count includes vehicles still parked that entered today
+  // plus vehicles currently waiting in the entry queue. Overnight vehicles stay separate.
+  const carNormal = carActive.filter(session => session.entryTime >= todayStart).length + carQueueWaiting
+  const motoNormal = motoActive.filter(session => session.entryTime >= todayStart).length + motoQueueWaiting
   const carOvernight = carActive.filter(session => session.entryTime < todayStart).length
   const motoOvernight = motoActive.filter(session => session.entryTime < todayStart).length
   const carRemaining = carNormal + carOvernight
