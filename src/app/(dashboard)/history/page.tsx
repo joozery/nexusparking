@@ -29,6 +29,11 @@ interface Session {
   exitPhotoPath?:  string
 }
 
+interface HistorySummary {
+  active: number
+  completed: number
+}
+
 interface RefundRecord {
   id: string
   sessionId: string
@@ -82,6 +87,7 @@ export default function HistoryPage() {
   const [sessions,  setSessions]  = useState<Session[]>([])
   const [refunds,   setRefunds]   = useState<RefundRecord[]>([])
   const [total,     setTotal]     = useState(0)
+  const [summary,   setSummary]   = useState<HistorySummary | null>(null)
   const [loading,   setLoading]   = useState(true)
   const [page,      setPage]      = useState(1)
   const [search,    setSearch]    = useState('')
@@ -141,6 +147,7 @@ export default function HistoryPage() {
       const data = await res.json()
       setSessions(data.sessions ?? [])
       setTotal(data.total ?? 0)
+      setSummary(data.summary ?? null)
     } finally {
       setLoading(false)
     }
@@ -180,8 +187,8 @@ export default function HistoryPage() {
   // returned, but it must no longer be counted as an outstanding lost card.
   const returnedSessionIds = new Set(refunds.map(refund => refund.sessionId))
   const isOutstandingLost = (s: Session) => isLost(s) && !returnedSessionIds.has(s._id)
-  const countActive    = sessions.filter(s => s.status === 'active' && !isLost(s)).length
-  const countCompleted = sessions.filter(s => s.status === 'completed').length
+  const countActive    = summary?.active ?? sessions.filter(s => s.status === 'active' && !isLost(s)).length
+  const countCompleted = summary?.completed ?? sessions.filter(s => s.status === 'completed').length
   const countLost      = sessions.filter(isOutstandingLost).length
   const totalRevenue   = sessions.filter(s => s.status !== 'active').reduce((a, s) => a + s.totalFee, 0)
   const showRefunds    = status === '' || status === 'completed'
