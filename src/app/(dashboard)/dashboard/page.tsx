@@ -102,16 +102,6 @@ export default function DashboardPage() {
     ? Math.min(100, Math.round((stats.activeCars / stats.totalCapacity) * 100))
     : 0
 
-  const occupancyColor =
-    occupancyPct >= 85 ? '#DC2626' :
-    occupancyPct >= 60 ? '#D97706' :
-    '#059669'
-
-  const occupancyGrad =
-    occupancyPct >= 85 ? 'linear-gradient(135deg,#7F1D1D,#DC2626)' :
-    occupancyPct >= 60 ? 'linear-gradient(135deg,#78350F,#D97706)' :
-    'linear-gradient(135deg,#064E3B,#059669)'
-
   const todayDate = new Date().toLocaleDateString('th-TH', {
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
   })
@@ -158,71 +148,50 @@ export default function DashboardPage() {
       <div className="flex-1 overflow-auto bg-slate-50/60">
         <div className="p-5 space-y-4">
 
-          {/* ── OCCUPANCY HERO ── */}
-          <div className="rounded-xl p-5 text-white relative overflow-hidden"
-            style={{ backgroundImage: 'url(/coverbgda.png)', backgroundSize: 'cover', backgroundPosition: 'center', boxShadow: '0 4px 24px rgba(0,0,0,0.15)' }}>
-            {/* overlay gradient for readability */}
-            <div className="absolute inset-0 pointer-events-none rounded-xl"
-              style={{ background: `${occupancyGrad.replace('linear-gradient', 'linear-gradient').replace(')', ', rgba(0,0,0,0.35))')}`, opacity: 0.75 }} />
-            {/* bg blobs */}
-            <div className="absolute -top-8 -right-8 size-40 rounded-full pointer-events-none"
-              style={{ background: 'rgba(255,255,255,0.06)' }} />
-            <div className="absolute -bottom-6 right-24 size-24 rounded-full pointer-events-none"
-              style={{ background: 'rgba(255,255,255,0.04)' }} />
-
-            <div className="relative z-10 flex items-center gap-8">
-              {/* ring gauge */}
-              <div className="relative size-28 shrink-0">
-                <svg className="size-28 -rotate-90" viewBox="0 0 100 100">
-                  <circle cx="50" cy="50" r="40" fill="none" strokeWidth="8"
-                    stroke="rgba(255,255,255,0.15)" />
-                  <circle cx="50" cy="50" r="40" fill="none" strokeWidth="8"
-                    stroke="white" strokeLinecap="round"
-                    strokeDasharray={`${2 * Math.PI * 40}`}
-                    strokeDashoffset={`${2 * Math.PI * 40 * (1 - occupancyPct / 100)}`}
-                    style={{ transition: 'stroke-dashoffset 0.6s ease' }}
-                  />
-                </svg>
-                <div className="absolute inset-0 flex flex-col items-center justify-center">
-                  <span className="text-3xl font-bold leading-none">{occupancyPct}%</span>
-                  <span className="text-[10px] opacity-70 mt-0.5">ใช้งาน</span>
+          {/* ── OCCUPANCY BY VEHICLE TYPE ── */}
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+            {([
+              { key: 'car' as const, label: 'รถยนต์', color: '#CA8A04', light: '#FEF3C7', icon: Car },
+              { key: 'motorcycle' as const, label: 'รถจักรยานยนต์', color: '#0284C7', light: '#E0F2FE', icon: Bike },
+            ]).map(({ key, label, color, light, icon: Icon }) => {
+              const lot = stats?.[key]
+              const pct = lot ? Math.min(100, Math.round((lot.active / Math.max(1, lot.capacity)) * 100)) : 0
+              return (
+                <div key={key} className="rounded-xl p-5 text-white relative overflow-hidden"
+                  style={{ background: `linear-gradient(135deg, ${color}, ${key === 'car' ? '#EAB308' : '#0EA5E9'})`, boxShadow: `0 4px 24px ${color}35` }}>
+                  <div className="absolute -top-8 -right-8 size-40 rounded-full pointer-events-none" style={{ background: 'rgba(255,255,255,0.08)' }} />
+                  <div className="relative z-10 flex items-center gap-5">
+                    <div className="relative size-24 shrink-0">
+                      <svg className="size-24 -rotate-90" viewBox="0 0 100 100">
+                        <circle cx="50" cy="50" r="40" fill="none" strokeWidth="8" stroke="rgba(255,255,255,0.2)" />
+                        <circle cx="50" cy="50" r="40" fill="none" strokeWidth="8" stroke="white" strokeLinecap="round"
+                          strokeDasharray={`${2 * Math.PI * 40}`}
+                          strokeDashoffset={`${2 * Math.PI * 40 * (1 - pct / 100)}`}
+                          style={{ transition: 'stroke-dashoffset 0.6s ease' }} />
+                      </svg>
+                      <div className="absolute inset-0 flex flex-col items-center justify-center">
+                        <span className="text-2xl font-bold leading-none">{lot ? `${pct}%` : '—'}</span>
+                        <span className="text-[10px] opacity-75 mt-0.5">ใช้งาน</span>
+                      </div>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Icon className="size-4" />
+                        <p className="text-xs font-semibold opacity-80 uppercase tracking-widest">{label}</p>
+                      </div>
+                      <p className="text-3xl font-bold leading-none">
+                        {lot?.active ?? '—'}
+                        <span className="text-lg opacity-60 font-normal ml-2">/ {lot?.capacity ?? '—'} คัน</span>
+                      </p>
+                      <p className="text-sm opacity-80 mt-2">ที่จอดว่างเหลือ <strong className="font-bold">{lot?.available ?? '—'} ช่อง</strong></p>
+                      <div className="mt-3 h-2 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.2)' }}>
+                        <div className="h-full rounded-full" style={{ width: `${pct}%`, background: light, transition: 'width 0.6s ease' }} />
+                      </div>
+                    </div>
+                  </div>
                 </div>
-              </div>
-
-              {/* text info */}
-              <div className="flex-1">
-                <p className="text-xs font-semibold opacity-60 uppercase tracking-widest mb-1">สถานะลานจอด</p>
-                <p className="text-4xl font-bold leading-none">
-                  {stats?.activeCars ?? '—'}
-                  <span className="text-xl opacity-50 font-normal ml-2">/ {stats?.totalCapacity ?? '—'} คัน</span>
-                </p>
-                <p className="text-sm opacity-70 mt-2">
-                  ที่จอดว่างเหลือ <strong className="text-white font-bold">{stats?.availableSlots ?? '—'} ช่อง</strong>
-                </p>
-                {stats && (
-                  <p className="text-xs opacity-60 mt-1">
-                    รถยนต์ {stats.car.available}/{stats.car.capacity} · รถจักรยานยนต์ {stats.motorcycle.available}/{stats.motorcycle.capacity}
-                  </p>
-                )}
-
-                {/* progress bar */}
-                <div className="mt-3 h-2 rounded-full overflow-hidden"
-                  style={{ background: 'rgba(255,255,255,0.2)' }}>
-                  <div className="h-full rounded-full"
-                    style={{
-                      width: `${occupancyPct}%`,
-                      background: 'rgba(255,255,255,0.8)',
-                      transition: 'width 0.6s ease',
-                    }} />
-                </div>
-
-                <div className="flex items-center gap-4 mt-2 text-[10px] opacity-60">
-                  <span>0%</span>
-                  <span className="flex-1 text-center">ความจุ {occupancyPct}%</span>
-                  <span>100%</span>
-                </div>
-              </div>
-            </div>
+              )
+            })}
           </div>
 
           {/* ── KPI STRIP ── */}
