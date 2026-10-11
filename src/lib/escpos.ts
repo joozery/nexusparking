@@ -112,6 +112,7 @@ export function buildRefundReceipt(r: RefundReceiptData): Buffer {
   parts.push(BOLD_ON, receiptRow('ยอดคืนเงิน', `${r.amount.toLocaleString('th-TH')} บาท`), BOLD_OFF)
   parts.push(receiptRow('คืนโดย', r.paymentMethod === 'qr' ? 'เงินโอน' : 'เงินสด'))
   parts.push(DIVIDER, ALIGN_CENTER,
+    thaiLine('หากมีข้อสงสัยหรือต้องการสอบถามข้อมูลเพิ่มเติม\n'),
     thaiLine('Facebook:A20Park\n'),
     thaiLine('ขอบคุณที่ใช้บริการ\n'))
   parts.push(NL, NL, NL, CUT)

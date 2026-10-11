@@ -118,6 +118,7 @@ export async function downloadRefundReceiptPdf(data: {
     `คืนโดย ${data.paymentMethod === 'qr' ? 'เงินโอน' : 'เงินสด'}`,
     `ยอดคืนเงิน ${money(data.amount)}`,
     '---',
+    'หากมีข้อสงสัยหรือต้องการสอบถามข้อมูลเพิ่มเติม',
     'Facebook:A20Park',
     'ขอบคุณที่ใช้บริการ',
   ]
