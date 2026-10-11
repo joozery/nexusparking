@@ -74,7 +74,7 @@ export default function DashboardPage() {
   const [stats,   setStats]   = useState<Stats | null>(null)
   const [recent,  setRecent]  = useState<Session[]>([])
   const [loading, setLoading] = useState(true)
-  const [tick,    setTick]    = useState(new Date())
+  const [tick,    setTick]    = useState<Date | null>(null)
 
   async function fetchAll() {
     setLoading(true)
@@ -92,6 +92,7 @@ export default function DashboardPage() {
   }
 
   useEffect(() => {
+    setTick(new Date())
     fetchAll()
     // auto-refresh every 30 s
     const id = setInterval(() => { fetchAll(); setTick(new Date()) }, 30000)
@@ -135,7 +136,7 @@ export default function DashboardPage() {
           <div className="flex items-center gap-2">
             <div className="flex items-center gap-1.5 text-[10px] text-slate-400">
               <span className="size-1.5 rounded-full bg-green-400 animate-pulse" />
-              {tick.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+              {tick ? tick.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '--:--:--'}
             </div>
             <button onClick={fetchAll}
               className="size-8 rounded-lg flex items-center justify-center hover:bg-slate-100 transition-colors">

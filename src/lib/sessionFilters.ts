@@ -1,4 +1,4 @@
-/** Shared by the history screen and its full export. Dates filter entry time. */
+/** Shared by the history screen and its full export. */
 export function sessionFilters(params: URLSearchParams): Record<string, unknown> {
   const filter: Record<string, unknown> = { status: { $ne: 'void' } }
   const status = params.get('status'), plate = params.get('plate'), shiftId = params.get('shiftId')
@@ -17,7 +17,10 @@ export function sessionFilters(params: URLSearchParams): Record<string, unknown>
     if (to) range.$lte = new Date(to.includes('T') ? to : `${to}T23:59:59`)
     if (Object.values(range).some(d => !Number.isFinite(d.getTime()))) throw new Error('วันที่ไม่ถูกต้อง')
     if (range.$gte && range.$lte && range.$gte > range.$lte) throw new Error('วันเริ่มต้องไม่เกินวันสิ้นสุด')
-    filter.entryTime = range
+    // Completed and lost records are historical exit events, so date filters
+    // should use the checkout time. Other views keep their entry-time behavior.
+    const dateField = status === 'completed' || status === 'lost' ? 'exitTime' : 'entryTime'
+    filter[dateField] = range
   }
   return filter
 }

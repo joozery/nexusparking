@@ -16,20 +16,11 @@ export async function GET() {
   const todayStart = getTodayStartTH()
   const now = new Date()
 
-  const [carActive, motoActive, todayEntrySessions, todayRevenueByMethod, todayRefundsByMethod, settings, todayQueues, todayRevenueSessions, refundShifts] = await Promise.all([
+  const [carActive, motoActive, todayEntrySessions, settings, todayQueues, todayRevenueSessions, refundShifts] = await Promise.all([
     ParkingSession.countDocuments({ cardType: { $in: CAR_TYPES }, status: 'active' }),
     ParkingSession.countDocuments({ cardType: 'motorcycle', status: 'active' }),
     // Need the actual rows (not just a count) to classify each by billing mode below.
     ParkingSession.find({ entryTime: { $gte: todayStart } }).lean(),
-    ParkingSession.aggregate([
-      { $match: { status: { $in: ['completed', 'lost'] }, exitTime: { $gte: todayStart } } },
-      { $group: { _id: '$paymentMethod', total: { $sum: '$totalFee' } } },
-    ]),
-    Shift.aggregate([
-      { $unwind: '$cardRefunds' },
-      { $match: { 'cardRefunds.refundedAt': { $gte: todayStart, $lte: now } } },
-      { $group: { _id: '$cardRefunds.paymentMethod', total: { $sum: '$cardRefunds.amount' } } },
-    ]),
     getSettings(),
     ParkingQueue.find({ status: { $in: ['waiting', 'cancelled'] }, sessionId: null, joinedAt: { $gte: todayStart } }).lean(),
     ParkingSession.find({ status: { $in: ['completed', 'lost'] }, exitTime: { $gte: todayStart, $lte: now } }).select('cardType paymentMethod totalFee').lean(),
@@ -38,17 +29,6 @@ export async function GET() {
 
   const activeSessions = carActive + motoActive
   const totalCapacity  = settings.capacity.car + settings.capacity.motorcycle
-
-  const cashGross = (todayRevenueByMethod.find(r => r._id === 'cash')?.total as number) ?? 0
-  const qrGross    = (todayRevenueByMethod.find(r => r._id === 'qr')?.total as number) ?? 0
-  const cashRefund = (todayRefundsByMethod.find(r => r._id === 'cash')?.total as number) ?? 0
-  const qrRefund   = (todayRefundsByMethod.find(r => r._id === 'qr')?.total as number) ?? 0
-  const cashRevenue = Math.max(0, cashGross - cashRefund)
-  const qrRevenue    = Math.max(0, qrGross - qrRefund)
-  const otherRevenue = todayRevenueByMethod
-    .filter(r => r._id !== 'cash' && r._id !== 'qr')
-    .reduce((sum, r) => sum + ((r.total as number) ?? 0), 0)
-  const revenue = cashRevenue + qrRevenue + otherRevenue
 
   const revenueByTypeMethod = {
     car: { cash: 0, qr: 0, other: 0 },
@@ -64,11 +44,33 @@ export async function GET() {
   const refundSessionIds = [...new Set(refundRows.map(refund => refund.sessionId))]
   const refundSessions = await ParkingSession.find({ _id: { $in: refundSessionIds } }).select('cardType').lean()
   const refundTypeBySession = new Map(refundSessions.map(session => [String(session._id), session.cardType]))
-  for (const refund of refundRows) {
-    const type = refundTypeBySession.get(refund.sessionId) === 'motorcycle' ? 'motorcycle' : 'car'
-    const method = refund.paymentMethod
-    revenueByTypeMethod[type][method] = Math.max(0, revenueByTypeMethod[type][method] - refund.amount)
+
+  // Subtract each refund completely while keeping every breakdown bucket non-negative.
+  // If the preferred bucket is smaller than the refund, carry the remainder to the
+  // other payment/type buckets so the breakdown always reconciles to net revenue.
+  const subtractRefund = (type: 'car' | 'motorcycle', method: 'cash' | 'qr' | 'other', amount: number) => {
+    let remaining = amount
+    const types: ('car' | 'motorcycle')[] = [type, type === 'car' ? 'motorcycle' : 'car']
+    const methods: ('cash' | 'qr' | 'other')[] = [method, ...(['cash', 'qr', 'other'] as const).filter(candidate => candidate !== method)]
+    for (const candidateType of types) for (const candidateMethod of methods) {
+      if (remaining <= 0) return
+      const bucket = revenueByTypeMethod[candidateType][candidateMethod]
+      const deduction = Math.min(bucket, remaining)
+      revenueByTypeMethod[candidateType][candidateMethod] -= deduction
+      remaining -= deduction
+    }
   }
+
+  for (const refund of refundRows) {
+    const type = refundTypeBySession.get(String(refund.sessionId)) === 'motorcycle' ? 'motorcycle' : 'car'
+    const method = refund.paymentMethod === 'cash' || refund.paymentMethod === 'qr' ? refund.paymentMethod : 'other'
+    subtractRefund(type, method, refund.amount)
+  }
+  const revenue = Object.values(revenueByTypeMethod)
+    .reduce((sum, byMethod) => sum + byMethod.cash + byMethod.qr + byMethod.other, 0)
+  const cashRevenue = revenueByTypeMethod.car.cash + revenueByTypeMethod.motorcycle.cash
+  const qrRevenue = revenueByTypeMethod.car.qr + revenueByTypeMethod.motorcycle.qr
+  const otherRevenue = revenueByTypeMethod.car.other + revenueByTypeMethod.motorcycle.other
 
   // "รถเข้าวันนี้" split into 4 buckets: car/motorcycle × normal/overnight billing mode.
   // Billing mode is worked out from the session's actual fee breakdown (crossing the

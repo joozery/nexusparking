@@ -95,6 +95,7 @@ export default function HistoryPage() {
   const [status,    setStatus]    = useState('')
   const [dateFrom,  setDateFrom]  = useState('')
   const [dateTo,    setDateTo]    = useState('')
+  const [datePreset, setDatePreset] = useState<'today' | '7days' | 'month' | ''>('')
   const [confirmId, setConfirmId] = useState<string | null>(null)
   const [editSession, setEditSession] = useState<Session | null>(null)
   const [editPlate, setEditPlate] = useState('')
@@ -110,6 +111,29 @@ export default function HistoryPage() {
     const date = new Date(iso)
     const pad = (value: number) => String(value).padStart(2, '0')
     return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`
+  }
+
+  function applyDatePreset(preset: 'today' | '7days' | 'month') {
+    const now = new Date()
+    const from = new Date(now)
+    if (preset === 'today') {
+      from.setHours(0, 0, 0, 0)
+    } else if (preset === '7days') {
+      from.setDate(from.getDate() - 6)
+      from.setHours(0, 0, 0, 0)
+    } else {
+      from.setDate(1)
+      from.setHours(0, 0, 0, 0)
+    }
+    setDateFrom(toDateTimeLocal(from.toISOString()))
+    setDateTo(toDateTimeLocal(now.toISOString()))
+    setDatePreset(preset)
+    setPage(1)
+    setShowDate(true)
+  }
+
+  function toFilterDate(value: string) {
+    return value.includes('T') ? new Date(value).toISOString() : value
   }
 
   function openEdit(session: Session) {
@@ -143,8 +167,8 @@ export default function HistoryPage() {
       if (status)   params.set('status',   status)
       if (status === 'lost') params.set('outstanding', '1')
       if (search)   params.set('plate',    search)
-      if (dateFrom) params.set('dateFrom', dateFrom)
-      if (dateTo)   params.set('dateTo',   dateTo)
+      if (dateFrom) params.set('dateFrom', toFilterDate(dateFrom))
+      if (dateTo)   params.set('dateTo',   toFilterDate(dateTo))
       const res  = await fetch(`/api/sessions?${params}`)
       const data = await res.json()
       setSessions(data.sessions ?? [])
@@ -159,8 +183,8 @@ export default function HistoryPage() {
 
   const fetchRefunds = useCallback(async () => {
     const params = new URLSearchParams()
-    if (dateFrom) params.set('dateFrom', dateFrom)
-    if (dateTo) params.set('dateTo', dateTo)
+    if (dateFrom) params.set('dateFrom', toFilterDate(dateFrom))
+    if (dateTo) params.set('dateTo', toFilterDate(dateTo))
     const res = await fetch(`/api/history/refunds?${params}`, { cache: 'no-store' })
     if (!res.ok) return
     const data = await res.json()
@@ -268,18 +292,33 @@ export default function HistoryPage() {
               ? { background: 'rgba(161,98,7,0.08)', color: '#A16207', border: '1px solid rgba(161,98,7,0.2)' }
               : { background: '#F8FAFF', color: '#94A3B8', border: '1px solid #E8ECF4' }}>
             <Filter className="size-3" />
-            {dateFrom && dateTo ? `${dateFrom} – ${dateTo}` : 'ช่วงวันที่'}
+            {dateFrom && dateTo ? `${dateFrom.replace('T', ' ')} – ${dateTo.replace('T', ' ')}` : 'ช่วงวันที่'}
           </button>
 
           {showDate && (
             <>
-              <input type="date" value={dateFrom}
-                onChange={e => { setDateFrom(e.target.value); setPage(1) }}
+              <div className="flex items-center gap-1">
+                {([
+                  ['today', 'วันนี้'],
+                  ['7days', '7 วัน'],
+                  ['month', 'เดือนนี้'],
+                ] as const).map(([key, label]) => (
+                  <button key={key} type="button" onClick={() => applyDatePreset(key)}
+                    className="h-8 px-2.5 rounded-lg text-[11px] font-semibold transition-colors"
+                    style={datePreset === key
+                      ? { background: 'rgba(161,98,7,0.12)', color: '#A16207', border: '1px solid rgba(161,98,7,0.2)' }
+                      : { background: '#F8FAFF', color: '#64748B', border: '1px solid #E8ECF4' }}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <input type="datetime-local" lang="en-GB" step="60" value={dateFrom}
+                onChange={e => { setDateFrom(e.target.value); setDatePreset(''); setPage(1) }}
                 className="h-8 px-3 rounded-lg text-xs text-slate-700 outline-none"
                 style={{ background: '#F8FAFF', border: '1px solid #E8ECF4' }} />
               <span className="text-slate-300 text-xs">–</span>
-              <input type="date" value={dateTo}
-                onChange={e => { setDateTo(e.target.value); setPage(1) }}
+              <input type="datetime-local" lang="en-GB" step="60" value={dateTo}
+                onChange={e => { setDateTo(e.target.value); setDatePreset(''); setPage(1) }}
                 className="h-8 px-3 rounded-lg text-xs text-slate-700 outline-none"
                 style={{ background: '#F8FAFF', border: '1px solid #E8ECF4' }} />
             </>
@@ -287,7 +326,7 @@ export default function HistoryPage() {
 
           {hasFilter && (
             <button
-              onClick={() => { setSearch(''); setStatus(''); setDateFrom(''); setDateTo(''); setPage(1); setShowDate(false) }}
+              onClick={() => { setSearch(''); setStatus(''); setDateFrom(''); setDateTo(''); setDatePreset(''); setPage(1); setShowDate(false) }}
               className="h-8 px-2.5 rounded-lg text-xs font-semibold text-slate-400 flex items-center gap-1 hover:bg-slate-100 transition-colors">
               <X className="size-3" /> ล้าง
             </button>
