@@ -33,6 +33,10 @@ interface Stats {
     car: { cash: number; qr: number; other: number }
     motorcycle: { cash: number; qr: number; other: number }
   }
+  todayRevenueBreakdown: {
+    car: { cash: number; qr: number; refund: number }
+    motorcycle: { cash: number; qr: number; refund: number }
+  }
   todayEntriesByType: { car: number; motorcycle: number; overnightCar: number; overnightMotorcycle: number }
 }
 
@@ -112,10 +116,12 @@ export default function DashboardPage() {
     .filter(d => d.value > 0)
   const totalEntriesToday = entryTypeData.reduce((sum, d) => sum + d.value, 0)
   const revenueTypeRows = [
-    { key: 'carCash', label: 'รถยนต์ · เงินสด', amount: stats?.todayRevenueByTypeMethod?.car.cash ?? 0, color: '#A16207', icon: Banknote },
-    { key: 'carQr', label: 'รถยนต์ · เงินโอน', amount: stats?.todayRevenueByTypeMethod?.car.qr ?? 0, color: '#0891B2', icon: Smartphone },
-    { key: 'motoCash', label: 'รถจักรยานยนต์ · เงินสด', amount: stats?.todayRevenueByTypeMethod?.motorcycle.cash ?? 0, color: '#6D28D9', icon: Banknote },
-    { key: 'motoQr', label: 'รถจักรยานยนต์ · เงินโอน', amount: stats?.todayRevenueByTypeMethod?.motorcycle.qr ?? 0, color: '#7C3AED', icon: Smartphone },
+    { key: 'carCash', label: 'รถยนต์ · เงินสด', amount: stats?.todayRevenueBreakdown?.car.cash ?? 0, color: '#A16207', icon: Banknote },
+    { key: 'carQr', label: 'รถยนต์ · เงินโอน', amount: stats?.todayRevenueBreakdown?.car.qr ?? 0, color: '#0891B2', icon: Smartphone },
+    { key: 'motoCash', label: 'รถจักรยานยนต์ · เงินสด', amount: stats?.todayRevenueBreakdown?.motorcycle.cash ?? 0, color: '#6D28D9', icon: Banknote },
+    { key: 'motoQr', label: 'รถจักรยานยนต์ · เงินโอน', amount: stats?.todayRevenueBreakdown?.motorcycle.qr ?? 0, color: '#7C3AED', icon: Smartphone },
+    { key: 'carRefund', label: 'คืนค่าปรับ · รถยนต์', amount: stats?.todayRevenueBreakdown?.car.refund ?? 0, color: '#DC2626', icon: ArrowDownLeft },
+    { key: 'motoRefund', label: 'คืนค่าปรับ · รถจักรยานยนต์', amount: stats?.todayRevenueBreakdown?.motorcycle.refund ?? 0, color: '#EA580C', icon: ArrowDownLeft },
   ]
 
   return (
@@ -260,7 +266,8 @@ export default function DashboardPage() {
                   const amount = row.amount
                   const color = row.color
                   const total  = stats?.todayRevenue ?? 0
-                  const pct    = total > 0 ? Math.round((amount / total) * 100) : 0
+                      const pct    = total > 0 ? Math.round((amount / total) * 100) : 0
+                      const barPct = Math.min(100, Math.max(0, Math.abs(pct)))
                   return (
                     <div key={row.key}>
                       <div className="flex items-center justify-between mb-1">
@@ -273,7 +280,7 @@ export default function DashboardPage() {
                       </div>
                       <div className="h-1.5 rounded-full overflow-hidden" style={{ background: '#F1F5F9' }}>
                         <div className="h-full rounded-full"
-                          style={{ width: `${pct}%`, background: color, transition: 'width 0.6s ease' }} />
+                          style={{ width: `${barPct}%`, background: color, transition: 'width 0.6s ease' }} />
                       </div>
                     </div>
                   )

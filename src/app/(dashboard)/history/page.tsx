@@ -96,6 +96,9 @@ export default function HistoryPage() {
   const [status,    setStatus]    = useState('')
   const [dateFrom,  setDateFrom]  = useState('')
   const [dateTo,    setDateTo]    = useState('')
+  const [timeFrom,  setTimeFrom]  = useState('00:00')
+  const [timeTo,    setTimeTo]    = useState('23:59')
+  const [openDateTime, setOpenDateTime] = useState<'from' | 'to' | null>(null)
   const [datePreset, setDatePreset] = useState<'today' | '7days' | 'month' | ''>('')
   const [confirmId, setConfirmId] = useState<string | null>(null)
   const [editSession, setEditSession] = useState<Session | null>(null)
@@ -128,6 +131,8 @@ export default function HistoryPage() {
     }
     setDateFrom(toDateTimeLocal(from.toISOString()))
     setDateTo(toDateTimeLocal(now.toISOString()))
+    setTimeFrom(toDateTimeLocal(from.toISOString()).slice(11, 16))
+    setTimeTo(toDateTimeLocal(now.toISOString()).slice(11, 16))
     setDatePreset(preset)
     setPage(1)
     setShowDate(true)
@@ -135,6 +140,21 @@ export default function HistoryPage() {
 
   function toFilterDate(value: string) {
     return value.includes('T') ? new Date(value).toISOString() : value
+  }
+
+  function updateFilterTimePart(kind: 'from' | 'to', part: 'hour' | 'minute', value: string) {
+    const current = kind === 'from' ? timeFrom : timeTo
+    const [hour = '00', minute = '00'] = current.split(':')
+    const next = `${part === 'hour' ? value : hour}:${part === 'minute' ? value : minute}`
+    if (kind === 'from') {
+      setTimeFrom(next)
+      setDateFrom(dateFrom ? `${dateFrom.slice(0, 10)}T${next}` : '')
+    } else {
+      setTimeTo(next)
+      setDateTo(dateTo ? `${dateTo.slice(0, 10)}T${next}` : '')
+    }
+    setDatePreset('')
+    setPage(1)
   }
 
   function openEdit(session: Session) {
@@ -316,21 +336,69 @@ export default function HistoryPage() {
                   </button>
                 ))}
               </div>
-              <input type="datetime-local" lang="en-GB" step="60" value={dateFrom}
-                onChange={e => { setDateFrom(e.target.value); setDatePreset(''); setPage(1) }}
-                className="h-8 px-3 rounded-lg text-xs text-slate-700 outline-none"
-                style={{ background: '#F8FAFF', border: '1px solid #E8ECF4' }} />
+              <div className="relative">
+                <button type="button" onClick={() => setOpenDateTime(openDateTime === 'from' ? null : 'from')}
+                  className="h-8 px-3 rounded-lg text-xs text-slate-700 outline-none"
+                  style={{ background: '#F8FAFF', border: '1px solid #E8ECF4' }}>
+                  {dateFrom ? `${dateFrom.slice(0, 10)} ${timeFrom}` : 'เลือกวันเวลาเริ่มต้น'}
+                </button>
+                {openDateTime === 'from' && (
+                  <div className="absolute left-0 top-10 z-30 rounded-lg bg-white p-3 shadow-xl" style={{ border: '1px solid #E8ECF4' }}>
+                    <input type="date" value={dateFrom.slice(0, 10)}
+                      onChange={e => { setDateFrom(e.target.value ? `${e.target.value}T${timeFrom}` : ''); setDatePreset(''); setPage(1) }}
+                      className="h-8 px-2 rounded-lg text-xs text-slate-700 outline-none"
+                      style={{ background: '#F8FAFF', border: '1px solid #E8ECF4' }} />
+                    <div className="mt-2 flex items-center gap-1">
+                      <select value={timeFrom.slice(0, 2)} aria-label="ชั่วโมงเริ่มต้น"
+                        onChange={e => updateFilterTimePart('from', 'hour', e.target.value)}
+                        className="h-8 w-14 rounded-lg text-xs text-slate-700 outline-none" style={{ border: '1px solid #E8ECF4' }}>
+                        {Array.from({ length: 24 }, (_, hour) => { const value = String(hour).padStart(2, '0'); return <option key={value} value={value}>{value}</option> })}
+                      </select>
+                      <span>:</span>
+                      <select value={timeFrom.slice(3, 5)} aria-label="นาทีเริ่มต้น"
+                        onChange={e => updateFilterTimePart('from', 'minute', e.target.value)}
+                        className="h-8 w-14 rounded-lg text-xs text-slate-700 outline-none" style={{ border: '1px solid #E8ECF4' }}>
+                        {Array.from({ length: 60 }, (_, minute) => { const value = String(minute).padStart(2, '0'); return <option key={value} value={value}>{value}</option> })}
+                      </select>
+                    </div>
+                  </div>
+                )}
+              </div>
               <span className="text-slate-300 text-xs">–</span>
-              <input type="datetime-local" lang="en-GB" step="60" value={dateTo}
-                onChange={e => { setDateTo(e.target.value); setDatePreset(''); setPage(1) }}
-                className="h-8 px-3 rounded-lg text-xs text-slate-700 outline-none"
-                style={{ background: '#F8FAFF', border: '1px solid #E8ECF4' }} />
+              <div className="relative">
+                <button type="button" onClick={() => setOpenDateTime(openDateTime === 'to' ? null : 'to')}
+                  className="h-8 px-3 rounded-lg text-xs text-slate-700 outline-none"
+                  style={{ background: '#F8FAFF', border: '1px solid #E8ECF4' }}>
+                  {dateTo ? `${dateTo.slice(0, 10)} ${timeTo}` : 'เลือกวันเวลาสิ้นสุด'}
+                </button>
+                {openDateTime === 'to' && (
+                  <div className="absolute right-0 top-10 z-30 rounded-lg bg-white p-3 shadow-xl" style={{ border: '1px solid #E8ECF4' }}>
+                    <input type="date" value={dateTo.slice(0, 10)}
+                      onChange={e => { setDateTo(e.target.value ? `${e.target.value}T${timeTo}` : ''); setDatePreset(''); setPage(1) }}
+                      className="h-8 px-2 rounded-lg text-xs text-slate-700 outline-none"
+                      style={{ background: '#F8FAFF', border: '1px solid #E8ECF4' }} />
+                    <div className="mt-2 flex items-center gap-1">
+                      <select value={timeTo.slice(0, 2)} aria-label="ชั่วโมงสิ้นสุด"
+                        onChange={e => updateFilterTimePart('to', 'hour', e.target.value)}
+                        className="h-8 w-14 rounded-lg text-xs text-slate-700 outline-none" style={{ border: '1px solid #E8ECF4' }}>
+                        {Array.from({ length: 24 }, (_, hour) => { const value = String(hour).padStart(2, '0'); return <option key={value} value={value}>{value}</option> })}
+                      </select>
+                      <span>:</span>
+                      <select value={timeTo.slice(3, 5)} aria-label="นาทีสิ้นสุด"
+                        onChange={e => updateFilterTimePart('to', 'minute', e.target.value)}
+                        className="h-8 w-14 rounded-lg text-xs text-slate-700 outline-none" style={{ border: '1px solid #E8ECF4' }}>
+                        {Array.from({ length: 60 }, (_, minute) => { const value = String(minute).padStart(2, '0'); return <option key={value} value={value}>{value}</option> })}
+                      </select>
+                    </div>
+                  </div>
+                )}
+              </div>
             </>
           )}
 
           {hasFilter && (
             <button
-              onClick={() => { setSearch(''); setStatus(''); setDateFrom(''); setDateTo(''); setDatePreset(''); setPage(1); setShowDate(false) }}
+              onClick={() => { setSearch(''); setStatus(''); setDateFrom(''); setDateTo(''); setTimeFrom('00:00'); setTimeTo('23:59'); setOpenDateTime(null); setDatePreset(''); setPage(1); setShowDate(false) }}
               className="h-8 px-2.5 rounded-lg text-xs font-semibold text-slate-400 flex items-center gap-1 hover:bg-slate-100 transition-colors">
               <X className="size-3" /> ล้าง
             </button>

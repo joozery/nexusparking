@@ -39,6 +39,10 @@ export async function GET() {
     const method = session.paymentMethod === 'cash' || session.paymentMethod === 'qr' ? session.paymentMethod : 'other'
     revenueByTypeMethod[type][method] += session.totalFee
   }
+  const grossRevenueByTypeMethod = {
+    car: { ...revenueByTypeMethod.car },
+    motorcycle: { ...revenueByTypeMethod.motorcycle },
+  }
   const refundRows = refundShifts.flatMap(shift => (shift.cardRefunds ?? [])
     .filter(refund => new Date(refund.refundedAt) >= todayStart && new Date(refund.refundedAt) <= now))
   const refundSessionIds = [...new Set(refundRows.map(refund => refund.sessionId))]
@@ -65,6 +69,11 @@ export async function GET() {
     const type = refundTypeBySession.get(String(refund.sessionId)) === 'motorcycle' ? 'motorcycle' : 'car'
     const method = refund.paymentMethod === 'cash' || refund.paymentMethod === 'qr' ? refund.paymentMethod : 'other'
     subtractRefund(type, method, refund.amount)
+  }
+  const refundByType = { car: 0, motorcycle: 0 }
+  for (const refund of refundRows) {
+    const type = refundTypeBySession.get(String(refund.sessionId)) === 'motorcycle' ? 'motorcycle' : 'car'
+    refundByType[type] += refund.amount
   }
   const revenue = Object.values(revenueByTypeMethod)
     .reduce((sum, byMethod) => sum + byMethod.cash + byMethod.qr + byMethod.other, 0)
@@ -114,6 +123,18 @@ export async function GET() {
       other: otherRevenue,
     },
     todayRevenueByTypeMethod: revenueByTypeMethod,
+    todayRevenueBreakdown: {
+      car: {
+        cash: grossRevenueByTypeMethod.car.cash,
+        qr: grossRevenueByTypeMethod.car.qr,
+        refund: -refundByType.car,
+      },
+      motorcycle: {
+        cash: grossRevenueByTypeMethod.motorcycle.cash,
+        qr: grossRevenueByTypeMethod.motorcycle.qr,
+        refund: -refundByType.motorcycle,
+      },
+    },
     // Today's entries split by vehicle type × billing mode (sums to todayEntries).
     todayEntriesByType: {
       car:                 carNormal,
