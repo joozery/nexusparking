@@ -32,6 +32,7 @@ interface Session {
 interface HistorySummary {
   active: number
   completed: number
+  revenueTotal: number
 }
 
 interface RefundRecord {
@@ -140,6 +141,7 @@ export default function HistoryPage() {
     try {
       const params = new URLSearchParams({ limit: String(LIMIT), page: String(page) })
       if (status)   params.set('status',   status)
+      if (status === 'lost') params.set('outstanding', '1')
       if (search)   params.set('plate',    search)
       if (dateFrom) params.set('dateFrom', dateFrom)
       if (dateTo)   params.set('dateTo',   dateTo)
@@ -190,7 +192,7 @@ export default function HistoryPage() {
   const countActive    = summary?.active ?? sessions.filter(s => s.status === 'active' && !isLost(s)).length
   const countCompleted = summary?.completed ?? sessions.filter(s => s.status === 'completed').length
   const countLost      = sessions.filter(isOutstandingLost).length
-  const totalRevenue   = sessions.filter(s => s.status !== 'active').reduce((a, s) => a + s.totalFee, 0)
+  const totalRevenue   = summary?.revenueTotal ?? sessions.filter(s => s.status !== 'active').reduce((a, s) => a + s.totalFee, 0)
   const showRefunds    = status === '' || status === 'completed'
   const visibleRefunds = showRefunds
     ? refunds.filter(r => !search || r.plate.toLowerCase().includes(search.toLowerCase()))
@@ -301,7 +303,7 @@ export default function HistoryPage() {
             { label: 'ในลานตอนนี้', value: countActive,    icon: CircleParking,   color: '#059669', bg: 'rgba(5,150,105,0.08)'  },
             { label: 'เสร็จสิ้น',   value: countCompleted, icon: ArrowUpRight,    color: '#A16207', bg: 'rgba(161,98,7,0.08)'  },
             { label: 'บัตรหาย',     value: countLost,      icon: AlertTriangle,   color: '#D97706', bg: 'rgba(245,158,11,0.08)' },
-            { label: 'รายได้สุทธิ (หน้านี้)', value: `฿${netRevenue.toLocaleString('th-TH')}`, detail: `ก่อนคืน ฿${totalRevenue.toLocaleString('th-TH')} · คืนเงิน ฿${totalRefunded.toLocaleString('th-TH')}`, icon: BadgeDollarSign, color: '#7C3AED', bg: 'rgba(124,58,237,0.08)' },
+            { label: 'รายได้สุทธิ', value: `฿${netRevenue.toLocaleString('th-TH')}`, detail: `ก่อนคืน ฿${totalRevenue.toLocaleString('th-TH')} · คืนเงิน ฿${totalRefunded.toLocaleString('th-TH')}`, icon: BadgeDollarSign, color: '#7C3AED', bg: 'rgba(124,58,237,0.08)' },
           ].map(({ label, value, detail, icon: Icon, color, bg }) => (
             <div key={label} className="bg-white rounded-xl px-4 py-3 flex items-center gap-3"
               style={{ border: '1px solid #E8ECF4' }}>
