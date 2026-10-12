@@ -34,6 +34,7 @@ interface Session {
   discountAmount?: number
   fineAmount?: number
   lostFine?: number
+  paymentMethod?: 'cash' | 'qr'
   status: 'active' | 'completed' | 'lost'
 }
 
@@ -218,16 +219,28 @@ export default function GatePage() {
     }
   }
 
-  function printReceipt(s: Session, currentFee?: number) {
+  async function printReceipt(s: Session, currentFee?: number) {
+    if (s.status !== 'completed') return
+    // The list response can be stale after checkout. Load the persisted receipt
+    // data so discounts/fines printed from Gate match the completed session.
+    let receiptSession = s
+    try {
+      const res = await fetch(`/api/sessions/${encodeURIComponent(s._id)}/receipt`, { cache: 'no-store' })
+      if (res.ok) receiptSession = { ...s, ...(await res.json()) }
+    } catch {
+      // Keep the currently displayed session as a safe fallback.
+    }
+    s = receiptSession
     const fee      = currentFee ?? s.totalFee ?? s.fee ?? 0
-    const parkingFee = s.status === 'active' ? fee : (s.fee ?? fee)
+    const parkingFee = s.fee ?? fee
     const discountAmount = s.discountAmount ?? 0
     const fineAmount = s.fineAmount ?? 0
     const lostFine = s.lostFine ?? 0
     const combinedFine = fineAmount + lostFine
-    const total = s.status === 'active' ? fee : (s.totalFee ?? fee)
+    const total = s.totalFee ?? fee
+    const paymentLabel = s.paymentMethod === 'qr' ? 'โอนเงิน' : s.paymentMethod === 'cash' ? 'เงินสด' : 'ยังไม่ชำระ'
     const entry    = new Date(s.entryTime)
-    const exit     = s.status !== 'active' ? new Date((s as Session & { exitTime?: string }).exitTime ?? Date.now()) : new Date()
+    const exit     = new Date((s as Session & { exitTime?: string }).exitTime ?? Date.now())
     const durationSeconds = Math.max(0, Math.floor((exit.getTime() - entry.getTime()) / 1000))
     const durationDays = Math.floor(durationSeconds / 86400)
     const durationHours = Math.floor(durationSeconds % 86400 / 3600)
@@ -258,14 +271,14 @@ export default function GatePage() {
   .bold { font-weight: 700; }
   .lg { font-size: 16px; }
   .xl { font-size: 22px; }
-  .sm { font-size: 10px; }
+  .sm { font-size: 12px; line-height: 1.5; }
   .logo { margin-bottom: 3px; }
   .logo img { width: 42mm; max-height: 18mm; object-fit: contain; }
   .dash { border-top: 1px dashed #000; margin: 4px 0; }
   .row { display: flex; justify-content: space-between; padding: 2px 0; }
   .row.total { font-weight: 700; font-size: 15px; border-top: 2px solid #000; padding-top: 4px; margin-top: 2px; }
   .badge { display: inline-block; border: 1px solid #000; border-radius: 3px; padding: 0 4px; font-size: 10px; }
-  .lost-row { color: #c00; font-weight: 700; }
+  .lost-row { color: #000; font-weight: 700; }
 </style>
 </head>
 <body>
@@ -278,20 +291,19 @@ export default function GatePage() {
 <div class="dash"></div>
 
 <div class="row"><span>เวลาเข้า</span><span class="bold">${fmt(entry)}</span></div>
-<div class="row"><span>เวลาออก</span><span class="bold">${s.status === 'active' ? '(ยังจอดอยู่)' : fmt(exit)}</span></div>
+<div class="row"><span>เวลาออก</span><span class="bold">${fmt(exit)}</span></div>
 
 <div class="dash"></div>
 
 <div class="row"><span>เวลาจอด</span><span class="bold">${duration}</span></div>
 
-<div class="dash"></div>
+<div class="row"><span>ค่าจอดรถ</span><span>${parkingFee.toLocaleString('th-TH')} บาท</span></div>
+<div class="row"><span>ส่วนลด</span><span>${discountAmount.toLocaleString('th-TH')} บาท</span></div>
+<div class="row lost-row"><span>ค่าปรับ</span><span>${combinedFine.toLocaleString('th-TH')} บาท</span></div>
 
-<div class="row"><span>ค่าจอดรถ</span><span>฿${parkingFee.toLocaleString('th-TH')} บาท</span></div>
-${discountAmount > 0 ? `<div class="row"><span>ส่วนลด</span><span>฿${discountAmount.toLocaleString('th-TH')} บาท</span></div>` : ''}
-<div class="row lost-row"><span>ค่าปรับ</span><span>฿${combinedFine.toLocaleString('th-TH')} บาท</span></div>
+<div class="row total"><span>ยอดชำระสุทธิ</span><span>${total.toLocaleString('th-TH')} บาท</span></div>
 
-<div class="row total"><span>ยอดชำระสุทธิ</span><span>฿${total.toLocaleString('th-TH')} บาท</span></div>
-
+<div class="row"><span>ชำระโดย</span><span class="bold">${paymentLabel}</span></div>
 <div class="dash"></div>
 <div class="center sm" style="margin:6px 0">หากมีข้อสงสัยหรือต้องการสอบถามข้อมูลเพิ่มเติม<br>Facebook:A20Park<br>ขอบคุณที่ใช้บริการ</div>
 </body>
@@ -523,7 +535,7 @@ ${discountAmount > 0 ? `<div class="row"><span>ส่วนลด</span><span>�
               </div>
             </div>
           ) : (
-            <div className="w-full min-w-0 md:flex-1 flex flex-col bg-white rounded-xl overflow-hidden min-h-[520px] md:min-h-0"
+            <div className="gate-detail-panel w-full min-w-0 md:flex-1 flex flex-col bg-white rounded-xl overflow-hidden min-h-[520px] md:min-h-0"
               style={{ border: '1px solid #E8ECF4' }}>
 
               {/* Yellow header */}
@@ -556,7 +568,8 @@ ${discountAmount > 0 ? `<div class="row"><span>ส่วนลด</span><span>�
                   </div>
                   <button
                     onClick={() => printReceipt(active, liveFee)}
-                    className="size-9 rounded-lg flex items-center justify-center bg-black/10 hover:bg-black/20 text-slate-900 transition-colors"
+                    disabled={active.status !== 'completed'}
+                    className="size-9 rounded-lg flex items-center justify-center bg-black/10 hover:bg-black/20 text-slate-900 transition-colors disabled:cursor-not-allowed disabled:opacity-40"
                     style={{ border: '1px solid rgba(15,23,42,0.15)' }}
                     title="พิมพ์ใบเสร็จ">
                     <Printer className="size-4 text-slate-900" />
@@ -586,7 +599,7 @@ ${discountAmount > 0 ? `<div class="row"><span>ส่วนลด</span><span>�
               </div>
 
               {/* Fee breakdown */}
-              <div className="flex-1 px-6 py-5">
+              <div className="flex-1 min-h-0 overflow-y-auto px-4 md:px-6 py-5">
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">รายละเอียดค่าบริการ</p>
                 <div className="space-y-2.5">
                   {active.cardType !== 'overnight' ? (
@@ -653,7 +666,7 @@ ${discountAmount > 0 ? `<div class="row"><span>ส่วนลด</span><span>�
               </div>
 
               {/* Actions */}
-              <div className="shrink-0 px-4 md:px-6 pb-5 flex flex-wrap items-center gap-3"
+              <div className="sticky bottom-0 z-10 shrink-0 px-4 md:px-6 pb-5 flex flex-wrap items-center gap-3 bg-white/95 backdrop-blur-sm md:static md:bg-transparent md:backdrop-blur-none"
                 style={{ borderTop: '1px solid #E8ECF4', paddingTop: '16px' }}>
                 <button onClick={openLostCardFromActive}
                   disabled={active?.status !== 'active'}
@@ -665,7 +678,8 @@ ${discountAmount > 0 ? `<div class="row"><span>ส่วนลด</span><span>�
                 </button>
                 <button
                   onClick={() => printReceipt(active, liveFee)}
-                  className="h-10 flex-1 min-w-[120px] px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-colors"
+                  disabled={active.status !== 'completed'}
+                  className="h-10 flex-1 min-w-[120px] px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-colors disabled:cursor-not-allowed disabled:opacity-40"
                   style={{ background: '#F8FAFF', color: '#64748B', border: '1px solid #E8ECF4' }}
                   onMouseEnter={e => { e.currentTarget.style.background = '#F1F5F9' }}
                   onMouseLeave={e => { e.currentTarget.style.background = '#F8FAFF' }}>

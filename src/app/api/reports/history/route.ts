@@ -18,8 +18,11 @@ export async function GET(req: NextRequest) {
   catch { return NextResponse.json({ error: 'ช่วงวันที่ไม่ถูกต้อง' }, { status: 400 }) }
   const reportByExit = req.nextUrl.searchParams.get('reportMode') === 'revenue'
   if (reportByExit && (req.nextUrl.searchParams.has('dateFrom') || req.nextUrl.searchParams.has('dateTo'))) {
-    const thaiDate = (value: string, endOfDay = false) =>
-      new Date(`${value}T${endOfDay ? '23:59:59.999' : '00:00:00.000'}+07:00`)
+    const thaiDate = (value: string, endOfDay = false) => {
+      if (value.endsWith('Z') || /[+-]\d{2}:\d{2}$/.test(value)) return new Date(value)
+      if (value.includes('T')) return new Date(`${value}:00+07:00`)
+      return new Date(`${value}T${endOfDay ? '23:59:59.999' : '00:00:00.000'}+07:00`)
+    }
     const dateFrom = req.nextUrl.searchParams.get('dateFrom')
     const dateTo = req.nextUrl.searchParams.get('dateTo')
     const exitRange: Record<string, Date> = {}
@@ -29,6 +32,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'invalid report date range' }, { status: 400 })
     }
     delete filter.entryTime
+    delete filter.$or
     filter.exitTime = exitRange
   }
   await connectDB()

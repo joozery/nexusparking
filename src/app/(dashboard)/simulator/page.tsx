@@ -1294,7 +1294,7 @@ export default function SimulatorPage() {
         </span>
       </header>
 
-      <div className="flex-1 overflow-auto p-5 space-y-5">
+      <div className="flex-1 overflow-auto p-3 md:p-5 space-y-5">
         {loading ? <p role="status">กำลังโหลดอัตราค่าจอดและส่วนลด…</p> : loadError ? (
           <div role="alert" className="p-4 bg-red-50 text-red-700 rounded-lg">{loadError} <button className="underline" onClick={() => window.location.reload()}>ลองใหม่</button></div>
         ) : <>

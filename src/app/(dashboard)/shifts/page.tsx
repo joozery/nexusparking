@@ -4,9 +4,10 @@ import { useState, useEffect, useCallback } from 'react'
 import {
   Clock, LogIn, LogOut, Banknote, Smartphone,
   ChevronDown, ChevronUp, Car, Bike, Moon,
-  RefreshCw, CalendarDays, User, Tag,
+  RefreshCw, User, Tag,
 } from 'lucide-react'
 import { calcFeeBreakdown, type OvernightConfig } from '@/lib/calcFee'
+import { DateTimeRangeFilter } from '@/components/ui/DateTimeRangeFilter'
 
 const ENTRY_TYPE_META = {
   car:                 { label: 'รถยนต์',            icon: Car,  color: '#A16207' },
@@ -301,7 +302,7 @@ function ShiftItem({ shift }: { shift: Shift }) {
   return (
     <div className="rounded-xl overflow-hidden" style={{ border: '1px solid #E8ECF4' }}>
       <button onClick={() => setOpen(v => !v)}
-        className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-slate-50 transition-colors">
+        className="shift-item-header w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-slate-50 transition-colors">
 
         <div className="shrink-0 size-2 rounded-full"
           style={{ background: isActive ? '#10B981' : '#CBD5E1' }} />
@@ -319,7 +320,7 @@ function ShiftItem({ shift }: { shift: Shift }) {
           </p>
         </div>
 
-        <div className="flex items-center gap-3 shrink-0 text-center">
+        <div className="shift-item-metrics flex items-center gap-3 shrink-0 text-center">
           {/* รถค้างเริ่มกะ */}
           <div>
             <p className="text-[9px] text-slate-400">รถค้างต้นกะ</p>
@@ -388,7 +389,7 @@ function ExternalOperatorCard({ operatorName, sessions }: { operatorName: string
   const qr = total - cash
   return (
     <div className="bg-white rounded-2xl overflow-hidden" style={{ border: '1px solid #E8ECF4', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
-      <button onClick={() => setOpen(value => !value)} className="w-full flex flex-wrap items-center gap-4 px-5 py-4 text-left hover:bg-slate-50/60 transition-colors">
+      <button onClick={() => setOpen(value => !value)} className="shift-external-header w-full flex flex-wrap items-center gap-4 px-5 py-4 text-left hover:bg-slate-50/60 transition-colors">
         <div className="size-10 rounded-xl flex items-center justify-center text-white text-sm font-black shrink-0" style={{ background: '#64748B' }}>
           <User className="size-4" />
         </div>
@@ -399,7 +400,7 @@ function ExternalOperatorCard({ operatorName, sessions }: { operatorName: string
           </div>
           <p className="text-xs text-slate-400 mt-0.5">รายการนอกกะ · รถออก {sessions.length} คัน</p>
         </div>
-        <div className="flex items-center gap-4 shrink-0">
+        <div className="shift-external-revenue flex items-center gap-4 shrink-0">
           <div className="text-right"><p className="text-[10px] text-slate-400 font-medium">เงินสด</p><p className="text-sm font-black text-slate-700">฿{cash}</p></div>
           <div className="text-right"><p className="text-[10px] text-slate-400 font-medium">โอน</p><p className="text-sm font-black text-slate-700">฿{qr}</p></div>
           <div className="px-4 py-2 rounded-xl text-right" style={{ background: 'rgba(100,116,139,0.1)' }}>
@@ -440,7 +441,7 @@ function OperatorCard({ group }: { group: OperatorGroup }) {
 
       {/* Operator header */}
       <button onClick={() => setOpen(v => !v)}
-        className="w-full flex flex-wrap items-center gap-4 px-5 py-4 text-left hover:bg-slate-50/60 transition-colors">
+        className="shift-operator-header w-full flex flex-wrap items-center gap-4 px-5 py-4 text-left hover:bg-slate-50/60 transition-colors">
 
         {/* Avatar */}
         <div className="size-10 rounded-xl flex items-center justify-center text-white text-sm font-black shrink-0"
@@ -449,7 +450,7 @@ function OperatorCard({ group }: { group: OperatorGroup }) {
         </div>
 
         {/* Name + shift count */}
-        <div className="flex-1 min-w-0">
+        <div className="shift-operator-name flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <p className="text-base font-black text-slate-900">{group.operatorName}</p>
             {group.hasActive && (
@@ -466,7 +467,7 @@ function OperatorCard({ group }: { group: OperatorGroup }) {
         </div>
 
         {/* Revenue summary */}
-        <div className="flex w-full md:w-auto items-center justify-end gap-4 shrink-0">
+        <div className="shift-operator-revenue flex w-full md:w-auto items-center justify-end gap-4 shrink-0">
           <div className="text-right">
             <p className="text-[10px] text-slate-400 font-medium flex items-center gap-1 justify-end">
               <Banknote className="size-3" /> เงินสด
@@ -693,14 +694,7 @@ export default function ShiftsPage() {
           </div>
         </div>
         <div className="flex w-full md:w-auto items-center justify-end gap-2 flex-wrap">
-          <CalendarDays className="size-3.5 text-slate-400" />
-          <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
-            className="h-8 px-2 text-xs rounded-lg outline-none text-slate-700"
-            style={{ border: '1px solid #E2E8F0', background: '#F8FAFF' }} />
-          <span className="text-slate-400 text-xs">—</span>
-          <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
-            className="h-8 px-2 text-xs rounded-lg outline-none text-slate-700"
-            style={{ border: '1px solid #E2E8F0', background: '#F8FAFF' }} />
+          <DateTimeRangeFilter dateFrom={dateFrom} dateTo={dateTo} onChange={(from, to) => { setDateFrom(from); setDateTo(to) }} />
           <button onClick={fetchShifts}
             className="size-8 rounded-lg flex items-center justify-center"
             style={{ background: '#F1F5F9', border: '1px solid #E2E8F0' }}>

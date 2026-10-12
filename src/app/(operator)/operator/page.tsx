@@ -859,7 +859,7 @@ export default function OperatorPage() {
   }, [checkInOpen, checkOutOpen, lostOpen, shiftEnding, shift, plateMatches, returnCard, shiftReportOpen, warning, closedShift, openedShift])
 
   return (
-    <div className="h-screen flex flex-col bg-[#F0F4FF]">
+    <div className="min-h-screen h-auto md:h-screen flex flex-col bg-[#F0F4FF] overflow-y-auto md:overflow-hidden">
       {/* Hidden input — always focused when no dialog is open, captures card-reader keystrokes */}
       <input
         ref={scanInputRef}
@@ -914,7 +914,7 @@ export default function OperatorPage() {
 
       {/* ─── Header ─── */}
       <header
-        className="shrink-0 h-14 bg-white flex items-center justify-between px-6"
+        className="shrink-0 min-h-14 h-auto bg-white flex flex-wrap items-center justify-between gap-2 px-3 md:px-6 py-2"
         style={{ borderBottom: '1px solid #E8ECF4', boxShadow: '0 1px 6px rgba(0,0,0,0.05)' }}
       >
         <div className="flex items-center gap-3">
@@ -952,11 +952,11 @@ export default function OperatorPage() {
         <button className="ml-3 underline font-bold" onClick={() => { void fetchData() }}>ลองใหม่</button>
       </div>}
       {/* ─── Body ─── */}
-      <div className="flex-1 min-h-0 p-3 flex gap-3">
+      <div className="flex-1 min-h-0 p-2 md:p-3 flex flex-col md:flex-row gap-3">
 
         {/* ── Camera strip + fleet status bar — main area, fills all available space ── */}
         <div className="flex-1 min-w-0 min-h-0 flex flex-col gap-2">
-          <div className="flex-1 min-h-0 flex flex-col rounded-2xl overflow-hidden">
+          <div className="h-64 md:flex-1 md:min-h-0 flex flex-col rounded-2xl overflow-hidden">
             <CctvStrip
               isExit={isExitView}
               onToggleExit={() => setIsExitView(v => !v)}
@@ -968,7 +968,7 @@ export default function OperatorPage() {
         </div>
 
         {/* ── Right sidebar: check-in / check-out / queue ── */}
-        <div className="w-75 shrink-0 flex flex-col gap-2 min-h-0">
+        <div className="w-full md:w-75 shrink-0 flex flex-col gap-2 min-h-0">
 
           {/* Quick plate lookup — auto-route: active session found = checkout,
               no session + exit camera view = lost card, no session + lot full = queue, else = checkin */}

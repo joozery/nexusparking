@@ -42,22 +42,36 @@ const STATUS: Record<string, string> = { active: 'อยู่ในลาน', 
 export const historyDate = (value?: string) => value ? new Date(value).toLocaleString('th-TH', { timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }) : '—'
 const historyDateOnly = (value?: string) => value ? new Date(value).toLocaleDateString('th-TH', { timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit' }) : ''
 const historyTimeOnly = (value?: string) => value ? new Date(value).toLocaleTimeString('th-TH', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }) : ''
+const parkingDuration = (entryTime: string, exitTime: string | undefined, minutes: number, refund: boolean) => {
+  if (refund) return ''
+  const entry = new Date(entryTime).getTime()
+  const exit = exitTime ? new Date(exitTime).getTime() : NaN
+  const totalSeconds = Number.isFinite(entry) && Number.isFinite(exit) && exit >= entry
+    ? Math.floor((exit - entry) / 1000)
+    : Number.isFinite(minutes) && minutes >= 0 ? Math.floor(minutes * 60) : NaN
+  if (!Number.isFinite(totalSeconds) || totalSeconds < 0) return ''
+  const days = Math.floor(totalSeconds / 86400)
+  const hours = Math.floor((totalSeconds % 86400) / 3600)
+  const remainingMinutes = Math.floor((totalSeconds % 3600) / 60)
+  const seconds = totalSeconds % 60
+  return `${days} วัน ${hours} ชม. ${remainingMinutes} นาที ${seconds} วินาที`
+}
 export function historyValues(r: HistoryExportRow) {
   const refund = r.transactionType === 'refund'
   return [r.plate, refund ? 'คืนค่าปรับบัตรหาย' : TYPES[r.cardType] ?? r.cardType, r.cardUid,
-    historyDateOnly(r.entryTime), historyTimeOnly(r.entryTime), historyDateOnly(r.exitTime), historyTimeOnly(r.exitTime),
+    historyDateOnly(r.entryTime), historyTimeOnly(r.entryTime), historyDateOnly(r.exitTime), historyTimeOnly(r.exitTime), parkingDuration(r.entryTime, r.exitTime, r.durationMin, refund),
     refund ? 0 : r.fee, r.discountName ?? '', r.discountAmount ?? 0, r.fineName ?? '', r.fineAmount ?? 0,
     refund ? 'TRUE' : r.lostCard || r.lostFine > 0 ? 'TRUE' : 'FALSE', refund ? -(r.refundAmount ?? 0) : r.lostFine ?? 0,
     r.fineAmount && r.fineAmount > 0 ? 'TRUE' : 'FALSE', r.fineAmount ?? 0,
     r.paymentMethod === 'qr' ? 'เงินโอน' : 'เงินสด', refund ? -(r.refundAmount ?? 0) : r.totalFee,
     refund ? `${r.note ?? 'คืนค่าปรับบัตรหาย'}${r.originalSessionId ? ` · อ้างอิง ${r.originalSessionId}` : ''}${r.refundOperatorName ? ` · ผู้คืนเงิน ${r.refundOperatorName}` : ''}` : r.note ?? '']
 }
-const HEADERS = ['ทะเบียน', 'ประเภท (car/motorcycle/overnight)', 'เลขบัตร UID', 'วันที่เข้า (DD/MM/YYYY)', 'เวลาเข้า (HH:MM:SS)', 'วันที่ออก (DD/MM/YYYY)', 'เวลาออก (HH:MM:SS)', 'ค่าจอดรถ (บาท)', 'ชื่อส่วนลดร้านค้า (ไม่มีบัตร)', 'ส่วนลดร้านค้า (บาท)', 'ชื่อค่าปรับนอกเวลา', 'ค่าปรับนอกเวลา (บาท)', 'บัตรหาย (true/false)', 'ค่าปรับบัตรหาย (บาท)', 'ค่าปรับนอกเวลา (true/false)', 'ค่าปรับนอกเวลา (บาท)', 'Cash/QR', 'จำนวนเงินสุทธิ (บาท)', 'หมายเหตุ/รายการ']
-const REVENUE_HEADERS = ['ทะเบียน', 'ประเภท (car/motorcycle/overnight)', 'ประเภทรายการ', 'เลขบัตร UID', 'วันที่เข้า (DD/MM/YYYY)', 'เวลาเข้า (HH:MM:SS)', 'วันที่ออก (DD/MM/YYYY)', 'เวลาออก (HH:MM:SS)', 'ค่าจอดรถ (บาท)', 'ชื่อค่าปรับ', 'ค่าปรับ (บาท)', 'ชื่อส่วนลดรายคน / โรงแรม', 'ส่วนลดรายคน / โรงแรม (บาท)', 'บัตรหาย (true/false)', 'ค่าปรับบัตรหาย (บาท)', 'Cash/QR', 'จำนวนเงินสุทธิ (บาท)', 'หมายเหตุ/รายการ']
+const HEADERS = ['ทะเบียน', 'ประเภท (car/motorcycle/overnight)', 'เลขบัตร UID', 'วันที่เข้า (DD/MM/YYYY)', 'เวลาเข้า (HH:MM:SS)', 'วันที่ออก (DD/MM/YYYY)', 'เวลาออก (HH:MM:SS)', 'เวลาที่จอด', 'ค่าจอดรถ (บาท)', 'ชื่อส่วนลดร้านค้า (ไม่มีบัตร)', 'ส่วนลดร้านค้า (บาท)', 'ชื่อค่าปรับนอกเวลา', 'ค่าปรับนอกเวลา (บาท)', 'บัตรหาย (true/false)', 'ค่าปรับบัตรหาย (บาท)', 'ค่าปรับนอกเวลา (true/false)', 'ค่าปรับนอกเวลา (บาท)', 'Cash/QR', 'จำนวนเงินสุทธิ (บาท)', 'หมายเหตุ/รายการ']
+const REVENUE_HEADERS = ['ทะเบียน', 'ประเภท (car/motorcycle/overnight)', 'ประเภทรายการ', 'เลขบัตร UID', 'วันที่เข้า (DD/MM/YYYY)', 'เวลาเข้า (HH:MM:SS)', 'วันที่ออก (DD/MM/YYYY)', 'เวลาออก (HH:MM:SS)', 'เวลาที่จอด', 'ค่าจอดรถ (บาท)', 'ชื่อค่าปรับ', 'ค่าปรับ (บาท)', 'ชื่อส่วนลดรายคน / โรงแรม', 'ส่วนลดรายคน / โรงแรม (บาท)', 'บัตรหาย (true/false)', 'ค่าปรับบัตรหาย (บาท)', 'Cash/QR', 'จำนวนเงินสุทธิ (บาท)', 'หมายเหตุ/รายการ']
 const OPERATOR_HEADER = '\u0e0a\u0e37\u0e48\u0e2d\u0e1e\u0e19\u0e31\u0e01\u0e07\u0e32\u0e19'
 const exportHeaders = (options: HistoryExportOptions) => options.reportKind === 'revenue' ? [...REVENUE_HEADERS, OPERATOR_HEADER] : HEADERS
 const exportValues = (row: HistoryExportRow, options: HistoryExportOptions) => options.reportKind === 'revenue'
-  ? (() => { const values = historyValues(row); return [values[0], values[1], row.transactionType === 'refund' ? '' : row.reportCategory === 'overnight' ? 'รายการค้างคืน' : 'รายการปกติ', values[2], values[3], values[4], values[5], values[6], values[7], values[10], values[11], values[8], values[9], values[12], values[13], values[16], values[17], values[18], row.transactionType === 'refund' ? row.refundOperatorName ?? '' : row.operatorName ?? ''] })()
+  ? (() => { const values = historyValues(row); return [values[0], values[1], row.transactionType === 'refund' ? '' : row.reportCategory === 'overnight' ? 'รายการค้างคืน' : 'รายการปกติ', values[2], values[3], values[4], values[5], values[6], values[7], values[11], values[12], values[9], values[10], values[13], values[14], values[17], values[18], values[19], row.transactionType === 'refund' ? row.refundOperatorName ?? '' : row.operatorName ?? ''] })()
   : historyValues(row)
 const pause = () => new Promise<void>(resolve => setTimeout(resolve, 0))
 
@@ -110,7 +124,7 @@ export async function buildHistoryWorkbook(workbook: Workbook, rows: HistoryExpo
     const r = rows[i], row = sheet.addRow(exportValues(r, options))
     row.alignment = { vertical: 'middle', wrapText: true }
     row.height = options.includePhotos ? 120 : 36
-    for (const col of (options.reportKind === 'revenue' ? [9, 10, 12, 14, 16, 18] : [8, 10, 12, 14, 16, 18])) row.getCell(col).numFmt = '#,##0.00'
+    for (const col of (options.reportKind === 'revenue' ? [10, 12, 14, 16, 18] : [9, 11, 13, 15, 17, 19])) row.getCell(col).numFmt = '#,##0.00'
     if (options.includePhotos && r.transactionType !== 'refund') {
       for (const [index, type] of (['entry', 'exit'] as const).entries()) {
         const image = await loadPhoto(r, type, options.signal)
@@ -148,8 +162,8 @@ export async function exportHistoryPDF(rows: HistoryExportRow[], options: Histor
   const ctx = canvas.getContext('2d')!
   const font = getComputedStyle(document.body).fontFamily
   const widths = options.reportKind === 'revenue'
-    ? [100, 175, 150, 155, 125, 110, 125, 110, 115, 180, 125, 220, 145, 130, 140, 105, 145, 220]
-    : [100, 175, 155, 125, 110, 125, 110, 115, 220, 125, 180, 125, 130, 140, 155, 140, 105, 145, 220]
+    ? [100, 175, 150, 155, 125, 110, 125, 110, 125, 115, 180, 125, 220, 145, 130, 140, 105, 145, 220]
+    : [100, 175, 155, 125, 110, 125, 110, 125, 115, 220, 125, 180, 125, 130, 140, 155, 140, 105, 145, 220]
   const renderedWidths = options.reportKind === 'revenue' ? [...widths, 150] : widths
   const left = 35, top = 185, headerHeight = 105, rowHeight = 62, bottom = 2025
   const pageRows = Math.max(1, Math.floor((bottom - top - headerHeight) / rowHeight))
@@ -187,7 +201,7 @@ export async function exportHistoryPDF(rows: HistoryExportRow[], options: Histor
     pageRowsData.forEach((row, rowIndex) => {
       x = left
       const values = exportValues(row, options)
-      values.forEach((value, index) => drawCell(String(value ?? ''), renderedWidths[index], top + headerHeight + rowIndex * rowHeight, rowHeight, false, (options.reportKind === 'revenue' ? [8, 10, 12, 14, 16] : [7, 9, 11, 13, 15, 17]).includes(index)))
+      values.forEach((value, index) => drawCell(String(value ?? ''), renderedWidths[index], top + headerHeight + rowIndex * rowHeight, rowHeight, false, (options.reportKind === 'revenue' ? [9, 11, 13, 15, 17] : [8, 10, 12, 14, 16, 18]).includes(index)))
     })
     ctx.fillStyle = '#6B7280'; ctx.font = `18px ${font}`
     ctx.fillText(`หน้า ${pageIndex + 1}`, left, 2070)

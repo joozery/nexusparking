@@ -22,6 +22,7 @@ import { SessionHistory } from '@/components/reports/SessionHistory'
 import type { ExportColumn } from '@/lib/reportExport'
 import type { HistoryExportRow } from '@/lib/sessionHistoryExport'
 import { exportRevenueSummaryExcel, exportRevenueSummaryPDF } from '@/lib/revenueSummaryExport'
+import { DateTimeRangeFilter } from '@/components/ui/DateTimeRangeFilter'
 
 interface MonthlyRow { _id: string; total: number; count: number; car: number; motorcycle: number; carOvernight: number; motorcycleOvernight: number; overnight: number; overnightCount: number; lostFines: number }
 interface DailyRow   { _id: string; total: number; count: number; car: number; motorcycle: number; carOvernight: number; motorcycleOvernight: number; overnight: number; overnightCount: number; lostFines: number; lostCardCount: number; lostFineRefunds?: number }
@@ -97,6 +98,7 @@ const hourlyChartConfig = {
 
 const fmt         = (n: number) => n.toLocaleString('th-TH')
 const toInputDate = (d: Date)   => d.toISOString().slice(0, 10)
+const toInputDateTime = (d: Date, endOfDay = false) => `${toInputDate(d)}T${endOfDay ? '23:59' : '00:00'}`
 const fmtDurationMin = (min: number) => {
   const h = Math.floor(min / 60), m = Math.round(min % 60)
   return h > 0 ? `${h}ชม. ${m}น.` : `${m}น.`
@@ -166,8 +168,8 @@ function DailyRevenueTable({ rows, summary }: { rows: DailyRow[]; summary: Summa
 }
 
 export default function ReportsPage() {
-  const today   = toInputDate(new Date())
-  const weekAgo = toInputDate(new Date(Date.now() - 6 * 86400000))
+  const today   = toInputDateTime(new Date(), true)
+  const weekAgo = toInputDateTime(new Date(Date.now() - 6 * 86400000))
 
   const [tab,         setTab]         = useState<'revenue' | 'history'>('revenue')
   const [period,      setPeriod]      = useState<PeriodKey>('week')
@@ -213,8 +215,8 @@ export default function ReportsPage() {
         else exportRevenueSummaryPDF(summaryData)
         return
       }
-      const from = data.startDate.slice(0, 10)
-      const to = data.endDate.slice(0, 10)
+      const from = period === 'custom' ? dateFrom : data.startDate
+      const to = period === 'custom' ? dateTo : data.endDate
       const qs = new URLSearchParams({ dateFrom: from, dateTo: to, reportMode: 'revenue' })
       const [historyResponse, refundResponse] = await Promise.all([
         fetch(`/api/reports/history?${qs}`),
@@ -258,7 +260,7 @@ export default function ReportsPage() {
       const { exportHistoryExcel, exportHistoryPDF } = await import('@/lib/sessionHistoryExport')
       const options = {
         includePhotos: false,
-        description: `รายการจอดและคืนค่าปรับ · ${from} ถึง ${to}`,
+        description: `รายการจอดและคืนค่าปรับ · ${from.replace('T', ' ')} ถึง ${to.replace('T', ' ')}`,
         signal: new AbortController().signal,
         onProgress: () => undefined,
         reportKind: 'revenue' as const,
@@ -411,32 +413,10 @@ export default function ReportsPage() {
         </div>
 
         {tab === 'revenue' && period === 'custom' && (
-          <div className="flex items-center gap-3 px-6 pb-3">
-            <div className="flex items-center gap-2">
-              <label className="text-[10px] font-semibold text-slate-400 whitespace-nowrap">ตั้งแต่</label>
-              <input type="date" value={dateFrom} max={dateTo || today}
-                onChange={e => setDateFrom(e.target.value)}
-                className="h-8 px-3 rounded-lg text-xs text-slate-700 outline-none"
-                style={{ border: '1.5px solid #E8ECF4', background: '#FAFBFF' }}
-                onFocus={e => e.currentTarget.style.borderColor = '#A16207'}
-                onBlur={e => e.currentTarget.style.borderColor = '#E8ECF4'} />
-            </div>
-            <span className="text-slate-300">—</span>
-            <div className="flex items-center gap-2">
-              <label className="text-[10px] font-semibold text-slate-400 whitespace-nowrap">ถึง</label>
-              <input type="date" value={dateTo} min={dateFrom} max={today}
-                onChange={e => setDateTo(e.target.value)}
-                className="h-8 px-3 rounded-lg text-xs text-slate-700 outline-none"
-                style={{ border: '1.5px solid #E8ECF4', background: '#FAFBFF' }}
-                onFocus={e => e.currentTarget.style.borderColor = '#A16207'}
-                onBlur={e => e.currentTarget.style.borderColor = '#E8ECF4'} />
-            </div>
-            <button onClick={applyCustom} disabled={!dateFrom || !dateTo || loading}
-              className="h-8 px-4 rounded-lg text-xs font-semibold text-black flex items-center gap-1.5 disabled:opacity-50 hover:opacity-90 transition-opacity"
-              style={{ background: '#EAB308' }}>
-              {loading ? <RefreshCw className="size-3 animate-spin" /> : <ArrowUpRight className="size-3" />}
-              ดูรายงาน
-            </button>
+          <div className="px-6 pb-3">
+            <DateTimeRangeFilter dateFrom={dateFrom} dateTo={dateTo}
+              onChange={(from, to) => { setDateFrom(from); setDateTo(to) }}
+              onApply={applyCustom} />
           </div>
         )}
       </header>

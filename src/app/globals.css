@@ -153,11 +153,154 @@
   header {
     padding-left: 4.25rem !important;
     padding-right: 0.75rem !important;
+    height: auto !important;
+    min-height: 3.5rem;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  header > div {
+    min-width: 0;
+    height: auto !important;
+    flex-wrap: wrap;
   }
 
   .grid-cols-4,
   .grid-cols-5,
   .grid-cols-6 {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .grid-cols-3 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .sidebar-quick-stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .gate-detail-panel {
+    min-height: calc(100dvh - 7rem) !important;
+  }
+
+  .history-session-content,
+  .history-refund-content {
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.65rem;
+  }
+
+  .history-leading {
+    width: auto !important;
+    flex: 1 1 45%;
+  }
+
+  .history-badges {
+    width: auto !important;
+    flex: 0 0 auto;
+  }
+
+  .history-timeline,
+  .history-refund-detail {
+    order: 3;
+    flex: 1 1 100% !important;
+    width: 100%;
+  }
+
+  .history-photos {
+    order: 4;
+    width: auto !important;
+  }
+
+  .history-amount {
+    order: 5;
+    width: auto !important;
+    margin-left: auto;
+  }
+
+  .history-actions,
+  .history-spacer {
+    order: 6;
+    width: auto !important;
+  }
+
+  .history-filter-bar {
+    padding-left: 0.75rem !important;
+    padding-right: 0.75rem !important;
+    align-items: stretch;
+  }
+
+  .history-search-input {
+    width: 100% !important;
+  }
+
+  .history-filter-bar > .relative:first-child,
+  .history-status-tabs {
+    flex: 1 1 100%;
+  }
+
+  .history-status-tabs > button {
+    flex: 1 1 0;
+    min-width: 0;
+    padding-left: 0.25rem !important;
+    padding-right: 0.25rem !important;
+  }
+
+  .shifts-date-controls {
+    justify-content: flex-start !important;
+  }
+
+  .shifts-date-controls input[type='date'] {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  .shift-operator-header {
+    display: grid !important;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 0.75rem;
+  }
+
+  .shift-operator-name {
+    min-width: 0;
+  }
+
+  .shift-operator-revenue {
+    grid-column: 1 / -1;
+    width: 100% !important;
+    justify-content: space-between !important;
+    gap: 0.5rem !important;
+  }
+
+  .shift-operator-header > svg {
+    grid-column: 3;
+    grid-row: 1;
+  }
+
+  .shift-external-header {
+    gap: 0.75rem;
+  }
+
+  .shift-external-revenue {
+    width: 100%;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+
+  .shift-item-header {
+    flex-wrap: wrap;
+  }
+
+  .shift-item-metrics {
+    width: 100%;
+    justify-content: space-between;
+    gap: 0.5rem !important;
+    padding-top: 0.25rem;
+  }
+
+  .cctv-camera-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+    grid-template-rows: repeat(6, minmax(220px, auto)) !important;
+    height: auto !important;
   }
 }

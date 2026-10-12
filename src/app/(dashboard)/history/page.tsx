@@ -288,7 +288,7 @@ export default function HistoryPage() {
         </div>
 
         {/* ── FILTER BAR ── */}
-        <div className="px-6 pb-3 flex items-center gap-2 flex-wrap">
+        <div className="history-filter-bar px-6 pb-3 flex items-center gap-2 flex-wrap">
           {/* Search */}
           <div className="relative">
             <Search className="size-3 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -296,7 +296,7 @@ export default function HistoryPage() {
               value={search}
               onChange={e => { setSearch(e.target.value); setPage(1) }}
               placeholder="ค้นหาทะเบียน..."
-              className="h-8 pl-8 pr-3 rounded-lg text-xs text-slate-700 outline-none w-44"
+              className="history-search-input h-8 pl-8 pr-3 rounded-lg text-xs text-slate-700 outline-none w-44"
               style={{ background: '#F8FAFF', border: '1px solid #E8ECF4' }}
               onFocus={e => e.currentTarget.style.borderColor = '#A16207'}
               onBlur={e => e.currentTarget.style.borderColor = '#E8ECF4'}
@@ -304,11 +304,11 @@ export default function HistoryPage() {
           </div>
 
           {/* Status tabs */}
-          <div className="flex items-center rounded-lg p-0.5 gap-0.5" style={{ background: '#F1F5F9' }}>
+          <div className="history-status-tabs flex items-center rounded-lg p-0.5 gap-0.5" style={{ background: '#F1F5F9' }}>
             {STATUS_TABS.map(t => (
               <button key={t.key}
                 onClick={() => { setStatus(t.key); setPage(1) }}
-                className="h-7 px-3 rounded-md text-[11px] font-semibold transition-all"
+                className="h-7 px-3 rounded-md text-[11px] font-semibold transition-all whitespace-nowrap"
                 style={status === t.key
                   ? { background: 'white', color: '#A16207', boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }
                   : { color: '#94A3B8' }}>
@@ -459,11 +459,11 @@ export default function HistoryPage() {
                   const tm = TYPE_META[refund.cardType]
                   return (
                     <div key={refund.id}
-                      className="bg-white rounded-xl overflow-hidden flex"
+                      className="history-refund-item bg-white rounded-xl overflow-hidden flex"
                       style={{ border: '1px solid #F5D0A9' }}>
                       <div className="w-1 shrink-0" style={{ background: '#EA580C' }} />
-                      <div className="flex-1 flex items-center gap-4 px-4 py-3 min-w-0">
-                        <div className="flex items-center gap-3 w-36 shrink-0">
+                      <div className="history-refund-content flex-1 flex items-center gap-4 px-4 py-3 min-w-0">
+                        <div className="history-leading flex items-center gap-3 w-36 shrink-0">
                           <div className="size-9 rounded-lg flex items-center justify-center shrink-0" style={{ background: tm.bg }}>
                             <ArrowDownLeft className="size-4" style={{ color: '#EA580C' }} strokeWidth={1.75} />
                           </div>
@@ -472,18 +472,18 @@ export default function HistoryPage() {
                             <p className="text-[10px] text-slate-400 truncate">คืนบัตร/คืนค่าปรับ</p>
                           </div>
                         </div>
-                        <div className="flex items-center gap-1.5 w-40 shrink-0">
+                        <div className="history-badges flex items-center gap-1.5 w-40 shrink-0">
                           <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: 'rgba(234,88,12,0.1)', color: '#EA580C' }}>รายการคืนเงิน</span>
                         </div>
-                        <div className="flex-1 min-w-0">
+                        <div className="history-refund-detail flex-1 min-w-0">
                           <p className="text-xs font-semibold text-slate-700">คืนเงินวันที่ {fmtDate(refund.refundedAt)} เวลา {fmtTime(refund.refundedAt)}</p>
                           <p className="text-[10px] text-slate-400">{tm.label}{refund.operatorName ? ` · ${refund.operatorName}` : ''}</p>
                         </div>
-                        <div className="text-right w-20 shrink-0">
+                        <div className="history-amount text-right w-20 shrink-0">
                           <p className="text-sm font-bold" style={{ color: '#EA580C' }}>-{refund.amount.toLocaleString('th-TH')} บาท</p>
                           <p className="text-[10px] text-slate-400">{refund.paymentMethod === 'cash' ? 'เงินสด' : 'เงินโอน'}</p>
                         </div>
-                        <div className="w-14 shrink-0" />
+                        <div className="history-spacer w-14 shrink-0" />
                       </div>
                     </div>
                   )
@@ -498,7 +498,7 @@ export default function HistoryPage() {
 
                 return (
                   <div key={s._id}
-                    className="bg-white rounded-xl overflow-hidden flex group transition-shadow hover:shadow-sm"
+                    className="history-session-item bg-white rounded-xl overflow-hidden flex group transition-shadow hover:shadow-sm"
                     style={{
                       border: `1px solid ${isConfirm ? 'rgba(220,38,38,0.25)' : '#E8ECF4'}`,
                       background: isConfirm ? 'rgba(220,38,38,0.02)' : 'white',
@@ -507,10 +507,10 @@ export default function HistoryPage() {
                     {/* Left status stripe */}
                     <div className="w-1 shrink-0" style={{ background: sm.dot }} />
 
-                    <div className="flex-1 flex items-center gap-4 px-4 py-3 min-w-0">
+                    <div className="history-session-content flex-1 flex items-center gap-4 px-4 py-3 min-w-0">
 
                       {/* Icon + Plate */}
-                      <div className="flex items-center gap-3 w-36 shrink-0">
+                      <div className="history-leading flex items-center gap-3 w-36 shrink-0">
                         <div className="size-9 rounded-lg flex items-center justify-center shrink-0"
                           style={{ background: tm.bg }}>
                           <TypeIcon className="size-4" style={{ color: tm.color }} strokeWidth={1.75} />
@@ -524,7 +524,7 @@ export default function HistoryPage() {
                       </div>
 
                       {/* Badges */}
-                      <div className="flex items-center gap-1.5 w-40 shrink-0">
+                      <div className="history-badges flex items-center gap-1.5 w-40 shrink-0">
                         <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
                           style={{ background: tm.bg, color: tm.color }}>{tm.label}</span>
                         <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full flex items-center gap-1"
@@ -535,7 +535,7 @@ export default function HistoryPage() {
                       </div>
 
                       {/* Timeline: entry → exit */}
-                      <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <div className="history-timeline flex items-center gap-2 flex-1 min-w-0">
                         <div className="text-center">
                           <p className="text-[10px] text-slate-400">เข้า</p>
                           <p className="text-xs font-semibold text-slate-700">{fmtTime(s.entryTime)}</p>
@@ -567,7 +567,7 @@ export default function HistoryPage() {
                       </div>
 
                       {/* Photos */}
-                      <div className="flex items-center gap-1 w-14 shrink-0 justify-center">
+                      <div className="history-photos flex items-center gap-1 w-14 shrink-0 justify-center">
                         {(['entry', 'exit'] as const).map(type => {
                           const has = type === 'entry' ? s.entryPhotoPath : s.exitPhotoPath
                           return has ? (
@@ -585,7 +585,7 @@ export default function HistoryPage() {
                       </div>
 
                       {/* Fee */}
-                      <div className="text-right w-20 shrink-0">
+                      <div className="history-amount text-right w-20 shrink-0">
                         <p className="text-sm font-bold text-slate-900">฿{s.totalFee.toLocaleString('th-TH')}</p>
                         {s.lostFine > 0 && (
                           <p className="text-[10px]" style={{ color: '#D97706' }}>+฿{s.lostFine} ค่าปรับ</p>
@@ -596,7 +596,7 @@ export default function HistoryPage() {
                       </div>
 
                       {/* Delete */}
-                      <div className="w-16 shrink-0 flex items-center justify-end">
+                      <div className="history-actions w-16 shrink-0 flex items-center justify-end">
                         {isConfirm ? (
                           <div className="flex items-center gap-1">
                             <button

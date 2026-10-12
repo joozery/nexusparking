@@ -16,8 +16,11 @@ export async function GET(req: NextRequest) {
 
   let startDate: Date
   let refDate: Date
-  const thaiDate = (value: string, endOfDay = false) =>
-    new Date(`${value}T${endOfDay ? '23:59:59.999' : '00:00:00.000'}+07:00`)
+  const thaiDate = (value: string, endOfDay = false) => {
+    if (value.endsWith('Z') || /[+-]\d{2}:\d{2}$/.test(value)) return new Date(value)
+    if (value.includes('T')) return new Date(`${value}:00+07:00`)
+    return new Date(`${value}T${endOfDay ? '23:59:59.999' : '00:00:00.000'}+07:00`)
+  }
 
   if (dateFrom && dateTo) {
     startDate = thaiDate(dateFrom)

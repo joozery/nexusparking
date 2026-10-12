@@ -19,13 +19,18 @@ export async function GET(req: NextRequest) {
   if (status)     filter.status     = status
   if (dateFrom || dateTo) {
     filter.startTime = {}
+    const parseFilterDate = (value: string, endOfDay = false) => {
+      if (value.endsWith('Z') || /[+-]\d{2}:\d{2}$/.test(value)) return new Date(value)
+      if (value.includes('T')) return new Date(`${value}:00+07:00`)
+      return new Date(`${value}T${endOfDay ? '23:59:59.999' : '00:00:00.000'}+07:00`)
+    }
     if (dateFrom) {
       // date-only (YYYY-MM-DD) → ใช้ local midnight, full ISO → ใช้ตรงๆ
-      const from = dateFrom.includes('T') ? new Date(dateFrom) : new Date(dateFrom + 'T00:00:00')
+      const from = parseFilterDate(dateFrom)
       ;(filter.startTime as Record<string, unknown>).$gte = from
     }
     if (dateTo) {
-      const to = dateTo.includes('T') ? new Date(dateTo) : new Date(dateTo + 'T23:59:59')
+      const to = parseFilterDate(dateTo, true)
       ;(filter.startTime as Record<string, unknown>).$lte = to
     }
   }

@@ -30,7 +30,7 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
       </header>
 
       <div className="shrink-0 px-5 pt-4 pb-0 bg-white" style={{ borderBottom: '1px solid #E8ECF4' }}>
-        <div className="flex items-center gap-1">
+        <div className="flex flex-wrap items-center gap-1">
           {TABS.map(t => {
             const active = pathname.startsWith(t.href)
             const Icon = t.icon

@@ -56,6 +56,7 @@ function fmtDT(iso?: string) {
   return new Date(iso).toLocaleString('th-TH', { day: '2-digit', month: 'short', year: '2-digit', hour: '2-digit', minute: '2-digit' })
 }
 const baht = (n: number) => `฿${n.toLocaleString('th-TH')}`
+const filterDate = (value: string) => value.includes('T') ? new Date(value).toISOString() : value
 
 const LIMIT = 20
 
@@ -85,8 +86,8 @@ export function SessionHistory() {
     try {
       const qs = new URLSearchParams()
       if (plate) qs.set('plate', plate)
-      if (dateFrom) qs.set('dateFrom', dateFrom)
-      if (dateTo) qs.set('dateTo', dateTo)
+      if (dateFrom) qs.set('dateFrom', filterDate(dateFrom))
+      if (dateTo) qs.set('dateTo', filterDate(dateTo))
       const [response, refundResponse] = await Promise.all([
         fetch(`/api/reports/history?${qs}`, { signal: controller.signal }),
         fetch(`/api/history/refunds?${qs}`, { signal: controller.signal }),
@@ -156,8 +157,8 @@ export function SessionHistory() {
     try {
       const qs = new URLSearchParams({ page: String(p), limit: String(LIMIT) })
       if (plate)    qs.set('plate',    plate)
-      if (dateFrom) qs.set('dateFrom', dateFrom)
-      if (dateTo)   qs.set('dateTo',   dateTo)
+      if (dateFrom) qs.set('dateFrom', filterDate(dateFrom))
+      if (dateTo)   qs.set('dateTo',   filterDate(dateTo))
       const response = await fetch(`/api/sessions?${qs}`, { signal: controller.signal })
       if (!response.ok) throw new Error('โหลดรายการไม่สำเร็จ')
       const data = await response.json()
@@ -192,13 +193,13 @@ export function SessionHistory() {
         </div>
         <div>
           <label className="text-[10px] font-black text-slate-400 uppercase block mb-1">ตั้งแต่</label>
-          <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
+          <input type="datetime-local" step="60" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
             className="h-9 px-3 rounded-lg text-xs outline-none"
             style={{ border: '1.5px solid #E8ECF4', background: '#FAFBFF' }} />
         </div>
         <div>
           <label className="text-[10px] font-black text-slate-400 uppercase block mb-1">ถึง</label>
-          <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
+          <input type="datetime-local" step="60" value={dateTo} onChange={e => setDateTo(e.target.value)}
             className="h-9 px-3 rounded-lg text-xs outline-none"
             style={{ border: '1.5px solid #E8ECF4', background: '#FAFBFF' }} />
         </div>

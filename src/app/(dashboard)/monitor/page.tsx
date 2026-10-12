@@ -418,8 +418,8 @@ export default function MonitorPage() {
       </header>
 
       {/* ─── Camera grid 3×2 ─── */}
-      <div className="flex-1 p-5 overflow-hidden">
-        <div className="h-full grid gap-4"
+      <div className="flex-1 p-3 md:p-5 overflow-auto md:overflow-hidden">
+        <div className="cctv-camera-grid h-full grid gap-4"
           style={{ gridTemplateColumns: '1fr 1fr 1fr', gridTemplateRows: '1fr 1fr' }}>
           {CAMERAS.map(c => (
             <CameraCard key={c.id} slot={c} url={urls[c.id]} onExpand={() => doExpand(c)} />

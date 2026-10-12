@@ -160,11 +160,11 @@ export function ParkingSidebar({ isOpen, activeNav }: Props) {
         {mobileOpen ? <X className="size-5" /> : <Menu className="size-5" />}
       </button>
       {mobileOpen && <button aria-label="ปิดเมนู" className="fixed inset-0 z-40 bg-slate-900/30 md:hidden" onClick={() => setMobileOpen(false)} />}
-      <aside className={`fixed inset-y-0 left-0 z-50 flex w-72 shrink-0 flex-col bg-white select-none shadow-xl transition-transform duration-200 md:static md:z-auto md:w-64 md:translate-x-0 md:shadow-none ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}`}
+      <aside className={`fixed inset-y-0 left-0 z-50 flex w-[min(18rem,88vw)] shrink-0 flex-col overflow-y-auto overscroll-contain bg-white select-none shadow-xl transition-transform duration-200 md:static md:z-auto md:w-64 md:translate-x-0 md:overflow-visible md:shadow-none ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}`}
       style={{ borderRight: '1px solid #E8ECF4' }}>
 
       {/* ══ HEADER BANNER ══ */}
-      <div className="relative overflow-hidden px-5 pt-5 pb-4 shrink-0"
+      <div className="relative overflow-hidden px-5 pt-12 md:pt-5 pb-4 shrink-0"
         style={{ background: '#FDDD09' }}>
         <div className="absolute -top-6 -right-6 w-24 h-24 rounded-full pointer-events-none"
           style={{ background: 'rgba(0,0,0,0.06)' }} />
@@ -202,7 +202,7 @@ export function ParkingSidebar({ isOpen, activeNav }: Props) {
       </div>
 
       {/* ══ QUICK STAT STRIP ══ */}
-      <div className="shrink-0 grid grid-cols-3" style={{ borderBottom: '1px solid #E8ECF4' }}>
+      <div className="sidebar-quick-stats shrink-0 grid grid-cols-3" style={{ borderBottom: '1px solid #E8ECF4' }}>
         {[
           { label: 'ในลาน', value: stats ? String(stats.activeCars)      : '—' },
           { label: 'ที่ว่าง', value: stats ? String(stats.availableSlots) : '—' },

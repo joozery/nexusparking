@@ -15,9 +15,14 @@ export async function GET(req: NextRequest) {
   await connectDB()
   const from = req.nextUrl.searchParams.get('dateFrom')
   const to = req.nextUrl.searchParams.get('dateTo')
+  const parseFilterDate = (value: string, endOfDay = false) => {
+    if (value.endsWith('Z') || /[+-]\d{2}:\d{2}$/.test(value)) return new Date(value)
+    if (value.includes('T')) return new Date(`${value}:00+07:00`)
+    return new Date(`${value}T${endOfDay ? '23:59:59.999' : '00:00:00.000'}+07:00`)
+  }
   const refundedAt: Record<string, Date> = {}
-  if (from) refundedAt.$gte = new Date(from.includes('T') ? from : `${from}T00:00:00`)
-  if (to) refundedAt.$lte = new Date(to.includes('T') ? to : `${to}T23:59:59.999`)
+  if (from) refundedAt.$gte = parseFilterDate(from)
+  if (to) refundedAt.$lte = parseFilterDate(to, true)
 
   const shifts = await Shift.find({
     'cardRefunds.0': { $exists: true },
