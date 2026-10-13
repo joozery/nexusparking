@@ -25,7 +25,7 @@ import { exportRevenueSummaryExcel, exportRevenueSummaryPDF } from '@/lib/revenu
 import { DateTimeRangeFilter } from '@/components/ui/DateTimeRangeFilter'
 
 interface MonthlyRow { _id: string; total: number; count: number; car: number; motorcycle: number; carOvernight: number; motorcycleOvernight: number; overnight: number; overnightCount: number; lostFines: number }
-interface DailyRow   { _id: string; total: number; count: number; car: number; motorcycle: number; carOvernight: number; motorcycleOvernight: number; overnight: number; overnightCount: number; lostFines: number; lostCardCount: number; lostFineRefunds?: number }
+interface DailyRow   { _id: string; total: number; count: number; car: number; motorcycle: number; carOvernight: number; motorcycleOvernight: number; carRevenue: number; motorcycleRevenue: number; carOvernightRevenue: number; motorcycleOvernightRevenue: number; overnight: number; overnightCount: number; lostFines: number; lostCardCount: number; lostFineRefunds?: number }
 interface TypeRow    { _id: string; total: number; count: number; avg: number; avgDurationMin: number }
 interface Summary    { total: number; count: number; avg: number; lostFines: number; lostCardCount: number; maxFee: number; cash: number; transfer: number; lostFineRefunds: number; lostFineRefundCount: number; lostFineRefundCash: number; lostFineRefundTransfer: number; fineTotal: number; fineBreakdown: { name: string; total: number }[] }
 interface AvgOccupancy { car: number; motorcycle: number }
@@ -123,10 +123,10 @@ function thaiMonth(iso: string) {
 // ── Main page ─────────────────────────────────────────────────────
 function DailyRevenueTable({ rows, summary }: { rows: DailyRow[]; summary: Summary }) {
   const columns = [
-    { key: 'car', label: 'รถยนต์', color: '#A16207' },
-    { key: 'carOvernight', label: 'ค้างคืนรถยนต์', color: '#7C3AED' },
-    { key: 'motorcycle', label: 'รถจักรยานยนต์', color: '#0891B2' },
-    { key: 'motorcycleOvernight', label: 'ค้างคืนรถจักรยานยนต์', color: '#EC4899' },
+    { key: 'carRevenue', label: 'รถยนต์', color: '#A16207' },
+    { key: 'carOvernightRevenue', label: 'ค้างคืนรถยนต์', color: '#7C3AED' },
+    { key: 'motorcycleRevenue', label: 'รถจักรยานยนต์', color: '#0891B2' },
+    { key: 'motorcycleOvernightRevenue', label: 'ค้างคืนรถจักรยานยนต์', color: '#EC4899' },
   ] as const
   return (
     <div className="bg-white rounded-xl overflow-hidden" style={{ border: '1px solid #E8ECF4' }}>

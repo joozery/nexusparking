@@ -283,22 +283,24 @@ export async function GET(req: NextRequest) {
       lostFineRefundCount: refund.count,
     })
   }
-  const dailyBreakdown = new Map<string, { car: number; motorcycle: number; carOvernight: number; motorcycleOvernight: number; overnight: number; overnightCount: number }>()
+  const dailyBreakdown = new Map<string, { car: number; motorcycle: number; carOvernight: number; motorcycleOvernight: number; carRevenue: number; motorcycleRevenue: number; carOvernightRevenue: number; motorcycleOvernightRevenue: number; overnight: number; overnightCount: number }>()
   const dailyDateKey = (value: Date) => new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit',
   }).format(value)
   for (const session of reportSessions) {
     if (!session.exitTime) continue
     const key = dailyDateKey(session.exitTime)
-    const bucket = dailyBreakdown.get(key) ?? { car: 0, motorcycle: 0, carOvernight: 0, motorcycleOvernight: 0, overnight: 0, overnightCount: 0 }
+    const bucket = dailyBreakdown.get(key) ?? { car: 0, motorcycle: 0, carOvernight: 0, motorcycleOvernight: 0, carRevenue: 0, motorcycleRevenue: 0, carOvernightRevenue: 0, motorcycleOvernightRevenue: 0, overnight: 0, overnightCount: 0 }
     const kind = classifySession(session)
     // Vehicle columns show parking fee only; lost-card fine is kept in its
     // own column so it is not mixed into any vehicle category.
     const amount = session.fee ?? 0
+    const revenueAmount = Math.max(0, amount - (session.discountAmount ?? 0)) + (session.fineAmount ?? 0)
     if (kind === 'car') bucket.car += amount
-    if (kind === 'motorcycle') bucket.motorcycle += amount
-    if (kind === 'overnightCar') bucket.carOvernight += amount
-    if (kind === 'overnightMotorcycle') bucket.motorcycleOvernight += amount
+    if (kind === 'car') bucket.carRevenue += revenueAmount
+    if (kind === 'motorcycle') { bucket.motorcycle += amount; bucket.motorcycleRevenue += revenueAmount }
+    if (kind === 'overnightCar') { bucket.carOvernight += amount; bucket.carOvernightRevenue += revenueAmount }
+    if (kind === 'overnightMotorcycle') { bucket.motorcycleOvernight += amount; bucket.motorcycleOvernightRevenue += revenueAmount }
     if (kind === 'overnightCar' || kind === 'overnightMotorcycle') {
       bucket.overnight += amount
       bucket.overnightCount += 1
@@ -307,7 +309,7 @@ export async function GET(req: NextRequest) {
   }
   const dailyReport = [...dailyByDate.values()].sort((a, b) => a._id.localeCompare(b._id)).map(row => ({
     ...row,
-    ...(dailyBreakdown.get(row._id) ?? { car: 0, motorcycle: 0, carOvernight: 0, motorcycleOvernight: 0, overnight: 0, overnightCount: 0 }),
+    ...(dailyBreakdown.get(row._id) ?? { car: 0, motorcycle: 0, carOvernight: 0, motorcycleOvernight: 0, carRevenue: 0, motorcycleRevenue: 0, carOvernightRevenue: 0, motorcycleOvernightRevenue: 0, overnight: 0, overnightCount: 0 }),
     // Report the daily total using parking fee after discount plus other fines.
     total: row.total ?? 0,
     lostCardCount: (row.lostCardUids ?? []).filter(Boolean).length,
