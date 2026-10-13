@@ -34,10 +34,10 @@ export async function buildDailyReport(start: Date, end: Date, partial = false):
       `ค่าปรับบัตรหาย: ${money(sum('lostFine'))} บาท`,
       ...[...fines].map(([name, item]) => `${name}: ${item.count} รายการ / ${money(item.amount)} บาท`),
       `รวมค่าปรับอื่น: ${money(sum('fineAmount'))} บาท`,
-      `รายได้เงินสด: ${money(rows.filter(s => s.paymentMethod === 'cash').reduce((n, s) => n + s.totalFee, 0) - cashRefund)} บาท`,
-      `รายได้โอน/QR: ${money(rows.filter(s => s.paymentMethod === 'qr').reduce((n, s) => n + s.totalFee, 0) - qrRefund)} บาท`,
       ...(refunds.length ? [`คืนค่าปรับบัตรหาย: ${refunds.length} รายการ`, `คืนเงินสด: ${money(cashRefund)} บาท / คืนเงินโอน: ${money(qrRefund)} บาท`] : []),
       `รายได้รวมสุทธิ (รวมค่าปรับแล้ว): ${money(sum('totalFee') - cashRefund - qrRefund)} บาท`,
+      `รายได้เงินสด: ${money(rows.filter(s => s.paymentMethod === 'cash').reduce((n, s) => n + s.totalFee, 0) - cashRefund)} บาท`,
+      `รายได้โอน/QR: ${money(rows.filter(s => s.paymentMethod === 'qr').reduce((n, s) => n + s.totalFee, 0) - qrRefund)} บาท`,
     ]
   }
   const visitKey = (uid: string | undefined, date: Date) => `${uid ?? ''}:${date.getTime()}`
