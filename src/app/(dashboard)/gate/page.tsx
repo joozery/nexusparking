@@ -581,7 +581,7 @@ export default function GatePage() {
               <div className="shrink-0 grid grid-cols-3 min-w-0"
                 style={{ borderBottom: '1px solid #E8ECF4' }}>
                 {[
-                  { icon: ArrowDownLeft, label: 'เวลาเข้า',    value: new Date(active.entryTime).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }), iconColor: '#A16207', iconBg: 'rgba(161,98,7,0.08)' },
+                  { icon: ArrowDownLeft, label: 'วันที่/เวลาเข้า', value: (() => { const entry = new Date(active.entryTime); return `${entry.toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' })} ${entry.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}` })(), iconColor: '#A16207', iconBg: 'rgba(161,98,7,0.08)' },
                   { icon: Clock,         label: 'ระยะเวลา',    value: fmtDur(active.entryTime, active.exitTime), iconColor: '#EAB308', iconBg: 'rgba(234,179,8,0.08)' },
                   { icon: Hash,          label: 'ประเภทอัตรา', value: active.cardType === 'overnight' ? 'Overnight' : 'Daytime', iconColor: '#F59E0B', iconBg: 'rgba(245,158,11,0.08)' },
                 ].map(({ icon: Icon, label, value, iconColor, iconBg }, i) => (

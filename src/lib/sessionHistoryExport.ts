@@ -71,7 +71,7 @@ const REVENUE_HEADERS = ['ทะเบียน', 'ประเภท (car/motor
 const OPERATOR_HEADER = '\u0e0a\u0e37\u0e48\u0e2d\u0e1e\u0e19\u0e31\u0e01\u0e07\u0e32\u0e19'
 const exportHeaders = (options: HistoryExportOptions) => options.reportKind === 'revenue' ? [...REVENUE_HEADERS, OPERATOR_HEADER] : HEADERS
 const exportValues = (row: HistoryExportRow, options: HistoryExportOptions) => options.reportKind === 'revenue'
-  ? (() => { const values = historyValues(row); return [values[0], values[1], row.transactionType === 'refund' ? '' : row.reportCategory === 'overnight' ? 'รายการค้างคืน' : 'รายการปกติ', values[2], values[3], values[4], values[5], values[6], values[7], values[11], values[12], values[9], values[10], values[13], values[14], values[17], values[18], values[19], row.transactionType === 'refund' ? row.refundOperatorName ?? '' : row.operatorName ?? ''] })()
+  ? (() => { const values = historyValues(row); return [values[0], values[1], row.transactionType === 'refund' ? '' : row.reportCategory === 'overnight' ? 'รายการค้างคืน' : 'รายการปกติ', values[2], values[3], values[4], values[5], values[6], values[7], values[8], values[11], values[12], values[9], values[10], values[13], values[14], values[17], values[18], values[19], row.transactionType === 'refund' ? row.refundOperatorName ?? '' : row.operatorName ?? ''] })()
   : historyValues(row)
 const pause = () => new Promise<void>(resolve => setTimeout(resolve, 0))
 

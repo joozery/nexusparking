@@ -49,7 +49,7 @@ const TYPE_META: Record<string, { label: string; icon: typeof Car; color: string
   car:        { label: 'รถยนต์',       icon: Car,  color: '#A16207', bg: 'rgba(161,98,7,0.1)',  grad: 'linear-gradient(135deg,#713F12,#A16207)' },
   motorcycle: { label: 'รถจักรยานยนต์', icon: Bike, color: '#0891B2', bg: 'rgba(8,145,178,0.1)',  grad: 'linear-gradient(135deg,#164E63,#0891B2)' },
   overnightCar:        { label: 'ค้างคืนรถยนต์',         icon: Moon, color: '#7C3AED', bg: 'rgba(124,58,237,0.1)', grad: 'linear-gradient(135deg,#4C1D95,#7C3AED)' },
-  overnightMotorcycle: { label: 'ค้างคืนรถจักรยานยนต์', icon: Moon, color: '#9333EA', bg: 'rgba(147,51,234,0.1)', grad: 'linear-gradient(135deg,#581C87,#9333EA)' },
+  overnightMotorcycle: { label: 'ค้างคืนรถจักรยานยนต์', icon: Moon, color: '#EC4899', bg: 'rgba(236,72,153,0.1)', grad: 'linear-gradient(135deg,#9D174D,#EC4899)' },
 }
 
 // ── ตารางรายวัน: คอลัมน์ที่โชว์/export ได้ (วันที่ล็อกไว้เสมอ) ──
@@ -75,14 +75,14 @@ const dailyChartConfig = {
   car:                 { label: 'รถยนต์', color: '#A16207' },
   carOvernight:        { label: 'ค้างคืนรถยนต์', color: '#7C3AED' },
   motorcycle:          { label: 'รถจักรยานยนต์', color: '#0891B2' },
-  motorcycleOvernight: { label: 'ค้างคืนรถจักรยานยนต์', color: '#9333EA' },
+  motorcycleOvernight: { label: 'ค้างคืนรถจักรยานยนต์', color: '#EC4899' },
 } satisfies ChartConfig
 
 const monthlyChartConfig = {
   car:                 { label: 'รถยนต์',               color: '#CA8A04' },
-  carOvernight:        { label: 'รถยนต์ค้างคืน',         color: '#7C3AED' },
+  carOvernight:        { label: 'ค้างคืนรถยนต์',         color: '#7C3AED' },
   motorcycle:          { label: 'รถจักรยานยนต์',         color: '#0891B2' },
-  motorcycleOvernight: { label: 'รถจักรยานยนต์ค้างคืน', color: '#9333EA' },
+  motorcycleOvernight: { label: 'ค้างคืนรถจักรยานยนต์', color: '#EC4899' },
 } satisfies ChartConfig
 
 const overnightCountChartConfig = {
@@ -91,9 +91,9 @@ const overnightCountChartConfig = {
 
 const hourlyChartConfig = {
   car:                 { label: 'รถยนต์',               color: '#CA8A04' },
-  carOvernight:        { label: 'รถยนต์ค้างคืน',         color: '#7C3AED' },
+  carOvernight:        { label: 'ค้างคืนรถยนต์',         color: '#7C3AED' },
   motorcycle:          { label: 'รถจักรยานยนต์',         color: '#0891B2' },
-  motorcycleOvernight: { label: 'รถจักรยานยนต์ค้างคืน', color: '#9333EA' },
+  motorcycleOvernight: { label: 'ค้างคืนรถจักรยานยนต์', color: '#EC4899' },
 } satisfies ChartConfig
 
 const fmt         = (n: number) => n.toLocaleString('th-TH')
@@ -126,7 +126,7 @@ function DailyRevenueTable({ rows, summary }: { rows: DailyRow[]; summary: Summa
     { key: 'car', label: 'รถยนต์', color: '#A16207' },
     { key: 'carOvernight', label: 'ค้างคืนรถยนต์', color: '#7C3AED' },
     { key: 'motorcycle', label: 'รถจักรยานยนต์', color: '#0891B2' },
-    { key: 'motorcycleOvernight', label: 'ค้างคืนรถจักรยานยนต์', color: '#9333EA' },
+    { key: 'motorcycleOvernight', label: 'ค้างคืนรถจักรยานยนต์', color: '#EC4899' },
   ] as const
   return (
     <div className="bg-white rounded-xl overflow-hidden" style={{ border: '1px solid #E8ECF4' }}>
@@ -416,6 +416,7 @@ export default function ReportsPage() {
           <div className="px-6 pb-3">
             <DateTimeRangeFilter dateFrom={dateFrom} dateTo={dateTo}
               onChange={(from, to) => { setDateFrom(from); setDateTo(to) }}
+              onClear={() => { setPeriod('week'); fetchReport('week', dateFrom, dateTo) }}
               onApply={applyCustom} />
           </div>
         )}
@@ -439,10 +440,9 @@ export default function ReportsPage() {
           <div className="p-5 space-y-4">
 
             {/* KPI strip */}
-            <div className="grid grid-cols-4 gap-3">
+            <div className="grid grid-cols-3 gap-3">
               {[
                 { label: 'รายได้รวม',      value: `฿${fmt(data.summary.total)}`,            sub: `เงินสด ฿${fmt(data.summary.cash ?? 0)} · เงินโอน ฿${fmt(data.summary.transfer ?? 0)}`, icon: TrendingUp,    grad: 'linear-gradient(135deg,#713F12,#A16207)', glow: 'rgba(161,98,7,0.22)'  },
-                { label: 'เฉลี่ย/ครั้ง',   value: `฿${fmt(Math.round(data.summary.avg))}`, sub: 'บาทต่อคัน',                           icon: BarChart2,     grad: 'linear-gradient(135deg,#164E63,#0891B2)', glow: 'rgba(8,145,178,0.22)'  },
                 { label: 'ค่าปรับรวม',      value: `฿${fmt(data.summary.fineTotal ?? 0)}`,    sub: 'รายละเอียดค่าปรับ',                  icon: AlertTriangle, grad: 'linear-gradient(135deg,#7F1D1D,#DC2626)', glow: 'rgba(220,38,38,0.22)'  },
                 { label: 'คืนค่าปรับบัตรหาย', value: `฿${fmt(data.summary.lostFineRefunds ?? 0)}`, sub: `เงินสด ฿${fmt(data.summary.lostFineRefundCash ?? 0)} · เงินโอน ฿${fmt(data.summary.lostFineRefundTransfer ?? 0)}`, icon: RefreshCw, grad: 'linear-gradient(135deg,#14532D,#16A34A)', glow: 'rgba(22,163,74,0.22)' },
               ].map(k => {
@@ -455,7 +455,14 @@ export default function ReportsPage() {
                     <Icon className="size-4 opacity-75 mb-3" strokeWidth={1.75} />
                     <p className="text-2xl font-bold leading-none">{k.value}</p>
                     <p className="text-[10px] font-semibold opacity-65 mt-1">{k.label}</p>
-                    <p className="text-[10px] font-semibold opacity-75 mt-0.5">{k.sub}</p>
+                    {k.label === 'รายได้รวม' ? (
+                      <div className="mt-1 text-sm font-bold leading-5 opacity-85">
+                        <p>เงินสด ฿{fmt(data.summary.cash ?? 0)}</p>
+                        <p>เงินโอน ฿{fmt(data.summary.transfer ?? 0)}</p>
+                      </div>
+                    ) : (
+                      <p className="text-[10px] font-semibold opacity-75 mt-0.5">{k.sub}</p>
+                    )}
                     {k.label === 'ค่าปรับรวม' && (data.summary.fineBreakdown?.length ?? 0) > 0 && (
                       <div className="mt-2 space-y-0.5 text-[10px] font-semibold opacity-85">
                         {(data.summary.fineBreakdown ?? []).map(row => (
@@ -473,7 +480,7 @@ export default function ReportsPage() {
             {/* Type breakdown */}
             {data.daily.length > 0 && (
               <div className="grid grid-cols-4 gap-3">
-                {['car', 'motorcycle', 'overnightCar', 'overnightMotorcycle'].map(t => {
+                {['car', 'overnightCar', 'motorcycle', 'overnightMotorcycle'].map(t => {
                   const row  = data.byType.find(r => r._id === t)
                   const meta = TYPE_META[t]
                   const Icon = meta.icon

@@ -8,6 +8,7 @@ interface Props {
   dateTo: string
   onChange: (from: string, to: string) => void
   onApply?: () => void
+  onClear?: () => void
 }
 
 const pad = (value: number) => String(value).padStart(2, '0')
@@ -15,7 +16,7 @@ const localValue = (date: Date) => `${date.getFullYear()}-${pad(date.getMonth() 
 const datePart = (value: string) => value.slice(0, 10)
 const timePart = (value: string, fallback: string) => value.includes('T') ? value.slice(11, 16) : fallback
 
-export function DateTimeRangeFilter({ dateFrom, dateTo, onChange, onApply }: Props) {
+export function DateTimeRangeFilter({ dateFrom, dateTo, onChange, onApply, onClear }: Props) {
   const [open, setOpen] = useState(false)
   const [openField, setOpenField] = useState<'from' | 'to' | null>(null)
   const ref = useRef<HTMLDivElement>(null)
@@ -96,6 +97,7 @@ export function DateTimeRangeFilter({ dateFrom, dateTo, onChange, onApply }: Pro
           <button type="button" onClick={() => setOpenField(openField === 'to' ? null : 'to')} className="h-8 px-3 rounded-lg text-xs text-slate-700 outline-none" style={{ background: '#F8FAFF', border: '1px solid #E8ECF4' }}>{dateButton('to', dateTo)}</button>
           {editor('to', dateTo, toTime)}
         </div>
+        {onClear && <button type="button" onClick={() => { onClear(); setOpen(false); setOpenField(null) }} className="h-8 px-2.5 rounded-lg text-[11px] font-semibold text-slate-500 hover:bg-slate-100" style={{ border: '1px solid #E8ECF4' }}>ล้างตัวกรอง</button>}
         {onApply && <button type="button" onClick={() => { onApply(); setOpen(false); setOpenField(null) }} disabled={!dateFrom || !dateTo} className="h-8 px-3 rounded-lg text-xs font-semibold text-black flex items-center gap-1.5 disabled:opacity-50" style={{ background: '#EAB308' }}><ArrowUpRight className="size-3" /> ดูรายงาน</button>}
       </>}
     </div>

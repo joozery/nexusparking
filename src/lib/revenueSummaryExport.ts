@@ -29,19 +29,19 @@ const dateLabel = (value: string) => new Date(value).toLocaleDateString('th-TH',
 // The API summary can include refund adjustments at a different level.
 function displayedParkingTotals(data: RevenueSummaryData) {
   return data.daily.reduce((totals, row) => {
-    totals.cash += (row.cash ?? 0) - (row.lostFineCash ?? 0)
-    totals.transfer += (row.transfer ?? 0) - (row.lostFineTransfer ?? 0)
-    totals.total += row.total - row.lostFines
+    totals.cash += row.cash ?? 0
+    totals.transfer += row.transfer ?? 0
+    totals.total += row.total
     return totals
   }, { cash: 0, transfer: 0, total: 0 })
 }
 
 function rows(data: RevenueSummaryData) {
-  const parking = data.daily.map(row => ['ค่าจอดรถ', dateLabel(row._id), row.count, row.total - row.lostFines])
+  const parking = data.daily.map(row => ['ค่าจอดรถ', dateLabel(row._id), row.count, row.total])
   const lost = data.daily.filter(row => row.lostFines > 0).map(row => ['บัตรหาย', dateLabel(row._id), '', row.lostFines])
-  const parkingWithPayment = data.daily.map(row => ['ค่าจอดรถ', dateLabel(row._id), row.count, (row.cash ?? 0) - (row.lostFineCash ?? 0), (row.transfer ?? 0) - (row.lostFineTransfer ?? 0), row.total - row.lostFines])
+  const parkingWithPayment = data.daily.map(row => ['ค่าจอดรถ', dateLabel(row._id), row.count, row.cash ?? 0, row.transfer ?? 0, row.total])
   const totals = [
-    ['ค่าจอดรถ', data.summary.count, data.summary.total - data.summary.lostFines],
+    ['ค่าจอดรถ', data.summary.count, data.summary.total],
     ['บัตรหาย', '', data.summary.lostFines],
     ['รวมทั้งหมด', data.summary.count, data.summary.total],
   ]

@@ -55,6 +55,14 @@ export async function GET(req: NextRequest) {
     overnightCount: { $sum: { $cond: [{ $eq: ['$cardType', 'overnight'] },  1, 0] } },
     lostFines:      { $sum: '$lostFine' },
   }
+  // Report revenue excludes the lost-card fine and any refund of that fine.
+  // It consists of parking fee after discount plus other selected fines.
+  const revenueExpression = {
+    $add: [
+      { $max: [{ $subtract: [{ $ifNull: ['$fee', 0] }, { $ifNull: ['$discountAmount', 0] }] }, 0] },
+      { $ifNull: ['$fineAmount', 0] },
+    ],
+  }
 
   const now = new Date()
   const periodHours = Math.max(1e-9, (refDate.getTime() - startDate.getTime()) / 3600000)
@@ -66,7 +74,7 @@ export async function GET(req: NextRequest) {
 
   const [reportSettings, reportSessions, monthlySessions] = await Promise.all([
     getSettings(),
-    ParkingSession.find(reportSessionFilter).select('cardUid cardType entryTime exitTime fee totalFee durationMin lostFine lostCard status fineName fineAmount').lean(),
+    ParkingSession.find(reportSessionFilter).select('cardUid cardType entryTime exitTime fee totalFee durationMin lostFine lostCard status fineName fineAmount discountAmount').lean(),
     ParkingSession.find(monthlySessionFilter).select('cardType entryTime exitTime fee').lean(),
   ])
   const classifySession = (session: { cardType: 'car' | 'motorcycle' | 'overnight'; entryTime: Date; exitTime?: Date }) => {
@@ -87,7 +95,7 @@ export async function GET(req: NextRequest) {
   for (const session of reportSessions) {
     const key = classifySession(session)
     const row = typeTotals.get(key)!
-    row.total += session.fee ?? 0
+    row.total += Math.max(0, (session.fee ?? 0) - (session.discountAmount ?? 0)) + (session.fineAmount ?? 0)
     row.count += 1
     row.duration += session.durationMin ?? 0
   }
@@ -167,7 +175,7 @@ export async function GET(req: NextRequest) {
     // รายได้แต่ละวัน
     ParkingSession.aggregate([
       { $match: matchFilter },
-      { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$exitTime', timezone: '+07:00' } }, total: { $sum: '$totalFee' }, count: { $sum: 1 }, cash: { $sum: { $cond: [{ $eq: ['$paymentMethod', 'cash'] }, '$totalFee', 0] } }, transfer: { $sum: { $cond: [{ $eq: ['$paymentMethod', 'qr'] }, '$totalFee', 0] } }, lostFineCash: { $sum: { $cond: [{ $and: [{ $gt: ['$lostFine', 0] }, { $eq: ['$paymentMethod', 'cash'] }] }, '$lostFine', 0] } }, lostFineTransfer: { $sum: { $cond: [{ $and: [{ $gt: ['$lostFine', 0] }, { $eq: ['$paymentMethod', 'qr'] }] }, '$lostFine', 0] } }, lostCardUids: { $addToSet: { $cond: [{ $gt: ['$lostFine', 0] }, '$cardUid', null] } }, ...typeFields } },
+      { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$exitTime', timezone: '+07:00' } }, total: { $sum: revenueExpression }, count: { $sum: 1 }, cash: { $sum: { $cond: [{ $eq: ['$paymentMethod', 'cash'] }, revenueExpression, 0] } }, transfer: { $sum: { $cond: [{ $eq: ['$paymentMethod', 'qr'] }, revenueExpression, 0] } }, lostFineCash: { $sum: { $cond: [{ $and: [{ $gt: ['$lostFine', 0] }, { $eq: ['$paymentMethod', 'cash'] }] }, '$lostFine', 0] } }, lostFineTransfer: { $sum: { $cond: [{ $and: [{ $gt: ['$lostFine', 0] }, { $eq: ['$paymentMethod', 'qr'] }] }, '$lostFine', 0] } }, lostCardUids: { $addToSet: { $cond: [{ $gt: ['$lostFine', 0] }, '$cardUid', null] } }, ...typeFields } },
       { $sort: { _id: 1 } },
     ]),
     // รายได้รายเดือน (12 เดือนล่าสุด เสมอ)
@@ -183,13 +191,13 @@ export async function GET(req: NextRequest) {
       {
         $group: {
           _id: null,
-          total: { $sum: '$totalFee' },
+          total: { $sum: revenueExpression },
           count: { $sum: 1 },
-          avg: { $avg: '$totalFee' },
+          avg: { $avg: revenueExpression },
           lostFines: { $sum: '$lostFine' },
           maxFee: { $max: '$totalFee' },
-          cash: { $sum: { $cond: [{ $eq: ['$paymentMethod', 'cash'] }, '$totalFee', 0] } },
-          transfer: { $sum: { $cond: [{ $eq: ['$paymentMethod', 'qr'] }, '$totalFee', 0] } },
+          cash: { $sum: { $cond: [{ $eq: ['$paymentMethod', 'cash'] }, revenueExpression, 0] } },
+          transfer: { $sum: { $cond: [{ $eq: ['$paymentMethod', 'qr'] }, revenueExpression, 0] } },
         },
       },
     ]),
@@ -300,8 +308,8 @@ export async function GET(req: NextRequest) {
   const dailyReport = [...dailyByDate.values()].sort((a, b) => a._id.localeCompare(b._id)).map(row => ({
     ...row,
     ...(dailyBreakdown.get(row._id) ?? { car: 0, motorcycle: 0, carOvernight: 0, motorcycleOvernight: 0, overnight: 0, overnightCount: 0 }),
-    // Report the net daily total after any lost-card fine refund.
-    total: Math.max(0, row.total - (row.lostFineRefunds ?? 0)),
+    // Report the daily total using parking fee after discount plus other fines.
+    total: row.total ?? 0,
     lostCardCount: (row.lostCardUids ?? []).filter(Boolean).length,
   }))
   const lostCardCount = new Set(reportSessions
@@ -332,12 +340,12 @@ export async function GET(req: NextRequest) {
     byType: reportByType,
     summary: {
       ...(summary[0] ?? { total: 0, count: 0, avg: 0, lostFines: 0, maxFee: 0 }),
-      total: Math.max(0, (summary[0]?.total ?? 0) - (refundSummary[0]?.total ?? 0)),
+      total: summary[0]?.total ?? 0,
       avg: summary[0]?.count
-        ? Math.max(0, (summary[0].total - (refundSummary[0]?.total ?? 0)) / summary[0].count)
+        ? summary[0].total / summary[0].count
         : 0,
-      cash: Math.max(0, (summary[0]?.cash ?? 0) - (refundSummary[0]?.cash ?? 0)),
-      transfer: Math.max(0, (summary[0]?.transfer ?? 0) - (refundSummary[0]?.transfer ?? 0)),
+      cash: summary[0]?.cash ?? 0,
+      transfer: summary[0]?.transfer ?? 0,
       lostFineRefunds: refundSummary[0]?.total ?? 0,
       lostFineRefundCount: refundSummary[0]?.count ?? 0,
       lostFineRefundCash: refundSummary[0]?.cash ?? 0,
