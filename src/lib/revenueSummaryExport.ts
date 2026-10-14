@@ -86,6 +86,13 @@ export function exportRevenueSummaryExcel(data: RevenueSummaryData) {
   const parkingTotalIndex = 4 + grouped.parking.length
   sheetRows[parkingTotalIndex] = ['รวมค่าจอดรถ', '', data.summary.count, data.summary.cash, data.summary.transfer, data.summary.total]
   const ws = XLSX.utils.aoa_to_sheet(sheetRows)
+  sheetRows.forEach((row, rowIndex) => {
+    const moneyColumns = row.length >= 6 ? [3, 4, 5] : row.length === 4 ? [3] : row.length === 3 ? [2] : []
+    for (const columnIndex of moneyColumns) {
+      const cell = ws[XLSX.utils.encode_cell({ r: rowIndex, c: columnIndex })]
+      if (cell && typeof cell.v === 'number') cell.z = '#,##0.00'
+    }
+  })
   ws['!cols'] = [{ wch: 24 }, { wch: 18 }, { wch: 18 }, { wch: 16 }, { wch: 16 }, { wch: 20 }]
   ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 5 } }]
   const wb = XLSX.utils.book_new()
@@ -109,24 +116,29 @@ export function exportRevenueSummaryPDF(data: RevenueSummaryData) {
   ctx.textAlign = 'left'
   let y = 185
   const table = (title: string, headers: string[], body: (string | number)[][]) => {
+    ctx.textAlign = 'left'
     ctx.fillStyle = '#111827'; ctx.font = `bold 28px ${font}`; ctx.fillText(title, 80, y); y += 24
     const columnCount = Math.max(headers.length, body[0]?.length ?? 0)
     const widths = columnCount === 6 ? [260, 240, 240, 220, 220, 300] : headers.length === 4 ? [320, 330, 300, 360] : [650, 300, 360]
+    const moneyIndexes = columnCount === 6 ? [3, 4, 5] : headers.length === 4 ? [3] : [2]
     const renderedHeaders = columnCount === 6 ? [...headers.slice(0, 3), 'เงินสด', 'เงินโอน', headers[3]] : headers
     const renderedBody = columnCount === 6
-      ? body.map(row => row.length === 4 ? [row[0], row[1], row[2], data.summary.cash, data.summary.transfer, row[3]] : row)
+      ? body.map(row => row.length === 4 ? [row[0], row[1], row[2], money(data.summary.cash), money(data.summary.transfer), row[3]] : row)
       : body
     const drawRow = (values: (string | number)[], header = false) => {
       let x = 80; ctx.font = `${header ? 'bold ' : ''}22px ${font}`
       values.forEach((value, i) => {
         ctx.fillStyle = header ? '#E5E7EB' : '#fff'; ctx.fillRect(x, y, widths[i], 52)
         ctx.strokeStyle = '#4B5563'; ctx.strokeRect(x, y, widths[i], 52)
-        ctx.fillStyle = '#111827'; ctx.fillText(String(value ?? ''), x + 12, y + 33); x += widths[i]
+        const alignRight = !header && moneyIndexes.includes(i)
+        ctx.textAlign = alignRight ? 'right' : 'center'
+        ctx.fillStyle = '#111827'; ctx.fillText(String(value ?? ''), alignRight ? x + widths[i] - 12 : x + widths[i] / 2, y + 33); x += widths[i]
       }); y += 52
     }
     drawRow(renderedHeaders, true); renderedBody.forEach(row => drawRow(row)); y += 35
   }
-  table('ค่าจอดรถ', ['ประเภทรายการ', 'วันที่', 'จำนวนรถ/คัน', 'เป็นเงิน (บาท)'], [...grouped.parking, ['รวมค่าจอดรถ', '', data.summary.count, money(data.summary.total)]])
+  const parkingRows = grouped.parking.map(row => [row[0], row[1], row[2], money(Number(row[3])), money(Number(row[4])), money(Number(row[5]))])
+  table('ค่าจอดรถ', ['ประเภทรายการ', 'วันที่', 'จำนวนรถ/คัน', 'เป็นเงิน (บาท)'], [...parkingRows, ['รวมค่าจอดรถ', '', data.summary.count, money(data.summary.total)]])
   if (grouped.lost.length) table('บัตรหาย', ['ประเภทรายการ', 'วันที่', 'จำนวนรถ/คัน', 'เป็นเงิน (บาท)'], grouped.lost.map(row => [row[0], row[1], row[2], money(Number(row[3]))]))
   if (grouped.refunds.length) table('คืนค่าปรับบัตรหาย', ['ประเภทรายการ', 'วันที่', 'จำนวนรถ/คัน', 'เป็นเงิน (บาท)'], grouped.refunds.map(row => [row[0], row[1], row[2], money(Number(row[3]))]))
   table('สรุปรวม', ['ประเภทรายการ', 'จำนวนรถ/คัน', 'เป็นเงิน (บาท)'], grouped.totals.map(row => [row[0], row[1], money(Number(row[2]))]))

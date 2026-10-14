@@ -127,8 +127,8 @@ export default function DashboardPage() {
   return (
     <>
       {/* ── HEADER ── */}
-      <header className="shrink-0 bg-white" style={{ borderBottom: '1px solid #E8ECF4' }}>
-        <div className="flex items-center justify-between px-6 h-14">
+      <header className="dashboard-page-header shrink-0 bg-white" style={{ borderBottom: '1px solid #E8ECF4' }}>
+        <div className="relative top-3 md:top-0 flex items-center justify-between pl-16 pr-3 md:px-6 h-14">
           <div className="flex items-center gap-3">
             <div className="size-7 rounded-lg flex items-center justify-center"
               style={{ background: 'rgba(161,98,7,0.08)' }}>

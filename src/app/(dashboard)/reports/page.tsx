@@ -297,9 +297,9 @@ export default function ReportsPage() {
   return (
     <>
       {/* ── HEADER ── */}
-      <header className="shrink-0 bg-white" style={{ borderBottom: '1px solid #E8ECF4' }}>
-        <div className="flex flex-wrap items-center justify-between gap-2 px-6 py-2 min-h-14">
-          <div className="flex items-center gap-3">
+      <header className="reports-page-header shrink-0 bg-white" style={{ borderBottom: '1px solid #E8ECF4' }}>
+        <div className="reports-header-main flex flex-wrap items-center justify-between gap-2 px-6 py-2 min-h-14">
+          <div className="reports-header-title flex items-center gap-3 shrink-0">
             <div className="size-7 rounded-lg flex items-center justify-center"
               style={{ background: 'rgba(161,98,7,0.08)' }}>
               <BarChart2 className="size-3.5" style={{ color: '#A16207' }} />
@@ -315,7 +315,7 @@ export default function ReportsPage() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="reports-header-controls flex items-center gap-2">
             <div className="flex items-center rounded-lg p-0.5 gap-0.5" style={{ background: '#F1F5F9' }}>
               {[
                 { key: 'revenue' as const, label: 'รายได้',       icon: BarChart2 },
