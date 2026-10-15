@@ -6,6 +6,7 @@ export interface IShift extends Document, ShiftVehicleCounts {
   openingCardsByType?: VehicleCounts
   closingCardsByType?: VehicleCounts
   carryoverByBilling?: ActiveVehicleBillingCounts
+  closingByBilling?: ActiveVehicleBillingCounts
   cardRefunds?: { sessionId: string; cardUid: string; plate: string; amount: number; paymentMethod: 'cash' | 'qr'; refundedAt: Date; operatorId: string }[]
   operatorId:      string
   operatorName:    string
@@ -34,6 +35,12 @@ const ShiftSchema = new Schema<IShift>({
   checkoutsByType: { type: countsSchema, default: undefined },
   carryoverByType: { type: countsSchema, default: undefined },
   carryoverByBilling: {
+    carNormal: { type: Number, default: 0 },
+    carOvernight: { type: Number, default: 0 },
+    motorcycleNormal: { type: Number, default: 0 },
+    motorcycleOvernight: { type: Number, default: 0 },
+  },
+  closingByBilling: {
     carNormal: { type: Number, default: 0 },
     carOvernight: { type: Number, default: 0 },
     motorcycleNormal: { type: Number, default: 0 },

@@ -6,12 +6,13 @@ import { connectDB } from '@/lib/mongodb'
 import { Shift } from '@/models/Shift'
 import { ParkingQueue } from '@/models/ParkingQueue'
 import { ParkingSession } from '@/models/ParkingSession'
-import { countActiveVehicles } from '@/lib/countActiveVehicles'
+import { countActiveVehicles, countActiveVehiclesByBilling } from '@/lib/countActiveVehicles'
 import { countRemainingTemporaryCards } from '@/lib/countRemainingTemporaryCards'
 import { getSettings } from '@/models/SystemSettings'
 import { sendLineMessage, buildShiftEndMessage } from '@/lib/lineNotify'
 import { triggerDrawer, printRaw } from '@/lib/hardware'
 import { buildShiftEndSlip } from '@/lib/escpos'
+import { calcFeeBreakdown } from '@/lib/calcFee'
 
 async function handlePost(req: NextRequest) {
   const body = await req.json().catch(() => ({}))
@@ -32,6 +33,27 @@ async function handlePost(req: NextRequest) {
   const closingByType = await countActiveVehicles()
   const closingCarCount = closingByType.car + closingByType.motorcycle
   const cfg = await getSettings()
+  const closingByBilling = await countActiveVehiclesByBilling(cfg.rates.overnight, new Date())
+  const checkoutRows = await ParkingSession.find({
+    shiftId: String(shift._id),
+    status: { $in: ['completed', 'lost'] },
+  }).select('cardType entryTime exitTime discountAmount').lean()
+  const discountTotal = checkoutRows.reduce((sum, row) => sum + (row.discountAmount ?? 0), 0)
+  const checkoutsByBilling = { carNormal: 0, carOvernight: 0, motorcycleNormal: 0, motorcycleOvernight: 0 }
+  for (const row of checkoutRows) {
+    const cardType = row.cardType as 'car' | 'motorcycle' | 'overnight'
+    const entryTime = new Date(row.entryTime)
+    const exitTime = row.exitTime ? new Date(row.exitTime) : new Date()
+    const overnight = cardType === 'overnight' || calcFeeBreakdown(cardType, entryTime, exitTime, cfg.rates.overnight).segments.some(segment => segment.kind === 'overnight')
+    if (cardType === 'motorcycle') {
+      if (overnight) checkoutsByBilling.motorcycleOvernight++
+      else checkoutsByBilling.motorcycleNormal++
+    } else if (overnight) {
+      checkoutsByBilling.carOvernight++
+    } else {
+      checkoutsByBilling.carNormal++
+    }
+  }
   const temporaryCardsRemaining = await countRemainingTemporaryCards()
   // Count each queue visit once, including visits already admitted or cancelled.
   const queuedRows = await ParkingQueue.aggregate<{ _id: string; count: number }>([
@@ -63,6 +85,7 @@ async function handlePost(req: NextRequest) {
   shift.closingBreakdown = new Map(Object.entries(closingBreakdown))
   shift.closingCarCount  = closingCarCount
   shift.closingByType = closingByType
+  shift.closingByBilling = closingByBilling
   shift.closingCardsByType = temporaryCardsRemaining
   await shift.save()
 
@@ -84,6 +107,7 @@ async function handlePost(req: NextRequest) {
     checkinsByType: shift.checkinsByType,
     checkoutsByType: shift.checkoutsByType,
     closingByType,
+    closingByBilling,
     closingCardsByType: temporaryCardsRemaining,
   })).catch(() => {})
 
@@ -99,6 +123,9 @@ async function handlePost(req: NextRequest) {
         endTime:        shift.endTime!,
         checkinsCount:  shift.checkinsCount,
         checkoutsCount: shift.checkoutsCount,
+        checkinsByType: shift.checkinsByType,
+        checkoutsByType: shift.checkoutsByType,
+        checkoutsByBilling,
         cashAmount:     shift.cashAmount,
         qrAmount:       shift.qrAmount,
         totalAmount:    shift.totalAmount,
@@ -107,6 +134,8 @@ async function handlePost(req: NextRequest) {
         closingBreakdown: Object.fromEntries(shift.closingBreakdown),
         closingCarCount,
         closingByType,
+        closingByBilling,
+        discountTotal,
         temporaryCardsRemaining,
         queuedByType,
         lostCardsCount,
