@@ -53,7 +53,7 @@ interface Props {
   onCustomExitTimeChange?: (v: string) => void
   onSimulateScan?: () => void
   onBack: () => void
-  onConfirm: (paymentMethod: PaymentMethod, discountId?: string, dailyDiscountId?: string, isLostCard?: boolean, fineId?: string) => void
+  onConfirm: (paymentMethod: PaymentMethod, discountId?: string, dailyDiscountId?: string, isLostCard?: boolean, fineId?: string, customerRef?: string) => void
   onPrintReceipt?: () => void
   onDownloadPdf?: () => void
   downloadingPdf?: boolean
@@ -128,12 +128,36 @@ export function CheckOutDialog({
     return () => clearTimeout(timer)
   }, [open, step, paymentMethod, plate, entryTimestamp])
   const [isLostCard, setIsLostCard] = useState(checkoutSource === 'plate')
+  const [customerRef, setCustomerRef] = useState('')
+  const [customerName, setCustomerName] = useState('')
+  const [customerRefError, setCustomerRefError] = useState('')
   const lostContext = `${open}:${plate}:${entryTime?.getTime()}:${checkoutSource}`
   const [previousLostContext, setPreviousLostContext] = useState(lostContext)
   if (previousLostContext !== lostContext) {
     setPreviousLostContext(lostContext)
     setIsLostCard(checkoutSource === 'plate')
+    setCustomerRef('')
+    setCustomerName('')
+    setCustomerRefError('')
   }
+
+  useEffect(() => {
+    if (!(isLostCard || lockedLostCard) || !/^A20-[0-9]{6}$/.test(customerRef)) {
+      setCustomerName('')
+      setCustomerRefError('')
+      return
+    }
+    const controller = new AbortController()
+    fetch(`/api/customer-registration/lookup?kind=lost&ref=${encodeURIComponent(customerRef)}`, { signal: controller.signal })
+      .then(async res => {
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.error ?? 'ไม่พบข้อมูล')
+        setCustomerName(data.fullName ?? '')
+        setCustomerRefError('')
+      })
+      .catch(error => { if (error.name !== 'AbortError') { setCustomerName(''); setCustomerRefError(error.message) } })
+    return () => controller.abort()
+  }, [customerRef, isLostCard, lockedLostCard])
 
   const storeDiscounts = discounts.filter(d => d.discountType !== 'per_day')
   const dailyDiscounts = discounts.filter(d => d.discountType === 'per_day')
@@ -316,7 +340,20 @@ export function CheckOutDialog({
                     <span className="text-sm font-bold flex-1 text-amber-800">
                       ยืนยันว่าบัตรหาย — เพิ่ม ฿{lostCardFine}
                     </span>
+                    {(isLostCard || lockedLostCard) && <input
+                      value={customerRef}
+                      onChange={e => setCustomerRef(e.target.value.toUpperCase().replace(/\s/g, '').slice(0, 10))}
+                      placeholder="Ref เช่น A20-123456"
+                      aria-label="เลข Ref ลูกค้า"
+                      className="h-8 w-36 rounded-md border border-amber-300 bg-white px-2 text-xs font-mono font-bold text-slate-800 outline-none"
+                      disabled={submitting}
+                    />}
                   </div>
+                )}
+                {(isLostCard || lockedLostCard) && customerRef && (customerName || customerRefError) && (
+                  <p className={`text-xs ${customerName ? 'text-emerald-700' : 'text-red-600'}`}>
+                    {customerName ? `พบข้อมูล: ${customerName}` : customerRefError}
+                  </p>
                 )}
 
                 {/* Sim: custom exit time */}
@@ -511,9 +548,10 @@ export function CheckOutDialog({
                   submitting ||
                   (!!entryTime && (!Number.isFinite(exitTimeDate.getTime()) || exitTimeDate <= entryTime)) ||
                   (paymentMethod === 'cash' && cashReceived !== '' && change < 0)
+                  || ((isLostCard || lockedLostCard) && (!/^A20-[0-9]{6}$/.test(customerRef) || !customerName))
                 }
                 style={paymentMethod === 'qr' ? { background: '#7C3AED' } : { background: theme.hex600 }}
-                onClick={() => onConfirm(paymentMethod, selectedDiscount?._id, selectedDailyDiscount?._id, isLostCard || lockedLostCard, selectedFineId || undefined)}
+                onClick={() => onConfirm(paymentMethod, selectedDiscount?._id, selectedDailyDiscount?._id, isLostCard || lockedLostCard, selectedFineId || undefined, customerRef || undefined)}
               >
                 {paymentMethod === 'cash'
                   ? <><Banknote className="size-4" /> รับเงินสด ฿{finalFee}</>

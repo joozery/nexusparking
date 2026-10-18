@@ -30,6 +30,7 @@ export async function POST(
     fineAmount: session.fineAmount ?? 0,
     discountAmount: session.discountAmount ?? 0,
     lostFine:  session.lostFine || undefined,
+    customerName: session.lostCard ? session.customerName : undefined,
     total:     session.totalFee,
   })
 

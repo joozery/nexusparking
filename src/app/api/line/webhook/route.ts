@@ -1,11 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { connectDB } from '@/lib/mongodb'
 import { SystemSettings } from '@/models/SystemSettings'
+import { CustomerRegistration } from '@/models/CustomerRegistration'
+
+async function replyLine(replyToken: string, text: string, channelToken: string) {
+  if (!channelToken) {
+    console.error('[LINE webhook] Missing Channel Access Token')
+    return
+  }
+  const response = await fetch('https://api.line.me/v2/bot/message/reply', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${channelToken}` },
+    body: JSON.stringify({ replyToken, messages: [{ type: 'text', text }] }),
+  })
+  if (!response.ok) console.error('[LINE webhook] Reply failed:', response.status, await response.text())
+}
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-    const events: { source?: { type?: string; userId?: string; groupId?: string; roomId?: string } }[] = body.events ?? []
+    const events: { replyToken?: string; type?: string; message?: { type?: string; text?: string }; source?: { type?: string; userId?: string; groupId?: string; roomId?: string } }[] = body.events ?? []
 
     const discovered = new Set<string>()
     for (const event of events) {
@@ -16,6 +30,28 @@ export async function POST(req: NextRequest) {
     }
 
     await connectDB()
+
+    const settings = await SystemSettings.findOne().select('line.channelToken').lean()
+    const channelToken = settings?.line?.channelToken ?? ''
+    for (const event of events) {
+      const text = event.message?.type === 'text' ? event.message.text?.trim().toUpperCase() : ''
+      if (!event.replyToken || !text) continue
+      const match = text.match(/\bA20-[0-9]{6}\b/)
+      if (!event.replyToken) continue
+      if (!match) {
+        await replyLine(event.replyToken, 'กรุณาส่งเลข Ref เช่น A20-123456 เพื่อเช็กข้อมูล', channelToken)
+        continue
+      }
+      const refCode = match[0]
+      const row = await CustomerRegistration.findOneAndUpdate(
+        { refCode },
+        { $set: { verifiedAt: new Date() } },
+        { new: true },
+      ).select('refCode fullName').lean()
+      await replyLine(event.replyToken, row
+        ? `ยืนยันข้อมูลสำเร็จ\nเลข Ref: ${row.refCode}\nชื่อ: ${row.fullName}`
+        : `ไม่พบข้อมูลเลข Ref ${refCode} กรุณาตรวจสอบอีกครั้ง`, channelToken)
+    }
 
     // เก็บ raw event ล่าสุดไว้ debug และ ID ที่ตรวจจับได้
     const ops: object[] = [

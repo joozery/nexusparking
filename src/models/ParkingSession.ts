@@ -24,6 +24,8 @@ export interface IParkingSession extends Document {
   fineName?:      string
   fineAmount:     number
   note?:          string
+  customerRef?:   string
+  customerName?:  string
   isSimulated?:   boolean
   entryPhotoPath?: string
   exitPhotoPath?:  string
@@ -57,6 +59,8 @@ const ParkingSessionSchema = new Schema<IParkingSession>({
   fineName:       { type: String },
   fineAmount:     { type: Number, default: 0 },
   note:           { type: String },
+  customerRef:    { type: String },
+  customerName:   { type: String },
   isSimulated:    { type: Boolean, default: false },
   entryPhotoPath: { type: String },
   exitPhotoPath:  { type: String },

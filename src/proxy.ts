@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 const SECRET = process.env.JWT_SECRET ?? 'dev-secret-change-me'
 const COOKIE  = 'np_session'
 
-const PUBLIC = ['/login', '/api/auth', '/api/line/webhook']
+const PUBLIC = ['/login', '/register', '/api/auth', '/api/line/webhook', '/api/customer-registration']
 
 interface JWTPayload {
   sub:  string

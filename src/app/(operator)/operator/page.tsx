@@ -650,7 +650,7 @@ export default function OperatorPage() {
     } finally { setPlateBusy(false) }
   }
 
-  async function handleCheckout(paymentMethod: PaymentMethod, discountId?: string, dailyDiscountId?: string, isLostCard?: boolean, fineId?: string) {
+  async function handleCheckout(paymentMethod: PaymentMethod, discountId?: string, dailyDiscountId?: string, isLostCard?: boolean, fineId?: string, customerRef?: string) {
     const body: Record<string, unknown> = {
       sessionId: coSessionId || undefined,
       queueId: coQueueId || undefined,
@@ -658,6 +658,7 @@ export default function OperatorPage() {
       discountId,
       dailyDiscountId,
       lostCard: isLostCard === true,
+      customerRef: customerRef || undefined,
       fineId,
     }
     if (coCustomTime || coScannedTime) body.exitTime = new Date(coCustomTime || coScannedTime).toISOString()

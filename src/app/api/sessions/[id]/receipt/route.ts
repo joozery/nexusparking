@@ -7,7 +7,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   if (!/^[a-f\d]{24}$/i.test(id)) return NextResponse.json({ error: 'เลขรายการไม่ถูกต้อง' }, { status: 400 })
   await connectDB()
   const session = await ParkingSession.findOne({ _id: id, status: { $in: ['completed', 'lost'] } })
-    .select('plate cardUid cardType entryTime exitTime fee discountAmount fineAmount lostFine totalFee paymentMethod').lean()
+    .select('plate cardUid cardType entryTime exitTime fee discountAmount fineAmount lostFine totalFee paymentMethod lostCard customerName').lean()
   if (!session) return NextResponse.json({ error: 'ไม่พบรายการรับเงิน' }, { status: 404 })
   return NextResponse.json(session, { headers: { 'Cache-Control': 'no-store' } })
 }

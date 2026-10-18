@@ -13,6 +13,7 @@ import { Fine } from '@/models/Fine'
 import { getSettings } from '@/models/SystemSettings'
 import { calcFeeFromMinutes, calcFeeBreakdown, calcDurationMinutes } from '@/lib/calcFee'
 import { runCheckoutSequence } from '@/lib/hardware'
+import { CustomerRegistration } from '@/models/CustomerRegistration'
 
 export async function GET(req: NextRequest) {
   const uid = new URL(req.url).searchParams.get('uid')
@@ -33,7 +34,7 @@ export async function GET(req: NextRequest) {
 }
 
 async function handlePost(req: NextRequest) {
-  const { uid, sessionId, queueId, paymentMethod = 'cash', discountId, dailyDiscountId, fineId, exitTime: exitTimeRaw, lostCard } = await req.json()
+  const { uid, sessionId, queueId, paymentMethod = 'cash', discountId, dailyDiscountId, fineId, exitTime: exitTimeRaw, lostCard, customerRef } = await req.json()
 
   const jar     = await cookies()
   const token   = jar.get(COOKIE_NAME)?.value
@@ -65,6 +66,13 @@ async function handlePost(req: NextRequest) {
   }
   if (!['cash', 'qr'].includes(paymentMethod)) return NextResponse.json({ error: 'ช่องทางชำระเงินไม่ถูกต้อง' }, { status: 400 })
   const isLostCard = session.lostCard === true || session.lostFine > 0 || lostCard === true
+  const normalizedCustomerRef = typeof customerRef === 'string' ? customerRef.trim().toUpperCase() : ''
+  let customerName: string | undefined
+  if (isLostCard && normalizedCustomerRef) {
+    const registration = await CustomerRegistration.findOne({ $or: [{ kind: 'lost' }, { kind: { $exists: false } }], refCode: normalizedCustomerRef }).select('fullName').lean()
+    if (!registration) return NextResponse.json({ error: 'ไม่พบข้อมูลจากเลข Ref นี้' }, { status: 404 })
+    customerName = registration.fullName
+  }
   const timeline = await loadCardTimeline([session.cardUid], queue ? String(queue._id) : undefined)
   const conflict = cardVisitError({ _id: session._id, cardUid: session.cardUid, entryTime: session.entryTime, exitTime: now, lostCard: isLostCard }, timeline.history, timeline.returns)
   if (conflict) return NextResponse.json({ error: conflict }, { status: 409 })
@@ -129,6 +137,8 @@ async function handlePost(req: NextRequest) {
   session.fee            = fee
   session.lostFine       = lostFine
   session.lostCard       = isLostCard
+  session.customerRef    = isLostCard ? (normalizedCustomerRef || undefined) : undefined
+  session.customerName   = isLostCard ? customerName : undefined
   session.totalFee       = totalFee
   session.discountId     = appliedDiscountId ?? appliedDailyDiscountId
   session.discountName   = discountName

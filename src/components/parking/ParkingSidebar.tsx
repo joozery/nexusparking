@@ -18,6 +18,8 @@ interface Props {
 }
 
 const NAV_MAIN = [
+  { key: 'customer-registration', href: '/customer-registration', icon: ClipboardList, label: 'บัตรหาย', badge: null },
+  { key: 'returned-card', href: '/returned-card', icon: CreditCard, label: 'คืนบัตร', badge: null },
   { key: 'dashboard', href: '/dashboard', icon: LayoutDashboard, label: 'ภาพรวม',       badge: null },
   { key: 'gate',      href: '/gate',      icon: DoorOpen,        label: 'ประตูเข้า-ออก', badge: null },
   { key: 'history',   href: '/history',   icon: History,         label: 'ประวัติการจอด', badge: null },
@@ -35,6 +37,8 @@ const NAV_SYSTEM = [
 ]
 
 const PATH_MAP: Record<string, string> = {
+  '/customer-registration': 'customer-registration',
+  '/returned-card': 'returned-card',
   '/': 'gate', '/gate': 'gate', '/dashboard': 'dashboard',
   '/history': 'history', '/cards': 'cards',
   '/shifts': 'shifts', '/discounts': 'discounts',

@@ -43,6 +43,7 @@ export interface ReceiptData {
   fineAmount?: number
   discountAmount?: number
   total:     number
+  customerName?: string
 }
 
 const CARD_TYPE_LABEL: Record<string, string> = {
@@ -70,6 +71,7 @@ export function buildReceipt(r: ReceiptData): Buffer {
   parts.push(ALIGN_CENTER, DIVIDER)
   parts.push(receiptRow('ทะเบียน', r.plate))
   parts.push(receiptRow('ประเภทรถ', CARD_TYPE_LABEL[r.cardType] ?? r.cardType))
+  if (r.customerName) parts.push(receiptRow('ชื่อผู้ใช้บริการ', r.customerName))
   parts.push(DIVIDER)
   parts.push(receiptRow('เวลาเข้า', receiptTime(r.entryTime)))
   parts.push(receiptRow('เวลาออก', receiptTime(r.exitTime)))

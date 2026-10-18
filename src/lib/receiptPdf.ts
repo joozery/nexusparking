@@ -16,6 +16,7 @@ export async function downloadReceiptPdf(sessionId: string) {
     'A20 Park', 'ใบเสร็จรับเงินค่าจอดรถ',
     `ทะเบียน ${s.plate}`,
     `ประเภทรถ ${{ car: 'รถยนต์', motorcycle: 'รถจักรยานยนต์', overnight: 'รถยนต์ (ค้างคืน)' }[s.cardType as string] ?? s.cardType}`,
+    ...(s.lostCard && s.customerName ? [`ชื่อผู้ใช้บริการ ${s.customerName}`] : []),
     '---',
     `เวลาเข้า ${date(s.entryTime)}`, `เวลาออก ${date(s.exitTime)}`,
     '---',
