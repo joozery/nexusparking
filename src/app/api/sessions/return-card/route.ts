@@ -20,7 +20,8 @@ export async function GET(req: NextRequest) {
   const visit = await ParkingSession.findOne({ cardUid: uid, status: { $ne: 'void' } }).sort({ entryTime: -1, _id: -1 }).lean()
   if (!visit || visit.status === 'active' || !(visit.lostCard || visit.lostFine > 0 || visit.status === 'lost')) return NextResponse.json(null)
   if (await Shift.exists({ 'cardRefunds.sessionId': String(visit._id) })) return NextResponse.json(null)
-  return NextResponse.json({ _id: visit._id, cardUid: visit.cardUid, plate: visit.plate, cardType: visit.cardType, exitTime: visit.exitTime, lostFine: visit.lostFine })
+  const dueAt = visit.exitTime ? new Date(new Date(visit.exitTime).getTime() + 30 * 24 * 60 * 60 * 1000) : null
+  return NextResponse.json({ _id: visit._id, cardUid: visit.cardUid, plate: visit.plate, cardType: visit.cardType, exitTime: visit.exitTime, lostFine: visit.lostFine, cancelled: Boolean(dueAt && new Date() >= dueAt), dueAt })
 }
 
 export const POST = parkingMutation(async (req: NextRequest) => {
@@ -30,6 +31,7 @@ export const POST = parkingMutation(async (req: NextRequest) => {
   if (!/^[a-f\d]{24}$/i.test(body.sessionId ?? '') || !['cash', 'qr'].includes(body.paymentMethod)) return NextResponse.json({ error: 'ข้อมูลไม่ถูกต้อง' }, { status: 400 })
   const visit = await ParkingSession.findById(body.sessionId).lean()
   if (!visit || !['completed', 'lost'].includes(visit.status) || !(visit.lostCard || visit.lostFine > 0 || visit.status === 'lost')) return NextResponse.json({ error: 'ไม่พบรายการบัตรหายที่รับเงินแล้ว' }, { status: 409 })
+  if (visit.exitTime && new Date() >= new Date(new Date(visit.exitTime).getTime() + 30 * 24 * 60 * 60 * 1000)) return NextResponse.json({ error: 'บัตรนี้ถูกยกเลิกการใช้งานแล้ว ไม่สามารถคืนค่าปรับอัตโนมัติ' }, { status: 409 })
   if (await Shift.exists({ 'cardRefunds.sessionId': body.sessionId })) return NextResponse.json({ error: 'รายการนี้คืนบัตรและคืนเงินแล้ว' }, { status: 409 })
   const latest = await ParkingSession.findOne({ cardUid: visit.cardUid, status: { $ne: 'void' } }).sort({ entryTime: -1, _id: -1 }).lean()
   if (String(latest?._id) !== body.sessionId || await ParkingQueue.exists({ cardUid: visit.cardUid, status: 'waiting' })) return NextResponse.json({ error: 'บัตรนี้มีการใช้งานใหม่แล้ว กรุณาตรวจสอบรายการ' }, { status: 409 })

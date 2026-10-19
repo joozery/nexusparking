@@ -15,7 +15,12 @@ export default function CustomerRegistrationPage() {
     if (response.ok) setRegistrations((await response.json()).registrations ?? [])
   }
 
-  useEffect(() => { void loadRegistrations() }, [])
+  async function loadLink() {
+    const response = await fetch('/api/customer-registration/link?kind=lost', { cache: 'no-store' })
+    if (response.ok) setUrl((await response.json()).link?.url ?? '')
+  }
+
+  useEffect(() => { void Promise.all([loadRegistrations(), loadLink()]) }, [])
 
   async function createLink() {
     setBusy(true); setMessage('')

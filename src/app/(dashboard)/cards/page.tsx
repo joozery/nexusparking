@@ -31,6 +31,7 @@ interface ParkingCard {
   expiryDate?: string
   isActive: boolean
   isLost?: boolean
+  isCancelled?: boolean
   createdAt: string
 }
 
@@ -826,6 +827,7 @@ export default function CardsPage() {
                       const cm = CATEGORY_META[card.cardCategory ?? 'temporary']
                       const status = expiryStatus(card.expiryDate)
                       const em = EXPIRY_META[status]
+                      const cardStatus = card.isCancelled ? 'ยกเลิกการใช้งาน' : card.isLost ? 'บัตรหาย' : 'ใช้งาน'
                       const isRenew = renewId === card._id
                       const rowNum = (pageSafe - 1) * pageSize + idx + 1
 
@@ -855,6 +857,14 @@ export default function CardsPage() {
                           </td>
                           <td className="px-3 py-2.5"><span className="text-[11px] text-slate-500">{card.phone || '—'}</span></td>
                           <td className="px-3 py-2.5">
+                            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full whitespace-nowrap"
+                              style={card.isCancelled
+                                ? { background: 'rgba(100,116,139,0.12)', color: '#475569' }
+                                : card.isLost
+                                  ? { background: 'rgba(220,38,38,0.1)', color: '#DC2626' }
+                                  : { background: 'rgba(5,150,105,0.1)', color: '#059669' }}>
+                              {cardStatus}
+                            </span>
                             {status !== 'none' ? (
                               <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full whitespace-nowrap"
                                 style={{ background: em.bg, color: em.color }}>
@@ -867,7 +877,12 @@ export default function CardsPage() {
                             ) : <span className="text-[11px] text-slate-300">—</span>}
                           </td>
                           <td className="px-3 py-2.5">
-                            {card.isLost ? (
+                            {card.isCancelled ? (
+                              <span className="inline-flex h-6 items-center px-2 rounded-full text-[10px] font-semibold"
+                                style={{ background: 'rgba(100,116,139,0.12)', color: '#475569' }}>
+                                ยกเลิกการใช้งาน
+                              </span>
+                            ) : card.isLost ? (
                               <span className="inline-flex h-6 items-center px-2 rounded-full text-[10px] font-semibold"
                                 style={{ background: 'rgba(220,38,38,0.1)', color: '#DC2626' }}>
                                 บัตรหาย

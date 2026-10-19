@@ -22,17 +22,20 @@ import { SessionHistory } from '@/components/reports/SessionHistory'
 import type { ExportColumn } from '@/lib/reportExport'
 import type { HistoryExportRow } from '@/lib/sessionHistoryExport'
 import { exportRevenueSummaryExcel, exportRevenueSummaryPDF } from '@/lib/revenueSummaryExport'
+import { exportVehicleCountExcel, exportVehicleCountPDF } from '@/lib/vehicleCountExport'
 import { DateTimeRangeFilter } from '@/components/ui/DateTimeRangeFilter'
 
 interface MonthlyRow { _id: string; total: number; count: number; car: number; motorcycle: number; carOvernight: number; motorcycleOvernight: number; overnight: number; overnightCount: number; lostFines: number }
 interface DailyRow   { _id: string; total: number; count: number; car: number; motorcycle: number; carOvernight: number; motorcycleOvernight: number; carRevenue: number; motorcycleRevenue: number; carOvernightRevenue: number; motorcycleOvernightRevenue: number; overnight: number; overnightCount: number; lostFines: number; lostCardCount: number; lostFineRefunds?: number }
 interface TypeRow    { _id: string; total: number; count: number; avg: number; avgDurationMin: number }
-interface Summary    { total: number; count: number; avg: number; lostFines: number; lostCardCount: number; maxFee: number; cash: number; transfer: number; lostFineRefunds: number; lostFineRefundCount: number; lostFineRefundCash: number; lostFineRefundTransfer: number; fineTotal: number; fineBreakdown: { name: string; total: number }[] }
+interface Summary    { total: number; count: number; avg: number; lostFines: number; lostCardCount: number; lostCardHold: number; lostCardIncome: number; lostCardIncomeCash: number; lostCardIncomeTransfer: number; maxFee: number; cash: number; transfer: number; lostFineRefunds: number; lostFineRefundCount: number; lostFineRefundCash: number; lostFineRefundTransfer: number; fineTotal: number; fineBreakdown: { name: string; total: number }[] }
 interface AvgOccupancy { car: number; motorcycle: number }
 interface HourlyRow { hour: number; total: number; count: number; car: number; motorcycle: number; carOvernight: number; motorcycleOvernight: number; avgTotal: number; avgCount: number }
 interface ReportData {
   period: string; startDate: string; endDate: string
   daily: DailyRow[]; monthly: MonthlyRow[]; byType: TypeRow[]; summary: Summary
+  lostCardHoldRows?: { date: string; amount: number }[]
+  lostCardIncomeRows?: { date: string; amount: number }[]
   avgOccupancy: AvgOccupancy
   hourly: HourlyRow[]; periodDays: number
 }
@@ -179,7 +182,7 @@ export default function ReportsPage() {
   const data = reportData!
   const [loading,     setLoading]     = useState(false)
   const [detailedExporting, setDetailedExporting] = useState(false)
-  const [exportReportKind, setExportReportKind] = useState<'all' | 'summary'>('all')
+  const [exportReportKind, setExportReportKind] = useState<'all' | 'summary' | 'vehicle-count'>('all')
 
   // คอลัมน์ที่จะโชว์ในตารางรายวัน + export — จำค่าไว้ต่อเบราว์เซอร์ (วันที่ล็อกไว้เสมอ ไม่ togglable)
   const togglableColumns = REPORT_COLUMNS.filter(c => c.key !== '_id')
@@ -209,10 +212,22 @@ export default function ReportsPage() {
           startDate: data.startDate,
           endDate: data.endDate,
           daily: data.daily,
+          lostCardHoldRows: data.lostCardHoldRows,
+          lostCardIncomeRows: data.lostCardIncomeRows,
           summary: data.summary,
         }
         if (format === 'excel') exportRevenueSummaryExcel(summaryData)
         else exportRevenueSummaryPDF(summaryData)
+        return
+      }
+      if (exportReportKind === 'vehicle-count') {
+        const from = period === 'custom' ? dateFrom : data.startDate
+        const to = period === 'custom' ? dateTo : data.endDate
+        const response = await fetch(`/api/reports/vehicle-counts?dateFrom=${encodeURIComponent(from)}&dateTo=${encodeURIComponent(to)}`)
+        const countData = await response.json()
+        if (!response.ok) throw new Error(countData.error ?? 'โหลดรายงานจำนวนรถไม่สำเร็จ')
+        if (format === 'excel') exportVehicleCountExcel(countData)
+        else exportVehicleCountPDF(countData)
         return
       }
       const from = period === 'custom' ? dateFrom : data.startDate
@@ -252,7 +267,30 @@ export default function ReportsPage() {
         originalSessionId: refund.sessionId,
         refundOperatorName: refund.operatorName,
       }))
-      const rows: HistoryExportRow[] = [...(historyData.sessions ?? []), ...refundRows]
+      const splitRows: HistoryExportRow[] = (historyData.sessions ?? []).flatMap((session: HistoryExportRow) => {
+        const isLost = session.lostCard === true || session.lostFine > 0 || session.status === 'lost'
+        if (!isLost || session.lostFine <= 0 || !session.exitTime) return [session]
+        const parkingRow: HistoryExportRow = { ...session, lostFine: 0, lostCard: false, totalFee: Math.max(0, session.totalFee - session.lostFine) }
+        const dueAt = new Date(new Date(session.exitTime).getTime() + 30 * 24 * 60 * 60 * 1000)
+        const refund = (refundData.refunds ?? []).find((item: { sessionId: string; refundedAt: string }) => item.sessionId === session._id)
+        const refundedBeforeDue = refund && new Date(refund.refundedAt).getTime() < dueAt.getTime()
+        const eventType: HistoryExportRow['transactionType'] = refundedBeforeDue || dueAt > new Date() ? 'lost-hold' : 'lost-income'
+        const eventRow: HistoryExportRow = {
+          ...session,
+          _id: `${session._id}:${dueAt.toISOString()}`,
+          entryTime: eventType === 'lost-income' ? dueAt.toISOString() : session.exitTime,
+          exitTime: undefined,
+          fee: 0,
+          fineAmount: 0,
+          discountAmount: 0,
+          lostFine: session.lostFine,
+          lostCard: true,
+          totalFee: session.lostFine,
+          transactionType: eventType,
+        }
+        return [parkingRow, eventRow]
+      })
+      const rows: HistoryExportRow[] = [...splitRows, ...refundRows]
         .sort((a, b) => new Date(b.transactionType === 'refund' ? (b.refundedAt ?? b.entryTime) : b.entryTime).getTime()
           - new Date(a.transactionType === 'refund' ? (a.refundedAt ?? a.entryTime) : a.entryTime).getTime())
       if (!rows.length) throw new Error('ไม่มีรายการในช่วงวันที่เลือก')
@@ -377,7 +415,8 @@ export default function ReportsPage() {
                         </p>
                         {[
                           { value: 'all' as const, label: 'รายงานรายการทั้งหมด' },
-                          { value: 'summary' as const, label: 'รายงานสรุป' },
+                          { value: 'summary' as const, label: 'รายงานสรุปรายได้' },
+                          { value: 'vehicle-count' as const, label: 'รายงานจำนวนรถทั้งหมด' },
                         ].map(option => (
                           <button key={option.value} onClick={() => setExportReportKind(option.value)}
                             className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs font-semibold text-left hover:bg-slate-50 transition-colors"
@@ -440,11 +479,13 @@ export default function ReportsPage() {
           <div className="p-5 space-y-4">
 
             {/* KPI strip */}
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 gap-3 xl:grid-cols-5">
               {[
-                { label: 'รายได้รวม',      value: `฿${fmt(data.summary.total)}`,            sub: `เงินสด ฿${fmt(data.summary.cash ?? 0)} · เงินโอน ฿${fmt(data.summary.transfer ?? 0)}`, icon: TrendingUp,    grad: 'linear-gradient(135deg,#713F12,#A16207)', glow: 'rgba(161,98,7,0.22)'  },
+                { label: 'รายได้รวม',      value: `฿${fmt(data.summary.total + (data.summary.lostCardIncome ?? 0))}`,            sub: `เงินสด ฿${fmt((data.summary.cash ?? 0) + (data.summary.lostCardIncomeCash ?? 0))} · เงินโอน ฿${fmt((data.summary.transfer ?? 0) + (data.summary.lostCardIncomeTransfer ?? 0))}`, icon: TrendingUp,    grad: 'linear-gradient(135deg,#713F12,#A16207)', glow: 'rgba(161,98,7,0.22)'  },
                 { label: 'ค่าปรับรวม',      value: `฿${fmt(data.summary.fineTotal ?? 0)}`,    sub: 'รายละเอียดค่าปรับ',                  icon: AlertTriangle, grad: 'linear-gradient(135deg,#7F1D1D,#DC2626)', glow: 'rgba(220,38,38,0.22)'  },
                 { label: 'คืนค่าปรับบัตรหาย', value: `฿${fmt(data.summary.lostFineRefunds ?? 0)}`, sub: `เงินสด ฿${fmt(data.summary.lostFineRefundCash ?? 0)} · เงินโอน ฿${fmt(data.summary.lostFineRefundTransfer ?? 0)}`, icon: RefreshCw, grad: 'linear-gradient(135deg,#14532D,#16A34A)', glow: 'rgba(22,163,74,0.22)' },
+                { label: 'Hold รอครบ 30 วัน', value: `฿${fmt(data.summary.lostCardHold ?? 0)}`, sub: 'ค่าปรับบัตรหายที่ยังรอดำเนินการ', icon: History, grad: 'linear-gradient(135deg,#334155,#64748B)', glow: 'rgba(100,116,139,0.22)' },
+                { label: 'รายได้บัตรหาย', value: `฿${fmt(data.summary.lostCardIncome ?? 0)}`, sub: 'ไม่คืนบัตรภายใน 30 วัน', icon: ArrowUpRight, grad: 'linear-gradient(135deg,#065F46,#10B981)', glow: 'rgba(16,185,129,0.22)' },
               ].map(k => {
                 const Icon = k.icon
                 return (

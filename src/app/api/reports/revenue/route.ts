@@ -72,11 +72,24 @@ export async function GET(req: NextRequest) {
     exitTime: { $gte: monthlyStart, $lte: new Date() },
   }
 
-  const [reportSettings, reportSessions, monthlySessions] = await Promise.all([
+  const recognitionStart = new Date(startDate.getTime() - 30 * 24 * 60 * 60 * 1000)
+  const [reportSettings, reportSessions, monthlySessions, refundLedgerShifts, lostCardIncomeSessions] = await Promise.all([
     getSettings(),
-    ParkingSession.find(reportSessionFilter).select('cardUid cardType entryTime exitTime fee totalFee durationMin lostFine lostCard status fineName fineAmount discountAmount').lean(),
+    ParkingSession.find(reportSessionFilter).select('cardUid cardType entryTime exitTime fee totalFee durationMin lostFine lostCard status fineName fineAmount discountAmount paymentMethod').lean(),
     ParkingSession.find(monthlySessionFilter).select('cardType entryTime exitTime fee').lean(),
+    Shift.find({ 'cardRefunds.0': { $exists: true } }).select('cardRefunds.sessionId cardRefunds.refundedAt').lean(),
+    ParkingSession.find({ ...reportSessionFilter, exitTime: { $gte: recognitionStart, $lte: refDate }, lostFine: { $gt: 0 } })
+      .select('exitTime lostFine paymentMethod').lean(),
   ])
+  const refundedAtBySessionId = new Map<string, Date>()
+  for (const shift of refundLedgerShifts) {
+    for (const refund of shift.cardRefunds ?? []) {
+      const sessionId = String(refund.sessionId)
+      const refundedAt = new Date(refund.refundedAt)
+      const existing = refundedAtBySessionId.get(sessionId)
+      if (!existing || refundedAt < existing) refundedAtBySessionId.set(sessionId, refundedAt)
+    }
+  }
   const classifySession = (session: { cardType: 'car' | 'motorcycle' | 'overnight'; entryTime: Date; exitTime?: Date }) => {
     const overnight = session.cardType === 'overnight' || (
       session.exitTime != null && calcFeeBreakdown(session.cardType, session.entryTime, session.exitTime, reportSettings.rates.overnight)
@@ -318,6 +331,47 @@ export async function GET(req: NextRequest) {
     .filter(session => session.lostCard === true || (session.lostFine ?? 0) > 0 || session.status === 'lost')
     .map(session => session.cardUid)
     .filter(Boolean)).size
+  const lostCardSessions = reportSessions.filter(session =>
+    session.lostCard === true || (session.lostFine ?? 0) > 0 || session.status === 'lost'
+  )
+  const lostCardHold = lostCardSessions.reduce((sum, session) => {
+    if (refundedAtBySessionId.has(String(session._id)) || !session.exitTime) return sum
+    const dueAt = new Date(session.exitTime.getTime() + 30 * 24 * 60 * 60 * 1000)
+    return now < dueAt ? sum + (session.lostFine ?? 0) : sum
+  }, 0)
+  const recognizedLostCardIncome = lostCardIncomeSessions.reduce((sum, session) => {
+    if (!session.exitTime) return sum
+    const dueAt = new Date(session.exitTime.getTime() + 30 * 24 * 60 * 60 * 1000)
+    const refundedAt = refundedAtBySessionId.get(String(session._id))
+    return dueAt >= startDate && dueAt <= refDate && (!refundedAt || refundedAt >= dueAt)
+      ? sum + (session.lostFine ?? 0)
+      : sum
+  }, 0)
+  const recognizedLostCardIncomeCash = lostCardIncomeSessions.reduce((sum, session) => {
+    if (!session.exitTime || session.paymentMethod !== 'cash') return sum
+    const dueAt = new Date(session.exitTime.getTime() + 30 * 24 * 60 * 60 * 1000)
+    const refundedAt = refundedAtBySessionId.get(String(session._id))
+    return dueAt >= startDate && dueAt <= refDate && (!refundedAt || refundedAt >= dueAt) ? sum + (session.lostFine ?? 0) : sum
+  }, 0)
+  const recognizedLostCardIncomeTransfer = lostCardIncomeSessions.reduce((sum, session) => {
+    if (!session.exitTime || session.paymentMethod !== 'qr') return sum
+    const dueAt = new Date(session.exitTime.getTime() + 30 * 24 * 60 * 60 * 1000)
+    const refundedAt = refundedAtBySessionId.get(String(session._id))
+    return dueAt >= startDate && dueAt <= refDate && (!refundedAt || refundedAt >= dueAt) ? sum + (session.lostFine ?? 0) : sum
+  }, 0)
+  const lostCardHoldRows = lostCardSessions.flatMap(session => {
+    if (!session.exitTime || refundedAtBySessionId.has(String(session._id))) return []
+    const dueAt = new Date(session.exitTime.getTime() + 30 * 24 * 60 * 60 * 1000)
+    return now < dueAt ? [{ date: dueAt.toISOString(), amount: session.lostFine ?? 0 }] : []
+  })
+  const lostCardIncomeRows = lostCardIncomeSessions.flatMap(session => {
+    if (!session.exitTime) return []
+    const dueAt = new Date(session.exitTime.getTime() + 30 * 24 * 60 * 60 * 1000)
+    const refundedAt = refundedAtBySessionId.get(String(session._id))
+    return dueAt >= startDate && dueAt <= refDate && (!refundedAt || refundedAt >= dueAt)
+      ? [{ date: dueAt.toISOString(), amount: session.lostFine ?? 0 }]
+      : []
+  })
   const hourlyByHour = new Map((hourlyRaw as { _id: number; total: number; count: number }[]).map(r => [r._id, r]))
   const hourly = Array.from({ length: 24 }, (_, hour) => {
     const row = hourlyByHour.get(hour)
@@ -338,6 +392,8 @@ export async function GET(req: NextRequest) {
     startDate: startDate.toISOString(),
     endDate:   refDate.toISOString(),
     daily: dailyReport,
+    lostCardHoldRows,
+    lostCardIncomeRows,
     monthly: monthlyReport,
     byType: reportByType,
     summary: {
@@ -353,6 +409,10 @@ export async function GET(req: NextRequest) {
       lostFineRefundCash: refundSummary[0]?.cash ?? 0,
       lostFineRefundTransfer: refundSummary[0]?.transfer ?? 0,
       lostCardCount,
+      lostCardHold,
+      lostCardIncome: recognizedLostCardIncome,
+      lostCardIncomeCash: recognizedLostCardIncomeCash,
+      lostCardIncomeTransfer: recognizedLostCardIncomeTransfer,
       fineTotal: fineBreakdown.reduce((sum, row) => sum + row.total, 0),
       fineBreakdown,
     },

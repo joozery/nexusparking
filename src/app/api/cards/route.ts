@@ -3,7 +3,7 @@ import { connectDB } from '@/lib/mongodb'
 import { ParkingCard } from '@/models/ParkingCard'
 import { ParkingSession } from '@/models/ParkingSession'
 import { ParkingQueue } from '@/models/ParkingQueue'
-import { getMissingCardUids } from '@/lib/missingCards'
+import { getCardStatusUids } from '@/lib/missingCards'
 import { normalizeUid } from '@/lib/thaiInput'
 
 function duplicateCardError(cardCategory?: string) {
@@ -25,8 +25,8 @@ export async function GET() {
     ...activeSessions.map(session => session.cardUid),
     ...waitingQueues.map(queue => queue.cardUid),
   ])
-  const missingUids = await getMissingCardUids(cards.map(card => card.uid), occupiedUids)
-  return NextResponse.json(cards.map(card => ({ ...card, isLost: missingUids.has(card.uid) })))
+  const { missingUids, cancelledUids } = await getCardStatusUids(cards.map(card => card.uid), occupiedUids)
+  return NextResponse.json(cards.map(card => ({ ...card, isLost: missingUids.has(card.uid), isCancelled: cancelledUids.has(card.uid) })))
 }
 
 export async function POST(req: NextRequest) {

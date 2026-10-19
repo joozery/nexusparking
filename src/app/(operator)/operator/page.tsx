@@ -247,6 +247,7 @@ export default function OperatorPage() {
   // Sidebar quick plate lookup (checkin/checkout auto-route by typed plate)
   const [plateMatches, setPlateMatches] = useState<Session[] | null>(null)
   const [returnCard, setReturnCard] = useState<{ _id: string; cardUid: string; plate: string; cardType: string; exitTime?: string; lostFine: number } | null>(null)
+  const [cancelledCard, setCancelledCard] = useState<{ cardUid: string; plate: string; dueAt?: string } | null>(null)
   const [refundReceipt, setRefundReceipt] = useState<RefundReceipt | null>(null)
   const [refundPrintBusy, setRefundPrintBusy] = useState(false)
   const [refundPdfBusy, setRefundPdfBusy] = useState(false)
@@ -388,7 +389,7 @@ export default function OperatorPage() {
   }, [fetchData, fetchSettings])
 
   // ── Scan input focus management ─────────────────────────────────────────
-  const noDialogOpen = !openedShift && !closedShift && !checkInOpen && !checkOutOpen && !lostOpen && !shiftEnding && !plateMatches && !returnCard && !carsListOpen && !shiftReportOpen && !!shift
+  const noDialogOpen = !openedShift && !closedShift && !checkInOpen && !checkOutOpen && !lostOpen && !shiftEnding && !plateMatches && !returnCard && !cancelledCard && !carsListOpen && !shiftReportOpen && !!shift
   useEffect(() => {
     if (noDialogOpen) {
       setTimeout(() => scanInputRef.current?.focus(), 50)
@@ -730,7 +731,7 @@ export default function OperatorPage() {
   useEffect(() => {
     onCardScanRef.current = async (uid: string) => {
       // Ignore scan when any dialog is already open — prevents resetting in-progress forms
-      if (openedShift || closedShift || checkInOpen || checkOutOpen || lostOpen || shiftEnding || plateMatches || returnCard || shiftReportOpen || !shift || cardScanBusy.current) return
+      if (openedShift || closedShift || checkInOpen || checkOutOpen || lostOpen || shiftEnding || plateMatches || returnCard || cancelledCard || shiftReportOpen || !shift || cardScanBusy.current) return
       cardScanBusy.current = true
       try {
       setCarsListOpen(false)
@@ -780,7 +781,11 @@ export default function OperatorPage() {
               const refundRes = await fetch(`/api/sessions/return-card?uid=${encodeURIComponent(found.uid)}`, { cache: 'no-store' })
               if (!refundRes.ok) { toastError('ตรวจสอบบัตรหายไม่สำเร็จ', 'กรุณาลองแตะบัตรใหม่'); return }
               const lostVisit = await refundRes.json()
-              if (lostVisit) { setRefundMethod('cash'); setReturnCard(lostVisit); return }
+              if (lostVisit) {
+                if (lostVisit.cancelled) setCancelledCard({ cardUid: lostVisit.cardUid, plate: lostVisit.plate, dueAt: lostVisit.dueAt })
+                else { setRefundMethod('cash'); setReturnCard(lostVisit) }
+                return
+              }
               setCiType(found.type)
               setCiPlate('')
               setCiUid(found.uid)
@@ -830,7 +835,7 @@ export default function OperatorPage() {
         e.preventDefault()
         e.stopPropagation()
         if (e.repeat) return
-        if (checkInOpen || checkOutOpen || lostOpen || shiftEnding || plateMatches || returnCard) {
+        if (checkInOpen || checkOutOpen || lostOpen || shiftEnding || plateMatches || returnCard || cancelledCard) {
           warning('กรุณาปิดหน้ารายการที่กำลังทำก่อนเปิดรายงาน F3')
           return
         }
@@ -842,7 +847,7 @@ export default function OperatorPage() {
         setShiftReportOpen(o => !o)
         return
       }
-      if (checkInOpen || checkOutOpen || lostOpen || shiftEnding || plateMatches || returnCard) return
+      if (checkInOpen || checkOutOpen || lostOpen || shiftEnding || plateMatches || returnCard || cancelledCard) return
       if (shiftReportOpen) return
 
       if (e.key === 'F2') {
@@ -857,7 +862,7 @@ export default function OperatorPage() {
     }
     window.addEventListener('keydown', handleKeyDown, true)
     return () => window.removeEventListener('keydown', handleKeyDown, true)
-  }, [checkInOpen, checkOutOpen, lostOpen, shiftEnding, shift, plateMatches, returnCard, shiftReportOpen, warning, closedShift, openedShift])
+  }, [checkInOpen, checkOutOpen, lostOpen, shiftEnding, shift, plateMatches, returnCard, cancelledCard, shiftReportOpen, warning, closedShift, openedShift])
 
   return (
     <div className="min-h-screen h-auto md:h-screen flex flex-col bg-[#F0F4FF] overflow-y-auto md:overflow-hidden">
@@ -903,7 +908,7 @@ export default function OperatorPage() {
           // Don't steal focus from a real input the operator clicked (e.g. search box)
           const target = e.relatedTarget as HTMLElement | null
           if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT')) return
-          if (!openedShift && !closedShift && !checkInOpen && !checkOutOpen && !lostOpen && !shiftEnding && !plateMatches && !returnCard && !carsListOpen && !shiftReportOpen && !!shift) {
+          if (!openedShift && !closedShift && !checkInOpen && !checkOutOpen && !lostOpen && !shiftEnding && !plateMatches && !returnCard && !cancelledCard && !carsListOpen && !shiftReportOpen && !!shift) {
             setTimeout(() => scanInputRef.current?.focus(), 50)
           }
         }}
@@ -1256,6 +1261,22 @@ export default function OperatorPage() {
             <div className="flex gap-3"><button disabled={refunding} className="rounded-xl border px-5 py-3" onClick={() => setReturnCard(null)}>ยกเลิก</button>
               <button disabled={refunding} className="flex-1 rounded-xl bg-emerald-600 px-5 py-3 font-bold text-white disabled:opacity-50" onClick={confirmCardReturn}>{refunding ? 'กำลังบันทึก…' : 'ยืนยันคืนบัตรและคืนค่าปรับ'}</button></div>
           </DialogBody>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={cancelledCard !== null} onOpenChange={o => { if (!o) setCancelledCard(null) }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>บัตรถูกยกเลิกการใช้งาน</DialogTitle>
+            <DialogDescription>บัตรใบนี้ไม่สามารถนำกลับมาใช้งานหรือคืนค่าปรับอัตโนมัติได้</DialogDescription>
+          </DialogHeader>
+          {cancelledCard && <DialogBody className="space-y-4 text-sm">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <div className="flex justify-between"><span>ทะเบียน</span><strong>{cancelledCard.plate || '—'}</strong></div>
+              <div className="mt-2 flex justify-between"><span>เลขบัตร</span><strong>{cancelledCard.cardUid}</strong></div>
+              <div className="mt-2 flex justify-between"><span>ครบกำหนดคืนบัตร</span><span>{cancelledCard.dueAt ? new Date(cancelledCard.dueAt).toLocaleDateString('th-TH') : '—'}</span></div>
+            </div>
+            <button type="button" className="w-full rounded-xl bg-slate-800 px-4 py-3 font-bold text-white" onClick={() => setCancelledCard(null)}>รับทราบ</button>
+          </DialogBody>}
         </DialogContent>
       </Dialog>
       <Dialog open={refundReceipt !== null} onOpenChange={o => { if (!o && !refundPdfBusy && !refundPrintBusy) setRefundReceipt(null) }}>

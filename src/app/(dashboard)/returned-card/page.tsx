@@ -15,7 +15,11 @@ export default function ReturnedCardPage() {
     const response = await fetch('/api/customer-registration?kind=return', { cache: 'no-store' })
     if (response.ok) setRows((await response.json()).registrations ?? [])
   }
-  useEffect(() => { void load() }, [])
+  async function loadLink() {
+    const response = await fetch('/api/customer-registration/link?kind=return', { cache: 'no-store' })
+    if (response.ok) setUrl((await response.json()).link?.url ?? '')
+  }
+  useEffect(() => { void Promise.all([load(), loadLink()]) }, [])
 
   async function createLink() {
     setBusy(true); setMessage('')
