@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
   await connectDB()
   const kind = new URL(req.url).searchParams.get('kind') === 'return' ? 'return' : 'lost'
   const rows = await CustomerRegistration.find({ kind })
-    .select('refCode fullName phone verifiedAt createdAt')
+    .select('refCode fullName phone firstName lastName bankName accountName accountNumber idNumber vehicleType plate province vehicleBrand vehicleModel vehicleColor entryDate consentAccepted verifiedAt createdAt')
     .sort({ createdAt: -1 }).limit(200).lean()
   return NextResponse.json({ registrations: rows })
 }
@@ -40,11 +40,30 @@ export async function POST(req: NextRequest) {
   try {
     const form = await req.formData()
     const slug = clean(form.get('slug'), 32)
-    const fullName = clean(form.get('fullName'), 120)
+    const firstName = clean(form.get('firstName'), 60)
+    const lastName = clean(form.get('lastName'), 60)
+    const fullName = clean(form.get('fullName'), 120) || `${firstName} ${lastName}`.trim()
     const phone = clean(form.get('phone'), 30)
+    const bankName = clean(form.get('bankName'), 80)
+    const accountName = clean(form.get('accountName'), 120)
+    const accountNumber = clean(form.get('accountNumber'), 30).replace(/\D/g, '')
+    const accountNumberConfirm = clean(form.get('accountNumberConfirm'), 30).replace(/\D/g, '')
+    const idNumber = clean(form.get('idNumber'), 30)
+    const vehicleType = clean(form.get('vehicleType'), 40)
+    const plate = clean(form.get('plate'), 30)
+    const province = clean(form.get('province'), 60)
+    const vehicleBrand = clean(form.get('vehicleBrand'), 60)
+    const vehicleModel = clean(form.get('vehicleModel'), 60)
+    const vehicleColor = clean(form.get('vehicleColor'), 30)
+    const entryDate = clean(form.get('entryDate'), 20)
+    const consentAccepted = form.get('consentAccepted') === 'true'
+    const privacyAccepted = form.get('privacyAccepted') === 'true'
     const idCard = form.get('idCardPhoto')
     const vehiclePhoto = form.get('vehicleRegistrationPhoto')
-    if (!slug || !fullName || !phone || !(idCard instanceof File) || !(vehiclePhoto instanceof File)) {
+    const carPhoto = form.get('vehiclePhoto')
+    const missingCommon = !slug || !firstName || !lastName || !fullName || !phone || !plate || !consentAccepted || !privacyAccepted
+    const missingLost = !idNumber || !vehicleType || !province || !vehicleBrand || !vehicleColor || !(idCard instanceof File) || !(vehiclePhoto instanceof File) || !(carPhoto instanceof File)
+    if (missingCommon) {
       return NextResponse.json({ error: 'กรุณากรอกข้อมูลและแนบเอกสารให้ครบ' }, { status: 400 })
     }
     if (!/^[0-9]{4,32}$/.test(slug)) return NextResponse.json({ error: 'ลิงก์แบบฟอร์มไม่ถูกต้อง' }, { status: 400 })
@@ -52,6 +71,13 @@ export async function POST(req: NextRequest) {
     await connectDB()
     const link = await CustomerFormLink.findOne({ slug, active: true }).lean()
     if (!link) return NextResponse.json({ error: 'ลิงก์นี้ไม่พร้อมใช้งาน' }, { status: 404 })
+    const isReturn = link.kind === 'return'
+    if (isReturn && (!bankName || !accountName || !/^\d{6,20}$/.test(accountNumber) || accountNumber !== accountNumberConfirm)) {
+      return NextResponse.json({ error: 'กรุณากรอกข้อมูลบัญชีให้ครบ และตรวจสอบเลขบัญชีให้ตรงกัน' }, { status: 400 })
+    }
+    if (!isReturn && (!entryDate || missingLost)) {
+      return NextResponse.json({ error: 'กรุณากรอกข้อมูลและแนบเอกสารให้ครบ' }, { status: 400 })
+    }
 
     let refCode = ''
     for (let attempt = 0; attempt < 10; attempt += 1) {
@@ -60,17 +86,23 @@ export async function POST(req: NextRequest) {
     }
     if (!refCode) return NextResponse.json({ error: 'สร้างเลข Ref ไม่สำเร็จ กรุณาลองใหม่' }, { status: 503 })
 
-    const idCardPhotoPath = await saveImage(idCard, refCode, 'id-card')
+    let idCardPhotoPath = ''
     let vehicleRegistrationPhotoPath = ''
+    let vehiclePhotoPath = ''
     try {
-      vehicleRegistrationPhotoPath = await saveImage(vehiclePhoto, refCode, 'vehicle')
-      await CustomerRegistration.create({ kind: link.kind, refCode, linkSlug: slug, fullName, phone, idCardPhotoPath, vehicleRegistrationPhotoPath })
+      if (!isReturn) {
+        idCardPhotoPath = await saveImage(idCard as File, refCode, 'id-card')
+        vehicleRegistrationPhotoPath = await saveImage(vehiclePhoto as File, refCode, 'vehicle')
+        vehiclePhotoPath = await saveImage(carPhoto as File, refCode, 'vehicle-photo')
+      }
+      await CustomerRegistration.create({ kind: link.kind, refCode, linkSlug: slug, fullName, phone, firstName, lastName, bankName, accountName, accountNumber, idNumber, vehicleType, plate, province, vehicleBrand, vehicleModel, vehicleColor, entryDate, consentAccepted, privacyAccepted, privacyAcceptedAt: new Date(), idCardPhotoPath, vehicleRegistrationPhotoPath, vehiclePhotoPath })
     } catch (error) {
       await fs.unlink(idCardPhotoPath).catch(() => {})
       if (vehicleRegistrationPhotoPath) await fs.unlink(vehicleRegistrationPhotoPath).catch(() => {})
+      if (vehiclePhotoPath) await fs.unlink(vehiclePhotoPath).catch(() => {})
       throw error
     }
-    return NextResponse.json({ success: true, refCode })
+    return NextResponse.json({ success: true, refCode, createdAt: new Date().toISOString() })
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : 'บันทึกข้อมูลไม่สำเร็จ' }, { status: 400 })
   }

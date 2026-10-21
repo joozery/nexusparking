@@ -95,6 +95,12 @@ export async function downloadRefundReceiptPdf(data: {
   paymentMethod: 'cash' | 'qr'
   refundedAt: string
   exitTime?: string
+  customerRef?: string
+  customerName?: string
+  bankName?: string
+  accountName?: string
+  accountNumber?: string
+  status?: 'completed' | 'pending'
 }) {
   const { jsPDF } = await import('jspdf')
   await document.fonts.ready
@@ -107,6 +113,9 @@ export async function downloadRefundReceiptPdf(data: {
   const lines = [
     'A20 Park',
     'ใบรับเงินคืนค่าปรับบัตรหาย',
+    '(ต้นฉบับ)',
+    ...(data.customerRef ? [`เลข Ref ${data.customerRef}`] : []),
+    ...(data.customerName ? [`ผู้คืนบัตร ${data.customerName}`] : []),
     `ทะเบียน ${data.plate}`,
     `ประเภทรถ ${vehicle}`,
     `เลขบัตร ${data.cardUid}`,
@@ -116,8 +125,13 @@ export async function downloadRefundReceiptPdf(data: {
     '---',
     `คืนค่าปรับบัตรหาย ${money(data.amount)}`,
     `คืนโดย ${data.paymentMethod === 'qr' ? 'เงินโอน' : 'เงินสด'}`,
+    data.paymentMethod === 'qr' ? `สถานะ ${data.status === 'pending' ? 'รอโอนภายใน 5 วัน' : 'โอนแล้ว'}` : 'สถานะ รับเงินสดแล้ว',
     `ยอดคืนเงิน ${money(data.amount)}`,
     '---',
+    'ลงชื่อพนักงาน __________________',
+    'ลงชื่อลูกค้า ____________________',
+    '---',
+    '(สำเนา)',
     'หากมีข้อสงสัยหรือต้องการสอบถามข้อมูลเพิ่มเติม',
     'Facebook:A20Park',
     'ขอบคุณที่ใช้บริการ',

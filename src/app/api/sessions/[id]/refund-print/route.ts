@@ -32,6 +32,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     refundedAt: new Date(refund.refundedAt).toISOString(),
     amount: refund.amount,
     paymentMethod: refund.paymentMethod,
+    customerRef: refund.customerRef,
+    customerName: refund.customerName,
+    status: refund.status,
   }))
   return NextResponse.json({ success: result.success })
 }

@@ -94,6 +94,12 @@ interface RefundReceipt {
   paymentMethod: 'cash' | 'qr'
   refundedAt: string
   exitTime?: string
+  customerRef?: string
+  customerName?: string
+  bankName?: string
+  accountName?: string
+  accountNumber?: string
+  status?: 'completed' | 'pending'
 }
 
 function EntryPhoto({ sessionId, face = false, exit = false }: { sessionId: string; face?: boolean; exit?: boolean }) {
@@ -253,12 +259,30 @@ export default function OperatorPage() {
   const [refundPdfBusy, setRefundPdfBusy] = useState(false)
   const [refundMethod, setRefundMethod] = useState<'cash' | 'qr'>('cash')
   const [refunding, setRefunding] = useState(false)
+  const [returnRef, setReturnRef] = useState('')
+  const [returnRegistration, setReturnRegistration] = useState<{ refCode: string; fullName: string; plate?: string; bankName?: string; accountName?: string; accountNumber?: string } | null>(null)
+  const [returnRefError, setReturnRefError] = useState('')
+  const [returnLookupBusy, setReturnLookupBusy] = useState(false)
+
+  async function lookupReturnRegistration() {
+    setReturnRefError(''); setReturnRegistration(null)
+    if (!/^A20-[0-9]{6}$/.test(returnRef)) return setReturnRefError('กรุณากรอกเลข Ref รูปแบบ A20-123456')
+    setReturnLookupBusy(true)
+    try {
+      const res = await fetch(`/api/customer-registration/lookup?kind=return&ref=${encodeURIComponent(returnRef)}`)
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'ไม่พบข้อมูล')
+      if (data.plate && data.plate.replace(/\s/g, '').toUpperCase() !== returnCard?.plate.replace(/\s/g, '').toUpperCase()) throw new Error('ทะเบียนใน Ref ไม่ตรงกับบัตรที่นำมาคืน')
+      setReturnRegistration(data)
+    } catch (error) { setReturnRefError(error instanceof Error ? error.message : 'ค้นหาข้อมูลไม่สำเร็จ') } finally { setReturnLookupBusy(false) }
+  }
 
   async function confirmCardReturn() {
     if (!returnCard || refunding) return
     setRefunding(true)
     try {
-      const res = await fetch('/api/sessions/return-card', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: returnCard._id, paymentMethod: refundMethod }) })
+      if (!returnRegistration) { setReturnRefError('กรุณาค้นหาเลข Ref และตรวจสอบข้อมูลก่อน'); return }
+      const res = await fetch('/api/sessions/return-card', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: returnCard._id, paymentMethod: refundMethod, customerRef: returnRegistration.refCode }) })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'บันทึกไม่สำเร็จ')
       setRefundReceipt({
@@ -270,9 +294,15 @@ export default function OperatorPage() {
         paymentMethod: data.paymentMethod,
         refundedAt: new Date().toISOString(),
         exitTime: returnCard.exitTime,
+        customerRef: data.customerRef,
+        customerName: data.customerName,
+        bankName: returnRegistration.bankName,
+        accountName: returnRegistration.accountName,
+        accountNumber: returnRegistration.accountNumber,
+        status: data.status,
       })
       setReturnCard(null)
-      success('คืนบัตรและคืนค่าปรับแล้ว', `ยอดคืน ฿${data.amount.toLocaleString()} บันทึกในกะปัจจุบัน`)
+      success(data.status === 'pending' ? 'รับเรื่องโอนเงินแล้ว' : 'คืนบัตรและคืนค่าปรับแล้ว', data.status === 'pending' ? 'บันทึกเป็นรอโอน ยังไม่ตัดยอด' : `ยอดคืน ฿${data.amount.toLocaleString()} บันทึกในกะปัจจุบัน`)
       await Promise.all([fetchData(), fetchShift()])
     } catch (error) { toastError('คืนบัตรไม่สำเร็จ', error instanceof Error ? error.message : 'กรุณาลองใหม่') }
     finally { setRefunding(false) }
@@ -288,6 +318,17 @@ export default function OperatorPage() {
     } catch (error) {
       toastError('พิมพ์ใบรับเงินไม่สำเร็จ', error instanceof Error ? error.message : 'กรุณาตรวจเครื่องพิมพ์')
     } finally { setRefundPrintBusy(false) }
+  }
+  async function markTransferDone() {
+    if (!refundReceipt || refundReceipt.status !== 'pending') return
+    try {
+      const res = await fetch('/api/sessions/return-card', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: refundReceipt.sessionId }) })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'บันทึกไม่สำเร็จ')
+      setRefundReceipt({ ...refundReceipt, status: 'completed' })
+      await fetchShift()
+      success('บันทึกโอนเงินแล้ว')
+    } catch (error) { toastError('บันทึกการโอนไม่สำเร็จ', error instanceof Error ? error.message : 'กรุณาลองใหม่') }
   }
   const [matchSource, setMatchSource] = useState<'card' | 'plate'>('plate')
   const [plateBusy, setPlateBusy] = useState(false)
@@ -783,7 +824,7 @@ export default function OperatorPage() {
               const lostVisit = await refundRes.json()
               if (lostVisit) {
                 if (lostVisit.cancelled) setCancelledCard({ cardUid: lostVisit.cardUid, plate: lostVisit.plate, dueAt: lostVisit.dueAt })
-                else { setRefundMethod('cash'); setReturnCard(lostVisit) }
+                else { setRefundMethod('cash'); setReturnRef(''); setReturnRegistration(null); setReturnRefError(''); setReturnCard(lostVisit) }
                 return
               }
               setCiType(found.type)
@@ -1258,8 +1299,14 @@ export default function OperatorPage() {
             <label className="block">คืนเงินโดย
               <select className="ml-4 rounded-lg border p-2" value={refundMethod} disabled={refunding} onChange={e => setRefundMethod(e.target.value as 'cash' | 'qr')}><option value="cash">เงินสด</option><option value="qr">โอน / QR</option></select>
             </label>
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+              <p className="font-bold">เลข Ref การคืนบัตร <span className="text-red-600">*</span></p>
+              <div className="mt-2 flex gap-2"><input value={returnRef} onChange={e => { setReturnRef(e.target.value.toUpperCase().replace(/\s/g, '').slice(0, 10)); setReturnRegistration(null); setReturnRefError('') }} placeholder="A20-123456" className="min-w-0 flex-1 rounded-lg border bg-white px-3 py-2 font-mono" disabled={refunding} /><button type="button" onClick={() => void lookupReturnRegistration()} disabled={returnLookupBusy || refunding} className="rounded-lg bg-amber-600 px-3 py-2 font-bold text-white disabled:opacity-50">{returnLookupBusy ? 'ค้นหา...' : 'ค้นหา'}</button></div>
+              {returnRefError && <p className="mt-2 text-sm text-red-600">{returnRefError}</p>}
+              {returnRegistration && <div className="mt-3 rounded-lg bg-white p-3 text-sm"><p>ชื่อ–นามสกุล: <strong>{returnRegistration.fullName}</strong></p><p>ทะเบียน: <strong>{returnRegistration.plate || '-'}</strong></p>{refundMethod === 'qr' && <><p>ธนาคาร: <strong>{returnRegistration.bankName || '-'}</strong></p><p>ชื่อบัญชี: <strong>{returnRegistration.accountName || '-'}</strong></p><p>เลขบัญชี: <strong>{returnRegistration.accountNumber ? `XXX-X-${returnRegistration.accountNumber.slice(-5)}` : '-'}</strong></p></>}</div>}
+            </div>
             <div className="flex gap-3"><button disabled={refunding} className="rounded-xl border px-5 py-3" onClick={() => setReturnCard(null)}>ยกเลิก</button>
-              <button disabled={refunding} className="flex-1 rounded-xl bg-emerald-600 px-5 py-3 font-bold text-white disabled:opacity-50" onClick={confirmCardReturn}>{refunding ? 'กำลังบันทึก…' : 'ยืนยันคืนบัตรและคืนค่าปรับ'}</button></div>
+              <button disabled={refunding || !returnRegistration} className="flex-1 rounded-xl bg-emerald-600 px-5 py-3 font-bold text-white disabled:opacity-50" onClick={confirmCardReturn}>{refunding ? 'กำลังบันทึก…' : 'ยืนยันคืนบัตรและคืนค่าปรับ'}</button></div>
           </DialogBody>
         </DialogContent>
       </Dialog>
@@ -1289,7 +1336,8 @@ export default function OperatorPage() {
             <div className="rounded-xl border border-orange-200 bg-orange-50 p-4 text-sm">
               <div className="flex justify-between"><span>ทะเบียน</span><strong>{refundReceipt.plate}</strong></div>
               <div className="flex justify-between"><span>ประเภทรถ</span><span>{refundReceipt.cardType === 'motorcycle' ? 'รถจักรยานยนต์' : 'รถยนต์'}</span></div>
-              <div className="flex justify-between"><span>คืนโดย</span><span>{refundReceipt.paymentMethod === 'cash' ? 'เงินสด' : 'เงินโอน'}</span></div>
+              <div className="flex justify-between"><span>คืนโดย</span><span>{refundReceipt.paymentMethod === 'cash' ? 'เงินสด' : refundReceipt.status === 'pending' ? 'โอนเงิน (รอโอน)' : 'โอนเงินแล้ว'}</span></div>
+              {refundReceipt.customerName && <div className="flex justify-between"><span>ผู้คืนบัตร</span><span>{refundReceipt.customerName}</span></div>}
               <div className="mt-2 flex justify-between border-t border-orange-200 pt-2 font-bold text-orange-700"><span>ยอดคืนเงิน</span><span>฿{refundReceipt.amount.toLocaleString('th-TH', { minimumFractionDigits: 2 })}</span></div>
             </div>
             <div className="flex gap-3">
@@ -1305,6 +1353,7 @@ export default function OperatorPage() {
                 } finally { setRefundPdfBusy(false) }
               }}>{refundPdfBusy ? 'กำลังสร้าง PDF...' : 'ดาวน์โหลดใบรับเงิน PDF'}</button>
             </div>
+            {refundReceipt.status === 'pending' && <button type="button" className="w-full rounded-xl bg-indigo-600 px-4 py-3 font-bold text-white" onClick={() => void markTransferDone()}>โอนแล้ว</button>}
           </DialogBody>}
         </DialogContent>
       </Dialog>

@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
   const kind = new URL(req.url).searchParams.get('kind') === 'return' ? 'return' : 'lost'
   if (!/^A20-[0-9]{6}$/.test(refCode)) return NextResponse.json({ error: 'กรุณากรอกเลข Ref ให้ถูกต้อง' }, { status: 400 })
   await connectDB()
-  const row = await CustomerRegistration.findOne({ refCode, kind }).select('refCode fullName verifiedAt').lean()
+  const row = await CustomerRegistration.findOne({ refCode, kind }).select('refCode fullName firstName lastName phone bankName accountName accountNumber idNumber vehicleType plate province vehicleBrand vehicleModel vehicleColor entryDate consentAccepted verifiedAt').lean()
   if (!row) return NextResponse.json({ error: 'ไม่พบข้อมูลจากเลข Ref นี้' }, { status: 404 })
-  return NextResponse.json({ refCode: row.refCode, fullName: row.fullName, verifiedAt: row.verifiedAt ?? null })
+  return NextResponse.json({ ...row, verifiedAt: row.verifiedAt ?? null })
 }

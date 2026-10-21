@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
     ...(Object.keys(refundedAt).length ? { cardRefunds: { $elemMatch: { refundedAt } } } : {}),
   }).select('operatorName cardRefunds').lean()
 
-  const refunds = shifts.flatMap(shift => (shift.cardRefunds ?? [])
+  const refunds = shifts.flatMap(shift => (shift.cardRefunds ?? []).filter(refund => refund.status !== 'pending')
     .filter(refund => !Object.keys(refundedAt).length || (
       new Date(refund.refundedAt) >= (refundedAt.$gte ?? new Date(0)) &&
       new Date(refund.refundedAt) <= (refundedAt.$lte ?? new Date(8640000000000000))

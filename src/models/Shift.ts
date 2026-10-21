@@ -7,7 +7,7 @@ export interface IShift extends Document, ShiftVehicleCounts {
   closingCardsByType?: VehicleCounts
   carryoverByBilling?: ActiveVehicleBillingCounts
   closingByBilling?: ActiveVehicleBillingCounts
-  cardRefunds?: { sessionId: string; cardUid: string; plate: string; amount: number; paymentMethod: 'cash' | 'qr'; refundedAt: Date; operatorId: string }[]
+  cardRefunds?: { sessionId: string; cardUid: string; plate: string; amount: number; paymentMethod: 'cash' | 'qr'; status: 'completed' | 'pending'; refundedAt: Date; transferredAt?: Date; operatorId: string; customerRef?: string; customerName?: string; bankName?: string; accountName?: string; accountNumber?: string }[]
   operatorId:      string
   operatorName:    string
   startTime:       Date
@@ -30,7 +30,7 @@ const countsSchema = new Schema({ car: { type: Number, required: true }, motorcy
 const ShiftSchema = new Schema<IShift>({
   openingCardsByType: { type: countsSchema, default: undefined },
   closingCardsByType: { type: countsSchema, default: undefined },
-  cardRefunds: { type: [{ sessionId: String, cardUid: String, plate: String, amount: Number, paymentMethod: { type: String, enum: ['cash', 'qr'] }, refundedAt: Date, operatorId: String }], default: [] },
+  cardRefunds: { type: [{ sessionId: String, cardUid: String, plate: String, amount: Number, paymentMethod: { type: String, enum: ['cash', 'qr'] }, status: { type: String, enum: ['completed', 'pending'], default: 'completed' }, refundedAt: Date, transferredAt: Date, operatorId: String, customerRef: String, customerName: String, bankName: String, accountName: String, accountNumber: String }], default: [] },
   checkinsByType: { type: countsSchema, default: undefined },
   checkoutsByType: { type: countsSchema, default: undefined },
   carryoverByType: { type: countsSchema, default: undefined },

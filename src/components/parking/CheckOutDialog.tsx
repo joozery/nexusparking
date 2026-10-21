@@ -31,6 +31,19 @@ interface FineOption {
   description?: string
 }
 
+interface LostRegistration {
+  refCode: string
+  fullName: string
+  idNumber?: string
+  vehicleType?: 'car' | 'motorcycle'
+  plate?: string
+  province?: string
+  vehicleBrand?: string
+  vehicleModel?: string
+  vehicleColor?: string
+  entryDate?: string
+}
+
 interface Props {
   lockedLostCard?: boolean
   submitting?: boolean
@@ -130,6 +143,10 @@ export function CheckOutDialog({
   const [isLostCard, setIsLostCard] = useState(checkoutSource === 'plate')
   const [customerRef, setCustomerRef] = useState('')
   const [customerName, setCustomerName] = useState('')
+  const [customerRegistration, setCustomerRegistration] = useState<LostRegistration | null>(null)
+  const [reviewConfirmed, setReviewConfirmed] = useState(false)
+  const [lookupBusy, setLookupBusy] = useState(false)
+  const [zoomedEvidence, setZoomedEvidence] = useState<string | null>(null)
   const [customerRefError, setCustomerRefError] = useState('')
   const lostContext = `${open}:${plate}:${entryTime?.getTime()}:${checkoutSource}`
   const [previousLostContext, setPreviousLostContext] = useState(lostContext)
@@ -138,26 +155,26 @@ export function CheckOutDialog({
     setIsLostCard(checkoutSource === 'plate')
     setCustomerRef('')
     setCustomerName('')
+    setCustomerRegistration(null)
+    setReviewConfirmed(false)
     setCustomerRefError('')
   }
 
-  useEffect(() => {
-    if (!(isLostCard || lockedLostCard) || !/^A20-[0-9]{6}$/.test(customerRef)) {
-      setCustomerName('')
-      setCustomerRefError('')
-      return
-    }
-    const controller = new AbortController()
-    fetch(`/api/customer-registration/lookup?kind=lost&ref=${encodeURIComponent(customerRef)}`, { signal: controller.signal })
-      .then(async res => {
-        const data = await res.json()
-        if (!res.ok) throw new Error(data.error ?? 'ไม่พบข้อมูล')
-        setCustomerName(data.fullName ?? '')
-        setCustomerRefError('')
-      })
-      .catch(error => { if (error.name !== 'AbortError') { setCustomerName(''); setCustomerRefError(error.message) } })
-    return () => controller.abort()
-  }, [customerRef, isLostCard, lockedLostCard])
+  async function lookupRegistration() {
+    setCustomerRefError('')
+    setCustomerRegistration(null)
+    setCustomerName('')
+    setReviewConfirmed(false)
+    if (!/^A20-[0-9]{6}$/.test(customerRef)) return setCustomerRefError('กรุณากรอกเลข Ref รูปแบบ A20-123456')
+    setLookupBusy(true)
+    try {
+      const res = await fetch(`/api/customer-registration/lookup?kind=lost&ref=${encodeURIComponent(customerRef)}`)
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'ไม่พบข้อมูล')
+      setCustomerRegistration(data)
+      setCustomerName(data.fullName ?? '')
+    } catch (error) { setCustomerRefError(error instanceof Error ? error.message : 'ค้นหาข้อมูลไม่สำเร็จ') } finally { setLookupBusy(false) }
+  }
 
   const storeDiscounts = discounts.filter(d => d.discountType !== 'per_day')
   const dailyDiscounts = discounts.filter(d => d.discountType === 'per_day')
@@ -342,12 +359,13 @@ export function CheckOutDialog({
                     </span>
                     {(isLostCard || lockedLostCard) && <input
                       value={customerRef}
-                      onChange={e => setCustomerRef(e.target.value.toUpperCase().replace(/\s/g, '').slice(0, 10))}
+                      onChange={e => { setCustomerRef(e.target.value.toUpperCase().replace(/\s/g, '').slice(0, 10)); setCustomerRegistration(null); setCustomerName(''); setReviewConfirmed(false); setCustomerRefError('') }}
                       placeholder="Ref เช่น A20-123456"
                       aria-label="เลข Ref ลูกค้า"
                       className="h-8 w-36 rounded-md border border-amber-300 bg-white px-2 text-xs font-mono font-bold text-slate-800 outline-none"
                       disabled={submitting}
                     />}
+                    {(isLostCard || lockedLostCard) && <button type="button" onClick={() => void lookupRegistration()} disabled={lookupBusy || submitting} className="h-8 rounded-md bg-amber-600 px-2 text-xs font-bold text-white disabled:opacity-50">{lookupBusy ? 'กำลังค้นหา' : 'ค้นหา'}</button>}
                   </div>
                 )}
                 {(isLostCard || lockedLostCard) && customerRef && (customerName || customerRefError) && (
@@ -355,6 +373,7 @@ export function CheckOutDialog({
                     {customerName ? `พบข้อมูล: ${customerName}` : customerRefError}
                   </p>
                 )}
+                {(isLostCard || lockedLostCard) && customerRegistration && <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-slate-700"><p className="font-black text-emerald-800">ข้อมูลจาก Ref สำหรับตรวจสอบ</p><dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1"><dt>ชื่อ–นามสกุล</dt><dd className="font-bold">{customerRegistration.fullName}</dd><dt>ประเภทรถ</dt><dd>{customerRegistration.vehicleType === 'motorcycle' ? 'รถจักรยานยนต์' : 'รถยนต์'}</dd><dt>ทะเบียน</dt><dd>{customerRegistration.plate || '-'}</dd><dt>จังหวัด</dt><dd>{customerRegistration.province || '-'}</dd><dt>ยี่ห้อ/รุ่น</dt><dd>{customerRegistration.vehicleBrand || '-'}{customerRegistration.vehicleModel ? ` / ${customerRegistration.vehicleModel}` : ''}</dd><dt>สีรถ</dt><dd>{customerRegistration.vehicleColor || '-'}</dd></dl><div className="mt-3 grid grid-cols-3 gap-2">{['id-card', 'vehicle', 'vehicle-photo'].map(type => { const url = `/api/customer-registration/${customerRef}/photo?type=${type}`; return <button key={type} type="button" onClick={() => setZoomedEvidence(url)} className="relative overflow-hidden rounded-lg border border-emerald-200 bg-white"><img src={url} alt={type} className="h-20 w-full object-cover" /><span className="pointer-events-none absolute inset-0 flex items-center justify-center text-xs font-black text-white [text-shadow:0_1px_3px_#000]">A20</span></button> })}</div><button type="button" disabled={submitting} onClick={() => setReviewConfirmed(true)} className={`mt-3 w-full rounded-lg px-3 py-2 text-sm font-black ${reviewConfirmed ? 'bg-emerald-600 text-white' : 'bg-white text-emerald-700 ring-1 ring-emerald-300'}`}>{reviewConfirmed ? 'ตรวจสอบแล้ว' : 'ยืนยันตรวจสอบข้อมูลแล้ว'}</button></div>}
 
                 {/* Sim: custom exit time */}
                 {onCustomExitTimeChange && (
@@ -548,7 +567,7 @@ export function CheckOutDialog({
                   submitting ||
                   (!!entryTime && (!Number.isFinite(exitTimeDate.getTime()) || exitTimeDate <= entryTime)) ||
                   (paymentMethod === 'cash' && cashReceived !== '' && change < 0)
-                  || ((isLostCard || lockedLostCard) && (!/^A20-[0-9]{6}$/.test(customerRef) || !customerName))
+                  || ((isLostCard || lockedLostCard) && (!/^A20-[0-9]{6}$/.test(customerRef) || !customerRegistration || !reviewConfirmed))
                 }
                 style={paymentMethod === 'qr' ? { background: '#7C3AED' } : { background: theme.hex600 }}
                 onClick={() => onConfirm(paymentMethod, selectedDiscount?._id, selectedDailyDiscount?._id, isLostCard || lockedLostCard, selectedFineId || undefined, customerRef || undefined)}
@@ -561,6 +580,7 @@ export function CheckOutDialog({
           )}
         </DialogFooter>
       </DialogContent>
+      {zoomedEvidence && <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/85 p-4" onClick={() => setZoomedEvidence(null)}><div className="relative max-h-[90vh] max-w-4xl" onClick={event => event.stopPropagation()}><img src={zoomedEvidence} alt="หลักฐาน" className="max-h-[85vh] max-w-[90vw] rounded-xl object-contain" /><span className="pointer-events-none absolute inset-0 flex items-center justify-center text-7xl font-black text-white/70 [text-shadow:0_2px_8px_#000]">A20</span><button type="button" onClick={() => setZoomedEvidence(null)} className="absolute right-2 top-2 rounded-full bg-slate-900/80 px-3 py-1 text-xl font-bold text-white">×</button></div></div>}
     </Dialog>
   )
 }

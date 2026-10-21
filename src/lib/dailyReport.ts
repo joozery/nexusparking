@@ -13,7 +13,7 @@ export async function buildDailyReport(start: Date, end: Date, partial = false):
     ParkingQueue.find({ joinedAt: { $lt: end }, $or: [{ joinedAt: { $gte: start } }, { status: 'waiting' }, { enteredAt: { $gte: end } }, { cancelledAt: { $gte: end } }] }).lean(),
   ])
   const outgoing = sessions.filter(s => within(s.exitTime) && (s.status === 'completed' || s.status === 'lost'))
-  const refunds = shifts.flatMap(shift => shift.cardRefunds ?? []).filter(refund => within(refund.refundedAt))
+  const refunds = shifts.flatMap(shift => shift.cardRefunds ?? []).filter(refund => refund.status !== 'pending' && within(refund.refundedAt))
   const cashRefund = refunds.filter(r => r.paymentMethod === 'cash').reduce((sum, r) => sum + r.amount, 0)
   const qrRefund = refunds.filter(r => r.paymentMethod === 'qr').reduce((sum, r) => sum + r.amount, 0)
   type Paid = typeof outgoing

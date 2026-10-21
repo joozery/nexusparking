@@ -12,12 +12,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ ref:
   if (!user || !['admin', 'superadmin'].includes(user.role)) return NextResponse.json({ error: 'ไม่มีสิทธิ์เข้าถึงเอกสาร' }, { status: 403 })
   const refCode = (await params).ref.trim().toUpperCase()
   const type = new URL(req.url).searchParams.get('type')
-  const photoType = type === 'id-card' ? 'id-card' : type === 'vehicle' ? 'vehicle' : null
+  const photoType = type === 'id-card' ? 'id-card' : type === 'vehicle' ? 'vehicle' : type === 'vehicle-photo' ? 'vehicle-photo' : null
   if (!/^A20-[0-9]{6}$/.test(refCode) || !photoType) return NextResponse.json({ error: 'คำขอไม่ถูกต้อง' }, { status: 400 })
   await connectDB()
-  const row = await CustomerRegistration.findOne({ refCode }).select('idCardPhotoPath vehicleRegistrationPhotoPath').lean()
+  const row = await CustomerRegistration.findOne({ refCode }).select('idCardPhotoPath vehicleRegistrationPhotoPath vehiclePhotoPath').lean()
   if (!row) return NextResponse.json({ error: 'ไม่พบข้อมูล' }, { status: 404 })
-  const filePath = photoType === 'id-card' ? row.idCardPhotoPath : row.vehicleRegistrationPhotoPath
+  const filePath = photoType === 'id-card' ? row.idCardPhotoPath : photoType === 'vehicle' ? row.vehicleRegistrationPhotoPath : row.vehiclePhotoPath
+  if (!filePath) return NextResponse.json({ error: 'ไม่พบไฟล์เอกสาร' }, { status: 404 })
   try {
     const body = await fs.readFile(filePath)
     const ext = path.extname(filePath).toLowerCase()

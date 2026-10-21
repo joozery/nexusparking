@@ -18,6 +18,7 @@ interface GeneralSettings {
   lostCardFine:   number
   monthlyDeposit: number
   monthlyFee:     number
+  vehicleTypes: { key: string; label: string; brands: string[] }[]
 }
 
 function Time24Input({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
@@ -52,6 +53,10 @@ export default function GeneralSettingsPage() {
         ...data.rates,
         overnight: { ...legacy, car: legacy.car ?? fallback, motorcycle: legacy.motorcycle ?? fallback },
       },
+      vehicleTypes: data.vehicleTypes?.length ? data.vehicleTypes : [
+        { key: 'car', label: 'รถยนต์', brands: ['Toyota', 'Honda', 'Isuzu', 'Mitsubishi', 'Nissan', 'Mazda', 'Ford', 'อื่น ๆ'] },
+        { key: 'motorcycle', label: 'รถจักรยานยนต์', brands: ['Honda', 'Yamaha', 'Suzuki', 'Kawasaki', 'อื่น ๆ'] },
+      ],
     }
   }
 
@@ -100,6 +105,7 @@ export default function GeneralSettingsPage() {
           lostCardFine:   settings.lostCardFine,
           monthlyDeposit: settings.monthlyDeposit,
           monthlyFee:     settings.monthlyFee,
+          vehicleTypes:   settings.vehicleTypes,
         }),
       })
       res.ok ? success('บันทึกการตั้งค่าสำเร็จ') : toastError('บันทึกไม่สำเร็จ', 'กรุณาลองใหม่อีกครั้ง')
@@ -130,8 +136,29 @@ export default function GeneralSettingsPage() {
   if (loading) return <div className="flex-1 flex items-center justify-center p-10"><RefreshCw className="size-5 text-slate-300 animate-spin" /></div>
   if (!settings) return null
 
+  function updateVehicleType(index: number, patch: Partial<GeneralSettings['vehicleTypes'][number]>) {
+    setSettings(current => current ? { ...current, vehicleTypes: current.vehicleTypes.map((item, itemIndex) => itemIndex === index ? { ...item, ...patch } : item) } : current)
+  }
+
+  function addVehicleType() {
+    setSettings(current => current ? { ...current, vehicleTypes: [...current.vehicleTypes, { key: `custom-${Date.now()}`, label: 'ประเภทรถใหม่', brands: ['อื่น ๆ'] }] } : current)
+  }
+
+  function removeVehicleType(index: number) {
+    setSettings(current => current && current.vehicleTypes.length > 1 ? { ...current, vehicleTypes: current.vehicleTypes.filter((_, itemIndex) => itemIndex !== index) } : current)
+  }
+
+  function updateBrands(index: number, value: string) {
+    updateVehicleType(index, { brands: value.split(',').map(item => item.trim()).filter(Boolean) })
+  }
+
   return (
     <div className="p-5 space-y-4">
+
+      <section className="rounded-xl bg-white p-5" style={{ border: '1px solid #E8ECF4' }}>
+        <div className="mb-4 flex items-center justify-between gap-3"><div><h2 className="text-sm font-black text-slate-900">ประเภทรถและยี่ห้อรถ</h2><p className="mt-1 text-xs text-slate-500">รายการนี้จะถูกใช้ในฟอร์มลงทะเบียนบัตรหาย</p></div><button type="button" onClick={addVehicleType} className="rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white">+ เพิ่มประเภทรถ</button></div>
+        <div className="space-y-3">{settings.vehicleTypes.map((item, index) => <div key={`${item.key}-${index}`} className="rounded-lg border border-slate-200 bg-slate-50 p-3"><div className="grid gap-2 md:grid-cols-[10rem_1fr_auto]"><input value={item.key} onChange={e => updateVehicleType(index, { key: e.target.value })} placeholder="key เช่น car" className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs font-mono" /><input value={item.label} onChange={e => updateVehicleType(index, { label: e.target.value })} placeholder="ชื่อที่แสดง" className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm" /><button type="button" onClick={() => removeVehicleType(index)} disabled={settings.vehicleTypes.length <= 1} className="flex h-9 items-center justify-center rounded-lg border border-red-200 px-3 text-red-600 disabled:opacity-30"><Trash2 className="size-4" /></button></div><input value={item.brands.join(', ')} onChange={e => updateBrands(index, e.target.value)} placeholder="ยี่ห้อคั่นด้วยเครื่องหมายจุลภาค เช่น Toyota, Honda, อื่น ๆ" className="mt-2 h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm" /><p className="mt-1 text-[11px] text-slate-400">ยี่ห้อรถคั่นด้วยเครื่องหมาย ,</p></div>)}</div>
+      </section>
 
       {/* Save button */}
       <div className="flex justify-end">

@@ -99,13 +99,18 @@ export interface RefundReceiptData {
   refundedAt: string
   amount: number
   paymentMethod: 'cash' | 'qr'
+  customerRef?: string
+  customerName?: string
+  status?: 'completed' | 'pending'
 }
 
-export function buildRefundReceipt(r: RefundReceiptData): Buffer {
+function buildRefundReceiptCopy(r: RefundReceiptData, copyLabel: string): Buffer {
   const parts: Buffer[] = [INIT, THAI_CODEPAGE, ALIGN_CENTER, BOLD_ON]
   parts.push(receiptLogo, NL)
-  parts.push(thaiLine('ใบรับเงินคืนค่าปรับบัตรหาย\n'), thaiLine('A20 Park\n'), BOLD_OFF, NL)
+  parts.push(thaiLine('ใบรับเงินคืนค่าปรับบัตรหาย\n'), thaiLine(`(${copyLabel})\n`), thaiLine('A20 Park\n'), BOLD_OFF, NL)
   parts.push(ALIGN_CENTER, DIVIDER)
+  if (r.customerRef) parts.push(receiptRow('เลข Ref', r.customerRef))
+  if (r.customerName) parts.push(receiptRow('ผู้คืนบัตร', r.customerName))
   parts.push(receiptRow('ทะเบียน', r.plate))
   parts.push(receiptRow('ประเภทรถ', CARD_TYPE_LABEL[r.cardType] ?? r.cardType))
   parts.push(receiptRow('เลขบัตร', r.cardUid))
@@ -116,12 +121,19 @@ export function buildRefundReceipt(r: RefundReceiptData): Buffer {
   parts.push(receiptRow('คืนค่าปรับบัตรหาย', `${r.amount.toLocaleString('th-TH')} บาท`))
   parts.push(BOLD_ON, receiptRow('ยอดคืนเงิน', `${r.amount.toLocaleString('th-TH')} บาท`), BOLD_OFF)
   parts.push(receiptRow('คืนโดย', r.paymentMethod === 'qr' ? 'เงินโอน' : 'เงินสด'))
+  if (r.paymentMethod === 'qr') parts.push(receiptRow('สถานะ', r.status === 'pending' ? 'รอโอนภายใน 5 วัน' : 'โอนแล้ว'))
+  else parts.push(receiptRow('สถานะ', 'รับเงินสดแล้ว'))
+  parts.push(DIVIDER, thaiLine('ลงชื่อพนักงาน __________________\n'), thaiLine('ลงชื่อลูกค้า ____________________\n'))
   parts.push(DIVIDER, ALIGN_CENTER,
     SMALL_FONT_ON, thaiLine('หากมีข้อสงสัยหรือต้องการสอบถามข้อมูลเพิ่มเติม\n'), SMALL_FONT_OFF,
     thaiLine('Facebook:A20Park\n'),
     thaiLine('ขอบคุณที่ใช้บริการ\n'))
   parts.push(NL, NL, NL, CUT)
   return Buffer.concat(parts)
+}
+
+export function buildRefundReceipt(r: RefundReceiptData): Buffer {
+  return Buffer.concat([buildRefundReceiptCopy(r, 'ต้นฉบับ'), buildRefundReceiptCopy(r, 'สำเนา')])
 }
 
 function thaiDateTime(d: Date): string {

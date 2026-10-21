@@ -109,10 +109,10 @@ export async function GET(req: NextRequest) {
         : shift
     }
     const refundCash = (shift.cardRefunds ?? [])
-      .filter(refund => refund.paymentMethod === 'cash')
+      .filter(refund => refund.status !== 'pending' && refund.paymentMethod === 'cash')
       .reduce((sum, refund) => sum + refund.amount, 0)
     const refundQr = (shift.cardRefunds ?? [])
-      .filter(refund => refund.paymentMethod === 'qr')
+      .filter(refund => refund.status !== 'pending' && refund.paymentMethod === 'qr')
       .reduce((sum, refund) => sum + refund.amount, 0)
     const cashAmount = Math.max(0, sessions.filter(session => session.paymentMethod === 'cash').reduce((sum, session) => sum + session.totalFee, 0) - refundCash)
     const qrAmount = Math.max(0, sessions.filter(session => session.paymentMethod === 'qr').reduce((sum, session) => sum + session.totalFee, 0) - refundQr)

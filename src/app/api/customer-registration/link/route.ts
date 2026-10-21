@@ -6,6 +6,14 @@ import { connectDB } from '@/lib/mongodb'
 import { CustomerFormLink } from '@/models/CustomerFormLink'
 
 export async function GET(req: NextRequest) {
+  const requestUrl = new URL(req.url)
+  const publicSlug = requestUrl.searchParams.get('slug')?.trim() ?? ''
+  if (publicSlug) {
+    await connectDB()
+    const publicLink = await CustomerFormLink.findOne({ slug: publicSlug, active: true }).select('slug kind').lean()
+    if (!publicLink) return NextResponse.json({ error: 'ลิงก์นี้ไม่พร้อมใช้งาน' }, { status: 404 })
+    return NextResponse.json({ slug: publicLink.slug, kind: publicLink.kind })
+  }
   const token = (await cookies()).get(COOKIE_NAME)?.value
   const user = token ? verifyToken(token) : null
   if (!user || !['admin', 'superadmin'].includes(user.role)) return NextResponse.json({ error: 'ไม่มีสิทธิ์เข้าถึงลิงก์' }, { status: 403 })

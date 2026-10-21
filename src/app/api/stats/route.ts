@@ -44,7 +44,7 @@ export async function GET() {
     motorcycle: { ...revenueByTypeMethod.motorcycle },
   }
   const refundRows = refundShifts.flatMap(shift => (shift.cardRefunds ?? [])
-    .filter(refund => new Date(refund.refundedAt) >= todayStart && new Date(refund.refundedAt) <= now))
+    .filter(refund => refund.status !== 'pending' && new Date(refund.refundedAt) >= todayStart && new Date(refund.refundedAt) <= now))
   const refundSessionIds = [...new Set(refundRows.map(refund => refund.sessionId))]
   const refundSessions = await ParkingSession.find({ _id: { $in: refundSessionIds } }).select('cardType').lean()
   const refundTypeBySession = new Map(refundSessions.map(session => [String(session._id), session.cardType]))

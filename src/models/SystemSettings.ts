@@ -20,6 +20,7 @@ export interface ISystemSettings extends Document {
   lostCardFine:    number
   monthlyDeposit:  number
   monthlyFee:      number
+  vehicleTypes: { key: string; label: string; brands: string[] }[]
   cctvUrls: { plate: string; face: string; rear: string; exit: string; plateOut: string; faceOut: string }
   line: { enabled: boolean; channelToken: string; targets: string[] }
 }
@@ -71,6 +72,17 @@ const SystemSettingsSchema = new Schema<ISystemSettings>({
   lostCardFine:   { type: Number, default: 300 },
   monthlyDeposit: { type: Number, default: 500 },
   monthlyFee:     { type: Number, default: 300 },
+  vehicleTypes: {
+    type: [{
+      key: { type: String, required: true },
+      label: { type: String, required: true },
+      brands: { type: [String], default: [] },
+    }],
+    default: [
+      { key: 'car', label: 'รถยนต์', brands: ['Toyota', 'Honda', 'Isuzu', 'Mitsubishi', 'Nissan', 'Mazda', 'Ford', 'Suzuki', 'MG', 'BYD', 'GWM', 'Haval', 'ORA', 'TANK', 'Changan', 'Deepal', 'Aion', 'Omoda', 'Jaecoo', 'Geely', 'NETA', 'Tesla', 'Volvo', 'Mercedes-Benz', 'BMW', 'MINI', 'Audi', 'Lexus', 'Porsche', 'Subaru', 'Hyundai', 'Kia', 'อื่น ๆ'] },
+      { key: 'motorcycle', label: 'รถจักรยานยนต์', brands: ['Honda', 'Yamaha', 'Suzuki', 'Kawasaki', 'Vespa', 'GPX', 'Royal Enfield', 'BMW Motorrad', 'Triumph', 'Ducati', 'Harley-Davidson', 'CFMOTO', 'Zontes', 'Benelli', 'Lambretta', 'Piaggio', 'QJMotor', 'KTM', 'อื่น ๆ'] },
+    ],
+  },
   cctvUrls: {
     plate:    { type: String, default: '' },
     face:     { type: String, default: '' },

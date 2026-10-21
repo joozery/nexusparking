@@ -6,6 +6,7 @@ import { connectDB } from '@/lib/mongodb'
 import { ParkingSession } from '@/models/ParkingSession'
 import { ParkingQueue } from '@/models/ParkingQueue'
 import { Shift } from '@/models/Shift'
+import { CustomerRegistration } from '@/models/CustomerRegistration'
 
 async function operator() {
   const token = (await cookies()).get(COOKIE_NAME)?.value
@@ -36,13 +37,35 @@ export const POST = parkingMutation(async (req: NextRequest) => {
   const latest = await ParkingSession.findOne({ cardUid: visit.cardUid, status: { $ne: 'void' } }).sort({ entryTime: -1, _id: -1 }).lean()
   if (String(latest?._id) !== body.sessionId || await ParkingQueue.exists({ cardUid: visit.cardUid, status: 'waiting' })) return NextResponse.json({ error: 'บัตรนี้มีการใช้งานใหม่แล้ว กรุณาตรวจสอบรายการ' }, { status: 409 })
   const amount = Math.max(0, visit.lostFine || 0)
+  const customerRef = typeof body.customerRef === 'string' ? body.customerRef.trim().toUpperCase() : ''
+  const registration = customerRef ? await CustomerRegistration.findOne({ refCode: customerRef, kind: 'return', plate: visit.plate }).select('refCode fullName bankName accountName accountNumber').lean() : null
+  if (!registration) return NextResponse.json({ error: 'กรุณาค้นหาและตรวจสอบเลข Ref การคืนบัตรให้ตรงกับทะเบียน' }, { status: 400 })
+  const status = body.paymentMethod === 'qr' ? 'pending' : 'completed'
   // Ledger and shift cash movement are one atomic write, including on standalone MongoDB.
   const shift = await Shift.findOneAndUpdate(
     { operatorId: user.sub, status: 'active', 'cardRefunds.sessionId': { $ne: body.sessionId } },
-    { $push: { cardRefunds: { sessionId: body.sessionId, cardUid: visit.cardUid, plate: visit.plate, amount, paymentMethod: body.paymentMethod, refundedAt: new Date(), operatorId: user.sub } },
-      $inc: { [body.paymentMethod === 'cash' ? 'cashAmount' : 'qrAmount']: -amount, totalAmount: -amount } },
+    { $push: { cardRefunds: { sessionId: body.sessionId, cardUid: visit.cardUid, plate: visit.plate, amount, paymentMethod: body.paymentMethod, status, refundedAt: new Date(), operatorId: user.sub, customerRef: registration.refCode, customerName: registration.fullName, bankName: registration.bankName, accountName: registration.accountName, accountNumber: registration.accountNumber } },
+      ...(status === 'completed' ? { $inc: { [body.paymentMethod === 'cash' ? 'cashAmount' : 'qrAmount']: -amount, totalAmount: -amount } } : {}) },
     { new: true },
   )
   if (!shift) return NextResponse.json({ error: 'กรุณาเปิดกะก่อนคืนเงิน' }, { status: 409 })
-  return NextResponse.json({ amount, paymentMethod: body.paymentMethod })
+  return NextResponse.json({ amount, paymentMethod: body.paymentMethod, status, customerRef: registration.refCode, customerName: registration.fullName })
+})
+
+export const PATCH = parkingMutation(async (req: NextRequest) => {
+  const user = await operator()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const body = await req.json()
+  if (!/^[a-f\d]{24}$/i.test(body.sessionId ?? '')) return NextResponse.json({ error: 'ข้อมูลไม่ถูกต้อง' }, { status: 400 })
+  const shift = await Shift.findOne({ 'cardRefunds.sessionId': body.sessionId, 'cardRefunds.status': 'pending' })
+  if (!shift) return NextResponse.json({ error: 'ไม่พบรายการโอนที่รอดำเนินการ' }, { status: 404 })
+  const refund = shift.cardRefunds?.find(item => item.sessionId === body.sessionId && item.status === 'pending')
+  if (!refund) return NextResponse.json({ error: 'ไม่พบรายการโอนที่รอดำเนินการ' }, { status: 404 })
+  refund.status = 'completed'
+  refund.transferredAt = new Date()
+  shift.cashAmount -= refund.paymentMethod === 'cash' ? refund.amount : 0
+  shift.qrAmount -= refund.paymentMethod === 'qr' ? refund.amount : 0
+  shift.totalAmount -= refund.amount
+  await shift.save()
+  return NextResponse.json({ success: true, transferredAt: refund.transferredAt })
 })

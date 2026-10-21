@@ -72,6 +72,19 @@ export async function PUT(req: NextRequest) {
   if (body.lostCardFine   !== undefined) $set['lostCardFine']   = body.lostCardFine
   if (body.monthlyDeposit !== undefined) $set['monthlyDeposit'] = body.monthlyDeposit
   if (body.monthlyFee     !== undefined) $set['monthlyFee']     = body.monthlyFee
+  if (body.vehicleTypes !== undefined) {
+    if (!Array.isArray(body.vehicleTypes) || body.vehicleTypes.length === 0) return NextResponse.json({ error: 'ต้องมีประเภทรถอย่างน้อย 1 รายการ' }, { status: 400 })
+    const vehicleTypes = (body.vehicleTypes as unknown[]).flatMap((raw: unknown) => {
+      if (!raw || typeof raw !== 'object') return []
+      const item = raw as { key?: unknown; label?: unknown; brands?: unknown }
+      if (typeof item.key !== 'string' || typeof item.label !== 'string') return []
+      const brands = Array.isArray(item.brands) ? item.brands.filter((brand: unknown): brand is string => typeof brand === 'string').map((brand: string) => brand.trim().slice(0, 80)).filter(Boolean) : []
+      const normalized = { key: item.key.trim().slice(0, 40), label: item.label.trim().slice(0, 80), brands }
+      return normalized.key && normalized.label ? [normalized] : []
+    })
+    if (!vehicleTypes.length || new Set(vehicleTypes.map(item => item.key)).size !== vehicleTypes.length) return NextResponse.json({ error: 'ประเภทรถต้องมี key และชื่อไม่ซ้ำกัน' }, { status: 400 })
+    $set.vehicleTypes = vehicleTypes
+  }
   const updated = await SystemSettings.findOneAndUpdate(
     {},
     { $set },
