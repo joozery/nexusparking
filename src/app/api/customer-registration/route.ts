@@ -61,10 +61,28 @@ export async function POST(req: NextRequest) {
     const idCard = form.get('idCardPhoto')
     const vehiclePhoto = form.get('vehicleRegistrationPhoto')
     const carPhoto = form.get('vehiclePhoto')
-    const missingCommon = !slug || !firstName || !lastName || !fullName || !phone || !plate || !consentAccepted || !privacyAccepted
-    const missingLost = !idNumber || !vehicleType || !province || !vehicleBrand || !vehicleColor || !(idCard instanceof File) || !(vehiclePhoto instanceof File) || !(carPhoto instanceof File)
-    if (missingCommon) {
-      return NextResponse.json({ error: 'กรุณากรอกข้อมูลและแนบเอกสารให้ครบ' }, { status: 400 })
+    const missingCommon = [
+      !slug && 'slug',
+      !firstName && 'firstName',
+      !lastName && 'lastName',
+      !fullName && 'fullName',
+      !phone && 'phone',
+      !plate && 'plate',
+      !consentAccepted && 'consentAccepted',
+      !privacyAccepted && 'privacyAccepted',
+    ].filter(Boolean) as string[]
+    const missingLost = [
+      !idNumber && 'idNumber',
+      !vehicleType && 'vehicleType',
+      !province && 'province',
+      !vehicleBrand && 'vehicleBrand',
+      !vehicleColor && 'vehicleColor',
+      !(idCard instanceof File) && 'idCardPhoto',
+      !(vehiclePhoto instanceof File) && 'vehicleRegistrationPhoto',
+      !(carPhoto instanceof File) && 'vehiclePhoto',
+    ].filter(Boolean) as string[]
+    if (missingCommon.length > 0) {
+      return NextResponse.json({ error: `ข้อมูลผู้แจ้งไม่ครบ: ${missingCommon.join(', ')}`, missingFields: missingCommon }, { status: 400 })
     }
     if (!/^[0-9]{4,32}$/.test(slug)) return NextResponse.json({ error: 'ลิงก์แบบฟอร์มไม่ถูกต้อง' }, { status: 400 })
 
@@ -75,8 +93,9 @@ export async function POST(req: NextRequest) {
     if (isReturn && (!bankName || !accountName || !/^\d{6,20}$/.test(accountNumber) || accountNumber !== accountNumberConfirm)) {
       return NextResponse.json({ error: 'กรุณากรอกข้อมูลบัญชีให้ครบ และตรวจสอบเลขบัญชีให้ตรงกัน' }, { status: 400 })
     }
-    if (!isReturn && (!entryDate || missingLost)) {
-      return NextResponse.json({ error: 'กรุณากรอกข้อมูลและแนบเอกสารให้ครบ' }, { status: 400 })
+    if (!isReturn && (!entryDate || missingLost.length > 0)) {
+      const missingFields = [...(!entryDate ? ['entryDate'] : []), ...missingLost]
+      return NextResponse.json({ error: `ข้อมูลรถหรือเอกสารไม่ครบ: ${missingFields.join(', ')}`, missingFields }, { status: 400 })
     }
 
     let refCode = ''

@@ -36,24 +36,22 @@ export async function POST(req: NextRequest) {
     for (const event of events) {
       const text = event.message?.type === 'text' ? event.message.text?.trim().toUpperCase() : ''
       if (!event.replyToken || !text) continue
+
       const match = text.match(/\bA20-[0-9]{6}\b/)
-      if (!event.replyToken) continue
-      if (!match) {
-        await replyLine(event.replyToken, 'กรุณาส่งเลข Ref เช่น A20-123456 เพื่อเช็กข้อมูล', channelToken)
-        continue
-      }
+      if (!match) continue
+
       const refCode = match[0]
       const row = await CustomerRegistration.findOneAndUpdate(
         { refCode },
         { $set: { verifiedAt: new Date() } },
         { new: true },
       ).select('refCode fullName').lean()
+
       await replyLine(event.replyToken, row
         ? `ยืนยันข้อมูลสำเร็จ\nเลข Ref: ${row.refCode}\nชื่อ: ${row.fullName}`
         : `ไม่พบข้อมูลเลข Ref ${refCode} กรุณาตรวจสอบอีกครั้ง`, channelToken)
     }
 
-    // เก็บ raw event ล่าสุดไว้ debug และ ID ที่ตรวจจับได้
     const ops: object[] = [
       { $set: { 'line._lastWebhook': new Date().toISOString(), 'line._eventCount': events.length } },
     ]
@@ -75,9 +73,9 @@ export async function GET() {
   const doc = await SystemSettings.collection.findOne({}, { projection: { 'line._discovered': 1, 'line._lastWebhook': 1, 'line._eventCount': 1 } })
   const lineDoc = doc?.line as { _discovered?: string[]; _lastWebhook?: string; _eventCount?: number } | undefined
   return NextResponse.json({
-    ids:          lineDoc?._discovered  ?? [],
-    lastWebhook:  lineDoc?._lastWebhook ?? null,
-    eventCount:   lineDoc?._eventCount  ?? 0,
+    ids: lineDoc?._discovered ?? [],
+    lastWebhook: lineDoc?._lastWebhook ?? null,
+    eventCount: lineDoc?._eventCount ?? 0,
   })
 }
 
@@ -86,3 +84,4 @@ export async function DELETE() {
   await SystemSettings.collection.updateOne({}, { $unset: { 'line._discovered': '' } })
   return NextResponse.json({ ok: true })
 }
+
